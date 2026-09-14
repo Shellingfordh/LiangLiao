@@ -1,0 +1,238 @@
+[
+  {
+    "source": "reddit-gamedev",
+    "count": 1,
+    "links": [
+      {
+        "text": "File a ticket",
+        "href": "https://support.reddithelp.com/hc/en-us/requests/new?ticket_form_id=21879292693140"
+      }
+    ]
+  },
+  {
+    "source": "reddit-indiegaming",
+    "count": 1,
+    "links": [
+      {
+        "text": "File a ticket",
+        "href": "https://support.reddithelp.com/hc/en-us/requests/new?ticket_form_id=21879292693140"
+      }
+    ]
+  },
+  {
+    "source": "gamedev-net",
+    "count": 0,
+    "links": []
+  },
+  {
+    "source": "tigsource",
+    "count": 0,
+    "links": []
+  },
+  {
+    "source": "itch-io-forums",
+    "count": 50,
+    "links": [
+      {
+        "text": "Skip to main content",
+        "href": "https://itch.io/search?q=visual+novel+game+jam#search_1314632"
+      },
+      {
+        "text": "Browse Games",
+        "href": "https://itch.io/games"
+      },
+      {
+        "text": "Upload Game",
+        "href": "https://itch.io/developers"
+      },
+      {
+        "text": "Developer Logs",
+        "href": "https://itch.io/devlogs"
+      },
+      {
+        "text": "Indie game store",
+        "href": "https://itch.io/games/store"
+      },
+      {
+        "text": "Horror games",
+        "href": "https://itch.io/games/tag-horror"
+      },
+      {
+        "text": "Game development",
+        "href": "https://itch.io/tools"
+      },
+      {
+        "text": "Game Engines",
+        "href": "https://itch.io/game-development/engines"
+      },
+      {
+        "text": "Game assets2,186",
+        "href": "https://itch.io/search?q=visual%20novel%20game%20jam&facets=c.2"
+      },
+      {
+        "text": "Soundtracks71",
+        "href": "https://itch.io/search?q=visual%20novel%20game%20jam&facets=c.5"
+      },
+      {
+        "text": "Game mods37",
+        "href": "https://itch.io/search?q=visual%20novel%20game%20jam&facets=c.3"
+      },
+      {
+        "text": "Physical games27",
+        "href": "https://itch.io/search?q=visual%20novel%20game%20jam&facets=c.4"
+      },
+      {
+        "text": "Windows5,296",
+        "href": "https://itch.io/search?q=visual%20novel%20game%20jam&facets=p.windows"
+      },
+      {
+        "text": "Phone Browser1,162",
+        "href": "https://itch.io/search?q=visual%20novel%20game%20jam&facets=p.mw"
+      },
+      {
+        "text": "Has demo269",
+        "href": "https://itch.io/search?q=visual%20novel%20game%20jam&facets=m.demo"
+      },
+      {
+        "text": "Change in account settings",
+        "href": "https://itch.io/login?intent=search&return_to=https%3A%2F%2Fitch.io%2Fuser%2Fsettings%23content_settings"
+      },
+      {
+        "text": "View all tags",
+        "href": "https://itch.io/tags"
+      },
+      {
+        "text": "Visual Novel",
+        "href": "https://itch.io/games/genre-visual-novel"
+      },
+      {
+        "text": "Visual novels are interactive stories. They focus mainly on character development and plot rather th",
+        "href": "https://itch.io/games/genre-visual-novel"
+      },
+      {
+        "text": "Kinetic Novel",
+        "href": "https://itch.io/games/tag-kinetic-novel"
+      },
+      {
+        "text": "An alternate spin on the visual novel medium, usually with the same style of presentation but a more",
+        "href": "https://itch.io/games/tag-kinetic-novel"
+      },
+      {
+        "text": "Ren'py is a free and open source Visual Novel Creator.",
+        "href": "https://itch.io/games/tag-renpy"
+      },
+      {
+        "text": "An inclusive term that describes relationship-focused Visual Novels and Interactive Fiction games th",
+        "href": "https://itch.io/games/tag-amare"
+      },
+      {
+        "text": "TyranoBuilder",
+        "href": "https://itch.io/games/tag-tyranobuilder"
+      },
+      {
+        "text": "TyranoBuilder is a multi-platform tool for building visual novels",
+        "href": "https://itch.io/games/tag-tyranobuilder"
+      },
+      {
+        "text": "Created with Decker, a multimedia authoring tool for making interactive hypercard-style projects. In",
+        "href": "https://itch.io/games/tag-decker"
+      },
+      {
+        "text": "Add to collection",
+        "href": "https://itch.io/g/bazaps/how-to-make-a-really-good-visual-novel-game-jam-edition/add-to-collection?source=search"
+      },
+      {
+        "text": "How to make a Really Good Visual Novel* (Game Jam Edition)",
+        "href": "https://bazaps.itch.io/how-to-make-a-really-good-visual-novel-game-jam-edition"
+      },
+      {
+        "text": "Add to collection",
+        "href": "https://itch.io/g/thequietestlilbucket/to-sleep-perchance-to-dream/add-to-collection?source=search"
+      },
+      {
+        "text": "To Sleep, Perchance To Dream",
+        "href": "https://thequietestlilbucket.itch.io/to-sleep-perchance-to-dream"
+      },
+      {
+        "text": "thequietestlilbucket",
+        "href": "https://thequietestlilbucket.itch.io/"
+      },
+      {
+        "text": "Add to collection",
+        "href": "https://itch.io/g/yuseigo/r-eject/add-to-collection?source=search"
+      },
+      {
+        "text": "Add to collection",
+        "href": "https://itch.io/g/studio-no-gala/jini5-dies/add-to-collection?source=search"
+      },
+      {
+        "text": "Jini5 Dies - A Gagekl Side Story",
+        "href": "https://studio-no-gala.itch.io/jini5-dies"
+      },
+      {
+        "text": "Studio no Gala",
+        "href": "https://studio-no-gala.itch.io/"
+      },
+      {
+        "text": "Add to collection",
+        "href": "https://itch.io/g/arthuntervera/leaving-luna/add-to-collection?source=search"
+      },
+      {
+        "text": "Leaving luna",
+        "href": "https://arthuntervera.itch.io/leaving-luna"
+      },
+      {
+        "text": "arthuntervera",
+        "href": "https://arthuntervera.itch.io/"
+      },
+      {
+        "text": "Add to collection",
+        "href": "https://itch.io/g/koincidence/bad-choice/add-to-collection?source=search"
+      },
+      {
+        "text": "Koïncidence",
+        "href": "https://koincidence.itch.io/"
+      },
+      {
+        "text": "Add to collection",
+        "href": "https://itch.io/g/big-william/pari/add-to-collection?source=search"
+      },
+      {
+        "text": "Big William",
+        "href": "https://big-william.itch.io/"
+      },
+      {
+        "text": "Add to collection",
+        "href": "https://itch.io/g/teharra-rose/bean-there-brewed-that/add-to-collection?source=search"
+      },
+      {
+        "text": "Bean There, Brewed That",
+        "href": "https://teharra-rose.itch.io/bean-there-brewed-that"
+      },
+      {
+        "text": "Teharra Rose",
+        "href": "https://teharra-rose.itch.io/"
+      },
+      {
+        "text": "Add to collection",
+        "href": "https://itch.io/g/nicosinclair/escapism/add-to-collection?source=search"
+      },
+      {
+        "text": "Escapism - a visual novel (GMTK Game Jam Version)",
+        "href": "https://nicosinclair.itch.io/escapism"
+      },
+      {
+        "text": "nicosinclair",
+        "href": "https://nicosinclair.itch.io/"
+      },
+      {
+        "text": "Add to collection",
+        "href": "https://itch.io/g/halfstar/imagine-death/add-to-collection?source=search"
+      },
+      {
+        "text": "Imagine Death",
+        "href": "https://halfstar.itch.io/imagine-death"
+      }
+    ]
+  }
+]

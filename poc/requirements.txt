@@ -1,0 +1,3 @@
+# 唯一外部依赖：HTTP 请求 + .env 读取
+requests>=2.31.0
+python-dotenv>=1.0.0

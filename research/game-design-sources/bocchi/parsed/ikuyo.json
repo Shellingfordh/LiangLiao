@@ -1,0 +1,21 @@
+{
+  "character": "喜多郁代（Kita Ikuyo）",
+  "role_in_band": "ギター・ボーカル担当（节奏吉他 / 主唱）",
+  "fields": {
+    "birthday": { "value": "4月21日", "source": "日文维基 + 中文维基 + 番剧官网系谱", "source_authority": "high" },
+    "height": { "value": "158cm", "source": "日文维基（单行本特典设定资料）", "source_authority": "high" },
+    "weight": { "value": "44kg", "source": "日文维基（单行本特典设定资料）", "source_authority": "high" },
+    "blood_type": { "value": "A型", "source": "日文维基 + 中文维基", "source_authority": "high" },
+    "school": { "value": "秀華高校（私立校）", "source": "日文维基 + 中文维基", "source_authority": "high" },
+    "class_1st_year": { "value": "1年5組（2年級後與ひとり同班）", "source": "日文维基 + 中文维基", "source_authority": "high" },
+    "cv": { "value": "長谷川育美（日本語）；閆夜橋（中國大陸）；張乃文（台灣）", "source": "番剧官网 + 日文维基 + 中文维基", "source_authority": "high" },
+    "personality": {
+      "value": "社交型陽キャ，自稱「人と関わるのが大好き」，常是話題中心；外貌可愛、愛打扮逛街、SNS重度用戶（虹夏稱「中毒」）；心善但對陰キャ的理解不足，常無自覺傷害ひとり。",
+      "source": "日文维基 + 中文维基", "source_authority": "high"
+    },
+    "name_complex": { "value": "對名字「郁代」有自卑（與「来た、行くよ」同音），自我介紹只報姓，希望被叫姓", "source": "日文维基", "source_authority": "high" },
+    "skill": { "value": "唱歌出色（卡拉OK強項）、運動神經好、學業中等；吉他從零起步，文化祭live已能為出機材故障的ひとり現場即興拖延時間", "source": "日文维基", "source_authority": "high" },
+    "band_history": { "value": "因憧憬山田リョウ加入結束バンド；本不會彈吉他，初次live前臨陣脫逃；後經ひとり說服和解重新加入，拜ひとり為師學吉他", "source": "日文维基 + 中文维基", "source_authority": "high" },
+    "future_decision": { "value": "一度想放棄升學專注樂隊（與母親衝突），後被ひとり等說服改為升學", "source": "日文维基", "source_authority": "high" }
+  }
+}

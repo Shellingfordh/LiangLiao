@@ -1,0 +1,631 @@
+[
+  {
+    "source": "udemy-gamedev",
+    "count": 0,
+    "links": []
+  },
+  {
+    "source": "coursera-gamedev",
+    "count": 50,
+    "links": [
+      {
+        "text": "Skip to main content",
+        "href": "https://www.coursera.org/search?query=game+development#main"
+      },
+      {
+        "text": "For Individuals",
+        "href": "https://www.coursera.org/"
+      },
+      {
+        "text": "For Businesses",
+        "href": "https://www.coursera.org/business?utm_content=corp-to-home-for-enterprise&utm_campaign=website&utm_medium=coursera&utm_source=header&utm_term=b-out"
+      },
+      {
+        "text": "For Universities",
+        "href": "https://www.coursera.org/campus?utm_content=corp-to-landing-for-campus&utm_campaign=website&utm_medium=coursera&utm_source=header&utm_term=b-out"
+      },
+      {
+        "text": "For Governments",
+        "href": "https://www.coursera.org/government?utm_content=corp-to-landing-for-government&utm_campaign=website&utm_medium=coursera&utm_source=header&utm_term=b-out"
+      },
+      {
+        "text": "Join for Free",
+        "href": "https://www.coursera.org/search?query=game+development#authMode=signup"
+      },
+      {
+        "text": "Game Design and Development with Unity",
+        "href": "https://www.coursera.org/specializations/game-design-and-development"
+      },
+      {
+        "text": "Epic Games Game Design",
+        "href": "https://www.coursera.org/professional-certificates/epic-games-game-design-professional-certificate"
+      },
+      {
+        "text": "C# Programming for Unity Game Development",
+        "href": "https://www.coursera.org/specializations/programming-unity-game-development"
+      },
+      {
+        "text": "Game Development and Prototyping",
+        "href": "https://www.coursera.org/learn/game-development-and-prototyping"
+      },
+      {
+        "text": "Introduction to Basic Game Development using Scratch",
+        "href": "https://www.coursera.org/projects/introduction-to-basic-game-development-using-scratch"
+      },
+      {
+        "text": "C++ Programming for Unreal Game Development",
+        "href": "https://www.coursera.org/specializations/cplusplusunrealgamedevelopment"
+      },
+      {
+        "text": "IBM Full Stack Software Developer",
+        "href": "https://www.coursera.org/professional-certificates/ibm-full-stack-cloud-developer"
+      },
+      {
+        "text": "Unreal Engine FPS & Action Game Development",
+        "href": "https://www.coursera.org/specializations/unreal-engine-fps-action-game-development"
+      },
+      {
+        "text": "Python for Data Science, AI & Development",
+        "href": "https://www.coursera.org/learn/python-for-applied-data-science-ai"
+      },
+      {
+        "text": "Game Design: Art and Concepts",
+        "href": "https://www.coursera.org/specializations/game-design"
+      },
+      {
+        "text": "Unity Game Development: Fun Mini-Game Projects",
+        "href": "https://www.coursera.org/specializations/unity-game-development-fun-mini-game-projects"
+      },
+      {
+        "text": "Game Development with GameMaker",
+        "href": "https://www.coursera.org/specializations/game-development-gamemaker"
+      },
+      {
+        "text": "Privacy Notice",
+        "href": "https://www.coursera.org/about/privacy"
+      },
+      {
+        "text": "Coursera's Privacy Notice",
+        "href": "https://www.coursera.org/about/privacy?trk_ref=coach"
+      },
+      {
+        "text": "Coursera's Privacy Notice",
+        "href": "https://www.coursera.org/about/privacy?trk_ref=coach"
+      },
+      {
+        "text": "Artificial Intelligence (AI)",
+        "href": "https://www.coursera.org/courses?query=artificial%20intelligence"
+      },
+      {
+        "text": "Cybersecurity",
+        "href": "https://www.coursera.org/courses?query=cybersecurity"
+      },
+      {
+        "text": "Data Analytics",
+        "href": "https://www.coursera.org/courses?query=data%20analytics"
+      },
+      {
+        "text": "Digital Marketing",
+        "href": "https://www.coursera.org/courses?query=digital%20marketing"
+      },
+      {
+        "text": "Human Resources (HR)",
+        "href": "https://www.coursera.org/courses?query=hr"
+      },
+      {
+        "text": "Microsoft Excel",
+        "href": "https://www.coursera.org/courses?query=microsoft%20excel"
+      },
+      {
+        "text": "Project Management",
+        "href": "https://www.coursera.org/courses?query=project%20management"
+      },
+      {
+        "text": "Google AI Certificate",
+        "href": "https://www.coursera.org/professional-certificates/google-ai"
+      },
+      {
+        "text": "Google Cybersecurity Certificate",
+        "href": "https://www.coursera.org/professional-certificates/google-cybersecurity"
+      },
+      {
+        "text": "Google Data Analytics Certificate",
+        "href": "https://www.coursera.org/professional-certificates/google-data-analytics"
+      },
+      {
+        "text": "Google IT Support Certificate",
+        "href": "https://www.coursera.org/professional-certificates/google-it-support"
+      },
+      {
+        "text": "Google Project Management Certificate",
+        "href": "https://www.coursera.org/professional-certificates/google-project-management"
+      },
+      {
+        "text": "Google UX Design Certificate",
+        "href": "https://www.coursera.org/professional-certificates/google-ux-design"
+      },
+      {
+        "text": "IBM AI Engineering Certificate",
+        "href": "https://www.coursera.org/professional-certificates/ai-engineer"
+      },
+      {
+        "text": "IBM AI Product Manager Certificate",
+        "href": "https://www.coursera.org/professional-certificates/ibm-ai-product-manager"
+      },
+      {
+        "text": "IBM Data Science Certificate",
+        "href": "https://www.coursera.org/professional-certificates/ibm-data-science"
+      },
+      {
+        "text": "Intuit Academy Bookkeeping Certificate",
+        "href": "https://www.coursera.org/professional-certificates/intuit-bookkeeping"
+      },
+      {
+        "text": "AI Essentials Specialization",
+        "href": "https://www.coursera.org/specializations/ai-essentials-google"
+      },
+      {
+        "text": "AI For Business Specialization",
+        "href": "https://www.coursera.org/specializations/ai-for-business-wharton"
+      },
+      {
+        "text": "AI For Everyone Course",
+        "href": "https://www.coursera.org/learn/ai-for-everyone"
+      },
+      {
+        "text": "AI in Healthcare Specialization",
+        "href": "https://www.coursera.org/specializations/ai-healthcare"
+      },
+      {
+        "text": "Deep Learning Specialization",
+        "href": "https://www.coursera.org/specializations/deep-learning"
+      },
+      {
+        "text": "Excel Skills for Business Specialization",
+        "href": "https://www.coursera.org/specializations/excel"
+      },
+      {
+        "text": "Financial Markets Course",
+        "href": "https://www.coursera.org/learn/financial-markets-global"
+      },
+      {
+        "text": "Machine Learning Specialization",
+        "href": "https://www.coursera.org/specializations/machine-learning-introduction"
+      },
+      {
+        "text": "Prompt Engineering for ChatGPT Course",
+        "href": "https://www.coursera.org/learn/prompt-engineering"
+      },
+      {
+        "text": "Python for Everybody Specialization",
+        "href": "https://www.coursera.org/specializations/python"
+      },
+      {
+        "text": "Career Aptitude Test",
+        "href": "https://www.coursera.org/resources/career-quiz"
+      },
+      {
+        "text": "CAPM Certification Requirements",
+        "href": "https://www.coursera.org/articles/capm-certification-guide"
+      }
+    ]
+  },
+  {
+    "source": "skillshare-gamedev",
+    "count": 0,
+    "links": []
+  },
+  {
+    "source": "edx-gamedev",
+    "count": 49,
+    "links": [
+      {
+        "text": "edX For Business",
+        "href": "https://business.edx.org/"
+      },
+      {
+        "text": "Register for free",
+        "href": "https://authn.edx.org/register"
+      },
+      {
+        "text": "Artificial Intelligence (AI)",
+        "href": "https://www.edx.org/learn/artificial-intelligence"
+      },
+      {
+        "text": "Data Analysis",
+        "href": "https://www.edx.org/learn/data-analysis"
+      },
+      {
+        "text": "Data Science",
+        "href": "https://www.edx.org/learn/data-science"
+      },
+      {
+        "text": "Software Engineering",
+        "href": "https://www.edx.org/learn/software-engineering"
+      },
+      {
+        "text": "Project Management",
+        "href": "https://www.edx.org/learn/project-management"
+      },
+      {
+        "text": "Machine Learning",
+        "href": "https://www.edx.org/learn/machine-learning"
+      },
+      {
+        "text": "see more Courses",
+        "href": "https://www.edx.org/learn"
+      },
+      {
+        "text": "Harvard University's CS50",
+        "href": "https://www.edx.org/cs50"
+      },
+      {
+        "text": "MicroMasters Programs",
+        "href": "https://www.edx.org/masters/micromasters"
+      },
+      {
+        "text": "MicroBachelors Programs",
+        "href": "https://www.edx.org/bachelors/microbachelors"
+      },
+      {
+        "text": "XSeries Programs",
+        "href": "https://www.edx.org/xseries"
+      },
+      {
+        "text": "Certificates in AI",
+        "href": "https://www.edx.org/certificates/ai-certificates"
+      },
+      {
+        "text": "Certificates in Project Management",
+        "href": "https://www.edx.org/certificates/project-management-certificate"
+      },
+      {
+        "text": "Certificates in Data Analytics",
+        "href": "https://www.edx.org/certificates/data-analytics-certificate"
+      },
+      {
+        "text": "Certificates in IT",
+        "href": "https://www.edx.org/certificates/it-certificates"
+      },
+      {
+        "text": "see more Certificates",
+        "href": "https://www.edx.org/certificates"
+      },
+      {
+        "text": "Bachelor's in Computer Science / Data Science",
+        "href": "https://www.edx.org/bachelors/computer-data-sciences"
+      },
+      {
+        "text": "Bachelor's in Psychology",
+        "href": "https://www.edx.org/bachelors/psychology"
+      },
+      {
+        "text": "Bachelor's in Finance",
+        "href": "https://www.edx.org/bachelors/online-bachelors-degree-finance"
+      },
+      {
+        "text": "Bachelor's in Business",
+        "href": "https://www.edx.org/bachelors/business"
+      },
+      {
+        "text": "Master's in Business Administration",
+        "href": "https://www.edx.org/masters/online-mba"
+      },
+      {
+        "text": "Master's in Statistics",
+        "href": "https://www.edx.org/masters/statistics"
+      },
+      {
+        "text": "Master's in AI",
+        "href": "https://www.edx.org/masters/online-masters-in-artificial-intelligence"
+      },
+      {
+        "text": "Master's in Data Science",
+        "href": "https://www.edx.org/masters/online-masters-in-data-science"
+      },
+      {
+        "text": "see more Undergraduate Degrees",
+        "href": "https://www.edx.org/bachelors"
+      },
+      {
+        "text": "see more Graduate Degrees",
+        "href": "https://www.edx.org/masters"
+      },
+      {
+        "text": "see more Doctorate Degrees",
+        "href": "https://www.edx.org/doctorate"
+      },
+      {
+        "text": "Benefits of a Verified Certificate",
+        "href": "https://www.edx.org/verified-certificate"
+      },
+      {
+        "text": "How to Get Financial Assistance",
+        "href": "https://www.edx.org/resources/how-to-get-financial-assistance-for-edx-courses"
+      },
+      {
+        "text": "How to Audit a Course",
+        "href": "https://www.edx.org/resources/how-to-audit-an-edx-class"
+      },
+      {
+        "text": "Become a Social Media Manager",
+        "href": "https://www.edx.org/become/how-to-become-a-social-media-manager"
+      },
+      {
+        "text": "Become a Cybersecurity Analyst",
+        "href": "https://www.edx.org/become/how-to-become-a-cybersecurity-analyst"
+      },
+      {
+        "text": "Become a Data Scientist",
+        "href": "https://www.edx.org/become/how-to-become-a-data-scientist"
+      },
+      {
+        "text": "Become a Software Developer",
+        "href": "https://www.edx.org/become/how-to-become-a-software-developer"
+      },
+      {
+        "text": "Become an AI Engineer",
+        "href": "https://www.edx.org/become/how-to-become-an-ai-engineer"
+      },
+      {
+        "text": "see more Resources",
+        "href": "https://www.edx.org/resources"
+      },
+      {
+        "text": "Partner With Us",
+        "href": "https://business.edx.org/partner?_gl=1*4owngl*_gcl_au*Nzc1ODIwNTQ0LjE3NDY4MjI5NTY.*_ga*OTc4NDQxMDIzLjE3NTEzMTAxOTY.*_ga_D3KS4KMDT0*czE3NTI1MDM2NjEkbzUyJGcxJHQxNzUyNTAzODY5JGoyOSRsMCRoMA.."
+      },
+      {
+        "text": "edX For Business",
+        "href": "https://business.edx.org/?_gl=1*z6vab9*_gcl_au*Nzc1ODIwNTQ0LjE3NDY4MjI5NTY.*_ga*OTc4NDQxMDIzLjE3NTEzMTAxOTY.*_ga_D3KS4KMDT0*czE3NTI1MDM2NjEkbzUyJGcxJHQxNzUyNTAzODY5JGoyOSRsMCRoMA.."
+      },
+      {
+        "text": "2U Advisory Council",
+        "href": "https://www.edx.org/advisory-groups"
+      },
+      {
+        "text": "Help Center",
+        "href": "https://support.edx.org/?_gl=1*9roxgx*_gcl_au*Nzc1ODIwNTQ0LjE3NDY4MjI5NTY.*_ga*OTc4NDQxMDIzLjE3NTEzMTAxOTY.*_ga_D3KS4KMDT0*czE3NTI1MDM2NjEkbzUyJGcxJHQxNzUyNTAzODY5JGoyOSRsMCRoMA.."
+      },
+      {
+        "text": "Terms of Service & Honor Code",
+        "href": "https://www.edx.org/edx-terms-service"
+      },
+      {
+        "text": "Privacy Policy",
+        "href": "https://www.edx.org/edx-privacy-policy"
+      },
+      {
+        "text": "Cookie Policy",
+        "href": "https://www.edx.org/edx-privacy-policy/cookies"
+      },
+      {
+        "text": "Accessibility Policy",
+        "href": "https://www.edx.org/accessibility"
+      },
+      {
+        "text": "Trademark Policy",
+        "href": "https://www.edx.org/trademarks"
+      },
+      {
+        "text": "Modern Slavery Statement",
+        "href": "https://www.edx.org/modern-slavery-statement"
+      },
+      {
+        "text": "Your Privacy Choices",
+        "href": "https://www.edx.org/#"
+      }
+    ]
+  },
+  {
+    "source": "khan-academy-gamedev",
+    "count": 0,
+    "links": []
+  },
+  {
+    "source": "codecademy-gamedev",
+    "count": 50,
+    "links": [
+      {
+        "text": "Skip to Content",
+        "href": "https://www.codecademy.com/search?query=game+development#page-skip-to-content-target"
+      },
+      {
+        "text": "Codecademy Logo Mini",
+        "href": "https://www.codecademy.com/"
+      },
+      {
+        "text": "NewGo from idea to real, working prototype in seconds with our new AI Builder experience.",
+        "href": "https://www.codecademy.com/ai-builder"
+      },
+      {
+        "text": "Take the quiz",
+        "href": "https://www.codecademy.com/welcome/find-a-course"
+      },
+      {
+        "text": "Cybersecurity",
+        "href": "https://www.codecademy.com/catalog/subject/cybersecurity"
+      },
+      {
+        "text": "Cloud computing",
+        "href": "https://www.codecademy.com/catalog/subject/cloud-computing"
+      },
+      {
+        "text": "Web development",
+        "href": "https://www.codecademy.com/catalog/subject/web-development"
+      },
+      {
+        "text": "Data science",
+        "href": "https://www.codecademy.com/catalog/subject/data-science"
+      },
+      {
+        "text": "Professional skills",
+        "href": "https://www.codecademy.com/catalog/subject/professional-skills"
+      },
+      {
+        "text": "Code foundations",
+        "href": "https://www.codecademy.com/catalog/subject/code-foundations"
+      },
+      {
+        "text": "Explore the full catalog",
+        "href": "https://www.codecademy.com/catalog"
+      },
+      {
+        "text": "Code FoundationsChecker DenseBeginner Friendly.Beginner Friendly4 hours",
+        "href": "https://www.codecademy.com/learn/paths/code-foundations"
+      },
+      {
+        "text": "Data Science FoundationsChecker DenseBeginner Friendly.Beginner Friendly55 hours",
+        "href": "https://www.codecademy.com/learn/paths/data-science-foundations"
+      },
+      {
+        "text": "Data and Programming Foundations for AIChecker DenseBeginner Friendly.Beginner Friendly39 hours",
+        "href": "https://www.codecademy.com/learn/paths/machine-learning-ai-engineering-foundations"
+      },
+      {
+        "text": "Build a Website with HTML, CSS, and GitHub PagesChecker DenseBeginner Friendly.Beginner Friendly14 h",
+        "href": "https://www.codecademy.com/learn/paths/learn-how-to-build-websites"
+      },
+      {
+        "text": "Analyze Data with SQLChecker DenseBeginner Friendly.Beginner Friendly18 hours",
+        "href": "https://www.codecademy.com/learn/paths/analyze-data-with-sql"
+      },
+      {
+        "text": "Build a Machine Learning ModelChecker DenseBeginner Friendly.Beginner Friendly23 hours",
+        "href": "https://www.codecademy.com/learn/paths/machine-learning"
+      },
+      {
+        "text": "Explore all 82 skill paths",
+        "href": "https://www.codecademy.com/catalog?type=skill-path"
+      },
+      {
+        "text": "Full-Stack EngineerChecker DenseBeginner Friendly.Beginner Friendly150 hours",
+        "href": "https://www.codecademy.com/learn/paths/full-stack-engineer-career-path"
+      },
+      {
+        "text": "Computer ScienceChecker DenseBeginner Friendly.Beginner Friendly75 hours",
+        "href": "https://www.codecademy.com/learn/paths/computer-science"
+      },
+      {
+        "text": "UX DesignerChecker DenseBeginner Friendly.Beginner Friendly10 hours",
+        "href": "https://www.codecademy.com/learn/paths/ux-designer-career-path"
+      },
+      {
+        "text": "Machine Learning/AI EngineerChecker DenseIntermediate.Intermediate50 hours",
+        "href": "https://www.codecademy.com/learn/paths/machine-learning-engineer"
+      },
+      {
+        "text": "Data Scientist: Machine Learning SpecialistChecker DenseBeginner Friendly.Beginner Friendly95 hours",
+        "href": "https://www.codecademy.com/learn/paths/data-science"
+      },
+      {
+        "text": "Front-End EngineerChecker DenseBeginner Friendly.Beginner Friendly115 hours",
+        "href": "https://www.codecademy.com/learn/paths/front-end-engineer-career-path"
+      },
+      {
+        "text": "Explore all 14 career paths",
+        "href": "https://www.codecademy.com/catalog?type=career-path"
+      },
+      {
+        "text": "Explore all 70 certification paths",
+        "href": "https://www.codecademy.com/catalog/certification-prep"
+      },
+      {
+        "text": "Bootcamps and Workshops",
+        "href": "https://www.codecademy.com/bootcamps"
+      },
+      {
+        "text": "1 on 1 Coaching",
+        "href": "https://www.codecademy.com/coaching"
+      },
+      {
+        "text": "NewGo from idea to real, working prototype in seconds with our new AI Builder experience.",
+        "href": "https://www.codecademy.com/ai-builder"
+      },
+      {
+        "text": "Command line",
+        "href": "https://www.codecademy.com/resources/docs/command-line"
+      },
+      {
+        "text": "Explore all Docs",
+        "href": "https://www.codecademy.com/docs"
+      },
+      {
+        "text": "AI BuilderGrid DenseLearn to build real projects using AI with guided workflows—at any skill level.",
+        "href": "https://www.codecademy.com/ai-builder"
+      },
+      {
+        "text": "ArticlesGrid DenseDive deeper into coding concepts and developer workflows to level up your skills.",
+        "href": "https://www.codecademy.com/articles"
+      },
+      {
+        "text": "CheatsheetsGrid DenseQuick guides that summarize key concepts across languages, tools, and technolog",
+        "href": "https://www.codecademy.com/resources/cheatsheets/all"
+      },
+      {
+        "text": "ProjectsGrid DenseApply your skills, connect concepts, and build something of your own.",
+        "href": "https://www.codecademy.com/projects"
+      },
+      {
+        "text": "Code challengesGrid DenseSharpen your skills with real interview challenges from top tech companies,",
+        "href": "https://www.codecademy.com/code-challenges"
+      },
+      {
+        "text": "WorkspacesGrid DenseBuild and share projects in 13 popular languages, all right in your browser.",
+        "href": "https://www.codecademy.com/pages/workspaces"
+      },
+      {
+        "text": "Job-readiness checkerGrid DenseSee how your skills match a job posting and get tips on what to impro",
+        "href": "https://www.codecademy.com/job-readiness"
+      },
+      {
+        "text": "Interview SimulatorGrid DensePractice interviews, get feedback, and build confidence at any stage of",
+        "href": "https://www.codecademy.com/interview-simulator"
+      },
+      {
+        "text": "Visit CommunityGrid DenseJoin conversations, ask questions, and learn together in an active space.",
+        "href": "https://community.codecademy.com/c/start-here/"
+      },
+      {
+        "text": "Learner StoriesGrid DenseGet inspired by real journeys from people. Discover how others have overcom",
+        "href": "https://www.codecademy.com/resources/blog/category/learner-stories/"
+      },
+      {
+        "text": "Code CrewGrid DenseJoin a focused circle of builders and creators. Collaborate on projects, exchange",
+        "href": "https://try.codecademy.com/code-crew/"
+      },
+      {
+        "text": "Learner storiesGrid DenseLearn how coding can change your life (and the world) for the better.",
+        "href": "https://www.codecademy.com/resources/blog/category/get-inspired"
+      },
+      {
+        "text": "Learning tipsGrid DenseLearning to code — or thinking about it? Here's how to get started, plus tips",
+        "href": "https://www.codecademy.com/resources/blog/category/learning-tips"
+      },
+      {
+        "text": "Career adviceGrid DenseExplore different tech jobs and learn how to advance in your career and maint",
+        "href": "https://www.codecademy.com/resources/blog/category/career"
+      },
+      {
+        "text": "Finding a jobGrid DenseMaster the skills to land a tech job, from resumes and portfolios to intervie",
+        "href": "https://www.codecademy.com/resources/blog/category/finding-a-job"
+      },
+      {
+        "text": "For Individuals",
+        "href": "https://www.codecademy.com/pricing"
+      },
+      {
+        "text": "For Students",
+        "href": "https://www.codecademy.com/student-center"
+      },
+      {
+        "text": "For Business",
+        "href": "https://www.codecademy.com/business/pricing"
+      },
+      {
+        "text": "Codecademy Logo Mini",
+        "href": "https://www.codecademy.com/"
+      }
+    ]
+  }
+]

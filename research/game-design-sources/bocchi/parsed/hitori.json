@@ -1,0 +1,26 @@
+{
+  "character": "後藤ひとり（后藤一里 / Gotoh Hitori）",
+  "role_in_band": "リードギター・作詞担当（主音吉他 / 作词）",
+  "fields": {
+    "birthday": { "value": "2月21日", "source": "日文维基 + 中文维基 + 番剧官网系谱", "source_authority": "high" },
+    "height": { "value": "156cm", "source": "日文维基（单行本1卷特典设定资料）", "source_authority": "high" },
+    "weight": { "value": "50kg", "source": "日文维基（单行本1卷特典设定资料）", "source_authority": "high" },
+    "blood_type": { "value": "O型", "source": "日文维基 + 中文维基", "source_authority": "high" },
+    "school": { "value": "秀華高校（私立校，非公立）", "source": "日文维基 + 中文维基", "source_authority": "high" },
+    "class_1st_year": { "value": "1年2組", "source": "日文维基 + 中文维基", "source_authority": "high" },
+    "class_2nd_year_note": { "value": "2年級班級表記有冲突：单行本4卷=2年3組、6卷=2年C組，作者2024-05确认为2年3組", "source": "日文维基（单行本4/6/7卷 + 作者Twitter）", "source_authority": "high" },
+    "cv": { "value": "青山吉能（日本語）；閻麼麼（中國大陸）；邱涵菲（台灣）", "source": "番剧官网 + 日文维基 + 中文维基", "source_authority": "high" },
+    "nickname": { "value": "ぼっちちゃん（小孤獨/小波奇），山田リョウ取名", "source": "日文维基 + 中文维基", "source_authority": "high" },
+    "residence": { "value": "神奈川県横浜市金沢区・金沢八景駅付近", "source": "日文维基 + 中文维基", "source_authority": "high" },
+    "appearance": { "value": "粉髮長髮、右側水藍/黃兩個立方體型髮夾、常穿運動服", "source": "日文维基 + 中文维基", "source_authority": "high" },
+    "personality": {
+      "value": "極度社恐（對陌生人幾乎無法搭話、不直視、結巴、壓力大面部崩壞、躲紙箱）、承認欲求強、妄想癖強、被誇就得意忘形、內心觀察力強（能察覺他人煩惱）",
+      "source": "日文维基 + 番剧官网", "source_authority": "high"
+    },
+    "skill": {
+      "value": "每天練吉他6小時以上約3年，solo實力專業級；網名「ギターヒーロー(guitarhero)」在投稿網站訂閱：1卷時3萬人、4卷時10萬人",
+      "source": "日文维基", "source_authority": "high"
+    },
+    "family": { "value": "父後藤直樹（10/16・O型）、母後藤美智代（4/3・A型）、妹後藤ふたり（7/7・A型，5歲）、養柴犬ジミヘン", "source": "日文维基", "source_authority": "high" }
+  }
+}

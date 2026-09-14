@@ -1,0 +1,21 @@
+{
+  "character": "伊地知虹夏（Ijichi Nijika）",
+  "role_in_band": "ドラム担当（鼓手）、結束バンド的領隊/まとめ役，兼任經理・設計・視頻編輯",
+  "fields": {
+    "birthday": { "value": "5月29日", "source": "日文维基 + 中文维基 + 番剧官网系谱", "source_authority": "high" },
+    "height": { "value": "154cm", "source": "日文维基（单行本特典设定资料）", "source_authority": "high" },
+    "weight": { "value": "48kg", "source": "日文维基（单行本特典设定资料）", "source_authority": "high" },
+    "blood_type": { "value": "A型", "source": "日文维基 + 中文维基", "source_authority": "high" },
+    "school": { "value": "下北沢高校", "source": "日文维基 + 中文维基", "source_authority": "high" },
+    "grade": { "value": "2年→3年（下北沢高校）", "source": "日文维基", "source_authority": "high" },
+    "cv": { "value": "鈴代紗弓（日本語）；姜英俊（中國大陸）；李昀晴（台灣）", "source": "番剧官网 + 日文维基 + 中文维基", "source_authority": "high" },
+    "personality": {
+      "value": "性格開朗、體貼成員、不責怪失敗並會讚揚努力；常識人/吐槽役擔當。有寂寞一面。對リョウ會用暴力式吐槽（德國suplex等，動畫未呈現暴力）。",
+      "source": "日文维基 + 中文维基", "source_authority": "high"
+    },
+    "appearance": { "value": "水玉リボン（波點蝴蝶結）為標誌，通常戴在身上的某處", "source": "日文维基", "source_authority": "high" },
+    "family": { "value": "幼時母親因事故去世，父親工作常不在家，與姐姐星歌（Live House STARRY 店長）兩人生活", "source": "日文维基 + 中文维基", "source_authority": "high" },
+    "motivation": { "value": "為圓「讓姐姐的Live House更有名」的夢想而組建結束バンド；學業優良，升入芳大", "source": "日文维基", "source_authority": "high" },
+    "band_role": { "value": "領導者/まとめ役；兼經理（バンド財務）、設計（logo/CD封面）、視頻剪輯；最早發現ギターヒーロー=ひとり", "source": "日文维基", "source_authority": "high" }
+  }
+}

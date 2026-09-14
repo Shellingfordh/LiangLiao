@@ -1,0 +1,23 @@
+{
+  "character": "山田リョウ（山田凉 / Yamada Ryo）",
+  "role_in_band": "ベース・作曲担当（贝斯 / 作曲；TV动画版亦担当和声）",
+  "fields": {
+    "birthday": { "value": "9月18日", "source": "日文维基 + 中文维基 + 番剧官网系谱", "source_authority": "high" },
+    "height": { "value": "163cm", "source": "日文维基（单行本特典设定资料）", "source_authority": "high" },
+    "weight": { "value": "50kg", "source": "日文维基（单行本特典设定资料）", "source_authority": "high" },
+    "blood_type": { "value": "AB型", "source": "日文维基 + 中文维基", "source_authority": "high" },
+    "school": { "value": "下北沢高校（公立，比秀華高校「頭好很多」）", "source": "日文维基 + 中文维基", "source_authority": "high" },
+    "grade": { "value": "2年→3年（下北沢高校）", "source": "日文维基", "source_authority": "high" },
+    "cv": { "value": "水野朔（日本語）；張雨曦（中國大陸）；連思宇（台灣）", "source": "番剧官网 + 日文维基 + 中文维基", "source_authority": "high" },
+    "personality": {
+      "value": "無口・無表情・朋友少；言行突發奇想，被稱「變人」反而高興；偶爾說出切中要害的建議。不是社恐，是「喜歡一個人待著」。對音樂/樂器講究，談起來變健談；怕絕叫機器（虹夏稱其其實是膽小鬼）。信念「個性を捨てたら死んでるのと一緒」。",
+      "source": "日文维基 + 中文维基", "source_authority": "high"
+    },
+    "appearance": { "value": "帥氣中性打扮、文青風，喜逛古著店與廢墟", "source": "日文维基 + 中文维基", "source_authority": "high" },
+    "hobbies": { "value": "古著店巡禮、廢墟巡禮、在家看電影、聽前衛搖滾", "source": "日文维基", "source_authority": "high" },
+    "family_wealth": { "value": "家境富裕（父母經營醫院：父山田恭一49歲・O型、母山田京香46歲・AB型），但零用錢幾乎全花在樂器上，常借錢甚至吃雜草果腹", "source": "日文维基", "source_authority": "high" },
+    "academic": { "value": "可考0分，但臨時抱佛腳可拿近滿分（曾放話要考東大），不用就忘；高校畢業後不升學，打算做自由職業專心作曲", "source": "日文维基", "source_authority": "high" },
+    "band_history": { "value": "曾退出先前樂隊（因成員放棄個性走賣線路線，後解散）；受摯友虹夏之邀組建結束バンド。也為 猫々・恵恋奈 指導貝斯。", "source": "日文维基", "source_authority": "high" },
+    "design_evolution": { "value": "最初設定是「不思議ちゃん系可愛角色」，與現行無口冷靜設定差異大", "source": "日文维基", "source_authority": "high" }
+  }
+}

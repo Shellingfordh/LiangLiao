@@ -1,0 +1,457 @@
+[
+  {
+    "source": "reddit-gamedesign",
+    "count": 1,
+    "links": [
+      {
+        "text": "File a ticket",
+        "href": "https://support.reddithelp.com/hc/en-us/requests/new?ticket_form_id=21879292693140"
+      }
+    ]
+  },
+  {
+    "source": "reddit-cozygames",
+    "count": 1,
+    "links": [
+      {
+        "text": "File a ticket",
+        "href": "https://support.reddithelp.com/hc/en-us/requests/new?ticket_form_id=21879292693140"
+      }
+    ]
+  },
+  {
+    "source": "reddit-visualnovels",
+    "count": 1,
+    "links": [
+      {
+        "text": "File a ticket",
+        "href": "https://support.reddithelp.com/hc/en-us/requests/new?ticket_form_id=21879292693140"
+      }
+    ]
+  },
+  {
+    "source": "reddit-interactivefiction",
+    "count": 1,
+    "links": [
+      {
+        "text": "File a ticket",
+        "href": "https://support.reddithelp.com/hc/en-us/requests/new?ticket_form_id=21879292693140"
+      }
+    ]
+  },
+  {
+    "source": "reddit-ludumdare",
+    "count": 1,
+    "links": [
+      {
+        "text": "File a ticket",
+        "href": "https://support.reddithelp.com/hc/en-us/requests/new?ticket_form_id=21879292693140"
+      }
+    ]
+  },
+  {
+    "source": "reddit-solodev",
+    "count": 1,
+    "links": [
+      {
+        "text": "File a ticket",
+        "href": "https://support.reddithelp.com/hc/en-us/requests/new?ticket_form_id=21879292693140"
+      }
+    ]
+  },
+  {
+    "source": "tigsource-cozy",
+    "count": 0,
+    "links": []
+  },
+  {
+    "source": "tigsource-wip",
+    "count": 0,
+    "links": []
+  },
+  {
+    "source": "tigsource-creativity",
+    "count": 0,
+    "links": []
+  },
+  {
+    "source": "tigsource-business",
+    "count": 0,
+    "links": []
+  },
+  {
+    "source": "steam-community-discussions",
+    "count": 49,
+    "links": [
+      {
+        "text": "Discovery Queue",
+        "href": "https://store.steampowered.com/explore/"
+      },
+      {
+        "text": "Points Shop",
+        "href": "https://store.steampowered.com/points/shop/"
+      },
+      {
+        "text": "Discussions",
+        "href": "https://steamcommunity.com/discussions/"
+      },
+      {
+        "text": "Get the Steam Mobile App",
+        "href": "https://store.steampowered.com/mobile"
+      },
+      {
+        "text": "Privacy Policy",
+        "href": "https://store.steampowered.com/privacy_agreement/"
+      },
+      {
+        "text": "Accessibility",
+        "href": "https://help.steampowered.com/faqs/view/10BB-D27A-6378-4436"
+      },
+      {
+        "text": "Steam Subscriber Agreement",
+        "href": "https://store.steampowered.com/subscriber_agreement/"
+      },
+      {
+        "text": "Discovery Queue",
+        "href": "https://store.steampowered.com/explore/"
+      },
+      {
+        "text": "Points Shop",
+        "href": "https://store.steampowered.com/points/shop/"
+      },
+      {
+        "text": "Discussions",
+        "href": "https://steamcommunity.com/discussions/"
+      },
+      {
+        "text": "Install Steam",
+        "href": "https://store.steampowered.com/about/"
+      },
+      {
+        "text": "简体中文 (Simplified Chinese)",
+        "href": "https://steamcommunity.com/app/413150/discussions/?l=schinese"
+      },
+      {
+        "text": "繁體中文 (Traditional Chinese)",
+        "href": "https://steamcommunity.com/app/413150/discussions/?l=tchinese"
+      },
+      {
+        "text": "日本語 (Japanese)",
+        "href": "https://steamcommunity.com/app/413150/discussions/?l=japanese"
+      },
+      {
+        "text": "한국어 (Korean)",
+        "href": "https://steamcommunity.com/app/413150/discussions/?l=koreana"
+      },
+      {
+        "text": "Bahasa Indonesia (Indonesian)",
+        "href": "https://steamcommunity.com/app/413150/discussions/?l=indonesian"
+      },
+      {
+        "text": "Bahasa Melayu (Malay)\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\tBETA",
+        "href": "https://steamcommunity.com/app/413150/discussions/?l=malay"
+      },
+      {
+        "text": "Български (Bulgarian)",
+        "href": "https://steamcommunity.com/app/413150/discussions/?l=bulgarian"
+      },
+      {
+        "text": "Čeština (Czech)",
+        "href": "https://steamcommunity.com/app/413150/discussions/?l=czech"
+      },
+      {
+        "text": "Dansk (Danish)",
+        "href": "https://steamcommunity.com/app/413150/discussions/?l=danish"
+      },
+      {
+        "text": "Deutsch (German)",
+        "href": "https://steamcommunity.com/app/413150/discussions/?l=german"
+      },
+      {
+        "text": "Español - España (Spanish - Spain)",
+        "href": "https://steamcommunity.com/app/413150/discussions/?l=spanish"
+      },
+      {
+        "text": "Español - Latinoamérica (Spanish - Latin America)",
+        "href": "https://steamcommunity.com/app/413150/discussions/?l=latam"
+      },
+      {
+        "text": "Ελληνικά (Greek)",
+        "href": "https://steamcommunity.com/app/413150/discussions/?l=greek"
+      },
+      {
+        "text": "Français (French)",
+        "href": "https://steamcommunity.com/app/413150/discussions/?l=french"
+      },
+      {
+        "text": "Italiano (Italian)",
+        "href": "https://steamcommunity.com/app/413150/discussions/?l=italian"
+      },
+      {
+        "text": "Magyar (Hungarian)",
+        "href": "https://steamcommunity.com/app/413150/discussions/?l=hungarian"
+      },
+      {
+        "text": "Nederlands (Dutch)",
+        "href": "https://steamcommunity.com/app/413150/discussions/?l=dutch"
+      },
+      {
+        "text": "Norsk (Norwegian)",
+        "href": "https://steamcommunity.com/app/413150/discussions/?l=norwegian"
+      },
+      {
+        "text": "Polski (Polish)",
+        "href": "https://steamcommunity.com/app/413150/discussions/?l=polish"
+      },
+      {
+        "text": "Português (Portuguese - Portugal)",
+        "href": "https://steamcommunity.com/app/413150/discussions/?l=portuguese"
+      },
+      {
+        "text": "Português - Brasil (Portuguese - Brazil)",
+        "href": "https://steamcommunity.com/app/413150/discussions/?l=brazilian"
+      },
+      {
+        "text": "Română (Romanian)",
+        "href": "https://steamcommunity.com/app/413150/discussions/?l=romanian"
+      },
+      {
+        "text": "Русский (Russian)",
+        "href": "https://steamcommunity.com/app/413150/discussions/?l=russian"
+      },
+      {
+        "text": "Suomi (Finnish)",
+        "href": "https://steamcommunity.com/app/413150/discussions/?l=finnish"
+      },
+      {
+        "text": "Svenska (Swedish)",
+        "href": "https://steamcommunity.com/app/413150/discussions/?l=swedish"
+      },
+      {
+        "text": "Türkçe (Turkish)",
+        "href": "https://steamcommunity.com/app/413150/discussions/?l=turkish"
+      },
+      {
+        "text": "Tiếng Việt (Vietnamese)",
+        "href": "https://steamcommunity.com/app/413150/discussions/?l=vietnamese"
+      },
+      {
+        "text": "Українська (Ukrainian)",
+        "href": "https://steamcommunity.com/app/413150/discussions/?l=ukrainian"
+      },
+      {
+        "text": "Report a translation problem",
+        "href": "https://www.valvesoftware.com/contact?contact-person=Translation%20Team%20Feedback"
+      },
+      {
+        "text": "Discussions",
+        "href": "https://steamcommunity.com/app/413150/discussions/"
+      },
+      {
+        "text": "Screenshots",
+        "href": "https://steamcommunity.com/app/413150/screenshots/"
+      },
+      {
+        "text": "Global Achievements",
+        "href": "https://steamcommunity.com/stats/413150/achievements/"
+      },
+      {
+        "text": "create an account",
+        "href": "https://store.steampowered.com/join/"
+      },
+      {
+        "text": "General Discussions",
+        "href": "https://steamcommunity.com/app/413150/discussions/0/"
+      },
+      {
+        "text": "Bug Reports",
+        "href": "https://steamcommunity.com/app/413150/discussions/1/"
+      },
+      {
+        "text": "Multiplayer",
+        "href": "https://steamcommunity.com/app/413150/discussions/2/"
+      },
+      {
+        "text": "Events & Announcements",
+        "href": "https://steamcommunity.com/app/413150/eventcomments/"
+      },
+      {
+        "text": "Discussions Rules and Guidelines",
+        "href": "https://support.steampowered.com/kb_article.php?ref=4045-USHJ-3810"
+      }
+    ]
+  },
+  {
+    "source": "rpgmaker-forums",
+    "count": 38,
+    "links": [
+      {
+        "text": "Search forums",
+        "href": "https://forums.rpgmakerweb.com/search/?type=post"
+      },
+      {
+        "text": "New profile posts",
+        "href": "https://forums.rpgmakerweb.com/whats-new/profile-posts/"
+      },
+      {
+        "text": "Latest activity",
+        "href": "https://forums.rpgmakerweb.com/whats-new/latest-activity"
+      },
+      {
+        "text": "Current visitors",
+        "href": "https://forums.rpgmakerweb.com/online/"
+      },
+      {
+        "text": "New profile posts",
+        "href": "https://forums.rpgmakerweb.com/whats-new/profile-posts/"
+      },
+      {
+        "text": "Search profile posts",
+        "href": "https://forums.rpgmakerweb.com/search/?type=profile_post"
+      },
+      {
+        "text": "Advanced search…",
+        "href": "https://forums.rpgmakerweb.com/search/"
+      },
+      {
+        "text": "Latest activity",
+        "href": "https://forums.rpgmakerweb.com/whats-new/latest-activity"
+      },
+      {
+        "text": "Search everything",
+        "href": "https://forums.rpgmakerweb.com/search/"
+      },
+      {
+        "text": "Search threads",
+        "href": "https://forums.rpgmakerweb.com/search/?type=post"
+      },
+      {
+        "text": "Search profile posts",
+        "href": "https://forums.rpgmakerweb.com/search/?type=profile_post"
+      },
+      {
+        "text": "Search tags",
+        "href": "https://forums.rpgmakerweb.com/tags/"
+      },
+      {
+        "text": "Latest Threads",
+        "href": "https://forums.rpgmakerweb.com/whats-new/"
+      },
+      {
+        "text": "Original Character Art",
+        "href": "https://forums.rpgmakerweb.com/threads/original-character-art.184090/"
+      },
+      {
+        "text": "Art, Literature, and Music",
+        "href": "https://forums.rpgmakerweb.com/forums/art-literature-and-music.51/"
+      },
+      {
+        "text": "To Skies Unknown",
+        "href": "https://forums.rpgmakerweb.com/threads/to-skies-unknown.184089/"
+      },
+      {
+        "text": "Introductions/Farewells",
+        "href": "https://forums.rpgmakerweb.com/forums/introductions-farewells.44/"
+      },
+      {
+        "text": "MV Better late than never I guess...",
+        "href": "https://forums.rpgmakerweb.com/threads/better-late-than-never-i-guess.184088/"
+      },
+      {
+        "text": "Introductions/Farewells",
+        "href": "https://forums.rpgmakerweb.com/forums/introductions-farewells.44/"
+      },
+      {
+        "text": "looking for more rpg maker mz statues. I need a dwarf statue mostly",
+        "href": "https://forums.rpgmakerweb.com/threads/looking-for-more-rpg-maker-mz-statues-i-need-a-dwarf-statue-mostly.184087/"
+      },
+      {
+        "text": "Resource Requests",
+        "href": "https://forums.rpgmakerweb.com/forums/resource-requests.31/"
+      },
+      {
+        "text": "Latest Profile Posts",
+        "href": "https://forums.rpgmakerweb.com/whats-new/profile-posts/?skip=1"
+      },
+      {
+        "text": "https://rpgmaker.net/",
+        "href": "https://rpgmaker.net/"
+      },
+      {
+        "text": "https://rpg-refuge.com/",
+        "href": "https://rpg-refuge.com/"
+      },
+      {
+        "text": "Join the RPG Refuge Discord Discord Server!",
+        "href": "https://discord.gg/dvQBVRAsW9"
+      },
+      {
+        "text": "Jun 18, 2026",
+        "href": "https://forums.rpgmakerweb.com/profile-posts/162987/"
+      },
+      {
+        "text": "https://forum.rmplanet.com/",
+        "href": "https://forum.rmplanet.com/"
+      },
+      {
+        "text": "Jun 18, 2026",
+        "href": "https://forums.rpgmakerweb.com/profile-posts/162986/"
+      },
+      {
+        "text": "Jun 18, 2026",
+        "href": "https://forums.rpgmakerweb.com/profile-posts/162985/"
+      },
+      {
+        "text": "Jun 18, 2026",
+        "href": "https://forums.rpgmakerweb.com/profile-posts/162984/"
+      },
+      {
+        "text": "Jun 18, 2026",
+        "href": "https://forums.rpgmakerweb.com/profile-posts/162983/"
+      },
+      {
+        "text": "billybowbug",
+        "href": "https://forums.rpgmakerweb.com/members/billybowbug.304175/"
+      },
+      {
+        "text": "Swift (RMW Light)",
+        "href": "https://forums.rpgmakerweb.com/misc/style"
+      },
+      {
+        "text": "Terms and rules",
+        "href": "https://forums.rpgmakerweb.com/help/terms/"
+      },
+      {
+        "text": "Privacy policy",
+        "href": "https://forums.rpgmakerweb.com/help/privacy-policy/"
+      },
+      {
+        "text": "Community platform by XenForo® © 2010-2024 XenForo Ltd.",
+        "href": "https://xenforo.com/"
+      },
+      {
+        "text": "Media embeds via s9e/MediaSites",
+        "href": "https://xenforo.com/community/resources/s9e-media-sites.5973/"
+      },
+      {
+        "text": "Learn more…",
+        "href": "https://forums.rpgmakerweb.com/help/cookies"
+      }
+    ]
+  },
+  {
+    "source": "lemma-soft-forums",
+    "count": 0,
+    "links": []
+  },
+  {
+    "source": "gamedev-net-forums",
+    "count": 0,
+    "links": []
+  },
+  {
+    "source": "indiedb-forums",
+    "count": 0,
+    "links": []
+  }
+]

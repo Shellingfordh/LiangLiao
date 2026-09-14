@@ -1,0 +1,64 @@
+{
+  "$schema": "Tripo text_to_model prompts for A Gift for 'You Who Came Back'",
+  "_note_1": "所有 prompt 走 Tripo OpenAPI 的 text_to_model / P1-20260311，参考 docs/tripo3d.ai",
+  "_note_2": "anime 风格的关键是 negative_prompt：必须把 realistic / photographic / 3d render 等词拉黑",
+  "_note_3": "face_limit 控低面数，避免移动端卡顿",
+  "_note_4": "auto_size=true 让模型缩放到真实米级身高（人物 1.5~1.7m），放进场景不用手动缩放",
+
+  "shared_params": {
+    "model_version": "P1-20260311",
+    "texture": true,
+    "pbr": true,
+    "auto_size": true,
+    "face_limit": 8000,
+    "texture_quality": "standard"
+  },
+
+  "characters": [
+    {
+      "id": "xiaoman",
+      "display_name": "小满",
+      "filename": "xiaoman.glb",
+      "prompt": "A cute anime-style 二次元 girl, age 18, warm and gentle personality, shoulder-length brown hair with a small bun on top, soft brown eyes, friendly smile, wearing a beige apron over a cream knit sweater and a long brown skirt, holding a freshly baked croissant on a small wooden tray, full body, soft pastel color palette, T-pose friendly for rigging, single character, soft lighting, white background, no other characters, no extra props",
+      "negative_prompt": "realistic, photographic, 3d render, blender, lowpoly, low poly, ugly, deformed, extra fingers, extra limbs, bad anatomy, blurry, watermark, text, logo, NSFW"
+    },
+    {
+      "id": "aize",
+      "display_name": "阿泽",
+      "filename": "aize.glb",
+      "prompt": "A cute anime-style 二次元 boy, age 19, calm and intellectual personality, slightly messy black hair, thin-rim glasses, gentle expression, wearing a navy cardigan over a white shirt and dark trousers, holding an open book in one hand, full body, soft pastel color palette, T-pose friendly for rigging, single character, soft lighting, white background, no other characters, no extra props",
+      "negative_prompt": "realistic, photographic, 3d render, blender, lowpoly, low poly, ugly, deformed, extra fingers, extra limbs, bad anatomy, blurry, watermark, text, logo, NSFW"
+    },
+    {
+      "id": "grandma",
+      "display_name": "奶奶",
+      "filename": "grandma.glb",
+      "prompt": "A kind anime-style 二次元 elderly woman, age 70, warm and caring personality, short gray hair tied in a low bun, round face with kind eyes and soft wrinkles, wearing a traditional Chinese-style faded indigo jacket with hand-stitched floral embroidery, holding a small woven basket of tomatoes, full body, soft pastel color palette, T-pose friendly for rigging, single character, soft lighting, white background, no other characters, no extra props",
+      "negative_prompt": "realistic, photographic, 3d render, blender, lowpoly, low poly, ugly, deformed, extra fingers, extra limbs, bad anatomy, blurry, watermark, text, logo, NSFW, scary, zombie"
+    }
+  ],
+
+  "props": [
+    {
+      "id": "bread_basket",
+      "display_name": "面包篮",
+      "filename": "bread_basket.glb",
+      "prompt": "A small wicker basket filled with croissants and bread rolls, anime-style toon shading, soft pastel colors, low poly, single prop, white background, top-down view",
+      "negative_prompt": "realistic, photographic, blurry, watermark"
+    },
+    {
+      "id": "book_stack",
+      "display_name": "书堆",
+      "filename": "book_stack.glb",
+      "prompt": "A small stack of three hardcover books with warm-colored spines, anime-style toon shading, soft pastel colors, low poly, single prop, white background, perspective view",
+      "negative_prompt": "realistic, photographic, blurry, watermark"
+    },
+    {
+      "id": "tomato_basket",
+      "display_name": "番茄篮",
+      "filename": "tomato_basket.glb",
+      "prompt": "A small wooden basket filled with bright red ripe tomatoes, anime-style toon shading, soft pastel colors, low poly, single prop, white background, perspective view",
+      "negative_prompt": "realistic, photographic, blurry, watermark"
+    }
+  ]
+}

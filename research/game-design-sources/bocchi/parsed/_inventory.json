@@ -1,0 +1,746 @@
+{
+  "bilibili-article-Bocchi_the_Rock_character_design.json": {
+    "file": "bilibili-article-Bocchi_the_Rock_character_design.json",
+    "kind": "items",
+    "n": 6,
+    "note": ""
+  },
+  "bilibili-article-Bocchi_the_Rock_illustration.json": {
+    "file": "bilibili-article-Bocchi_the_Rock_illustration.json",
+    "kind": "items",
+    "n": 40,
+    "note": ""
+  },
+  "bilibili-article-Bocchi_the_Rock_official_art.json": {
+    "file": "bilibili-article-Bocchi_the_Rock_official_art.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "bilibili-article-_.json": {
+    "file": "bilibili-article-_.json",
+    "kind": "items",
+    "n": 44,
+    "note": ""
+  },
+  "bilibili-article-伊地知虹夏_头像.json": {
+    "file": "bilibili-article-伊地知虹夏_头像.json",
+    "kind": "items",
+    "n": 46,
+    "note": ""
+  },
+  "bilibili-article-伊地知虹夏_立绘.json": {
+    "file": "bilibili-article-伊地知虹夏_立绘.json",
+    "kind": "items",
+    "n": 54,
+    "note": ""
+  },
+  "bilibili-article-伊地知虹夏_设定图.json": {
+    "file": "bilibili-article-伊地知虹夏_设定图.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "bilibili-article-后藤一里_壁纸.json": {
+    "file": "bilibili-article-后藤一里_壁纸.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "bilibili-article-后藤一里_头像.json": {
+    "file": "bilibili-article-后藤一里_头像.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "bilibili-article-后藤一里_立绘.json": {
+    "file": "bilibili-article-后藤一里_立绘.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "bilibili-article-后藤一里_设定图.json": {
+    "file": "bilibili-article-后藤一里_设定图.json",
+    "kind": "items",
+    "n": 180,
+    "note": ""
+  },
+  "bilibili-article-喜多郁代_头像.json": {
+    "file": "bilibili-article-喜多郁代_头像.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "bilibili-article-喜多郁代_立绘.json": {
+    "file": "bilibili-article-喜多郁代_立绘.json",
+    "kind": "items",
+    "n": 2,
+    "note": ""
+  },
+  "bilibili-article-喜多郁代_设定图.json": {
+    "file": "bilibili-article-喜多郁代_设定图.json",
+    "kind": "items",
+    "n": 52,
+    "note": ""
+  },
+  "bilibili-article-孤独摇滚_角色设定.json": {
+    "file": "bilibili-article-孤独摇滚_角色设定.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "bilibili-article-山田_头像.json": {
+    "file": "bilibili-article-山田_头像.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "bilibili-article-山田_立绘.json": {
+    "file": "bilibili-article-山田_立绘.json",
+    "kind": "items",
+    "n": 110,
+    "note": ""
+  },
+  "bilibili-article-山田_设定图.json": {
+    "file": "bilibili-article-山田_设定图.json",
+    "kind": "items",
+    "n": 210,
+    "note": ""
+  },
+  "bilibili-article-結束_.json": {
+    "file": "bilibili-article-結束_.json",
+    "kind": "items",
+    "n": 138,
+    "note": ""
+  },
+  "bilibili-article-結束_設定画.json": {
+    "file": "bilibili-article-結束_設定画.json",
+    "kind": "items",
+    "n": 42,
+    "note": ""
+  },
+  "bilibili-bocchi-Bocchi_AMV.json": {
+    "file": "bilibili-bocchi-Bocchi_AMV.json",
+    "kind": "items",
+    "n": 114,
+    "note": ""
+  },
+  "bilibili-bocchi-Bocchi_Band.json": {
+    "file": "bilibili-bocchi-Bocchi_Band.json",
+    "kind": "items",
+    "n": 210,
+    "note": ""
+  },
+  "bilibili-bocchi-Bocchi_Bass.json": {
+    "file": "bilibili-bocchi-Bocchi_Bass.json",
+    "kind": "items",
+    "n": 87,
+    "note": ""
+  },
+  "bilibili-bocchi-Bocchi_Cover.json": {
+    "file": "bilibili-bocchi-Bocchi_Cover.json",
+    "kind": "items",
+    "n": 414,
+    "note": ""
+  },
+  "bilibili-bocchi-Bocchi_Drum.json": {
+    "file": "bilibili-bocchi-Bocchi_Drum.json",
+    "kind": "items",
+    "n": 368,
+    "note": ""
+  },
+  "bilibili-bocchi-Bocchi_Guitar.json": {
+    "file": "bilibili-bocchi-Bocchi_Guitar.json",
+    "kind": "items",
+    "n": 496,
+    "note": ""
+  },
+  "bilibili-bocchi-Bocchi_Live.json": {
+    "file": "bilibili-bocchi-Bocchi_Live.json",
+    "kind": "items",
+    "n": 643,
+    "note": ""
+  },
+  "bilibili-bocchi-Bocchi_MV.json": {
+    "file": "bilibili-bocchi-Bocchi_MV.json",
+    "kind": "items",
+    "n": 475,
+    "note": ""
+  },
+  "bilibili-bocchi-Bocchi_Piano.json": {
+    "file": "bilibili-bocchi-Bocchi_Piano.json",
+    "kind": "items",
+    "n": 36,
+    "note": ""
+  },
+  "bilibili-bocchi-Bocchi_the_Rock.json": {
+    "file": "bilibili-bocchi-Bocchi_the_Rock.json",
+    "kind": "items",
+    "n": 860,
+    "note": ""
+  },
+  "bilibili-bocchi-Bocchi_the_Rock_anime.json": {
+    "file": "bilibili-bocchi-Bocchi_the_Rock_anime.json",
+    "kind": "items",
+    "n": 734,
+    "note": ""
+  },
+  "bilibili-bocchi-Kessoku.json": {
+    "file": "bilibili-bocchi-Kessoku.json",
+    "kind": "items",
+    "n": 341,
+    "note": ""
+  },
+  "bilibili-bocchi-Kessoku_Band.json": {
+    "file": "bilibili-bocchi-Kessoku_Band.json",
+    "kind": "items",
+    "n": 452,
+    "note": ""
+  },
+  "bilibili-bocchi-articles.json": {
+    "file": "bilibili-bocchi-articles.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "bilibili-bocchi-bocchi.json": {
+    "file": "bilibili-bocchi-bocchi.json",
+    "kind": "items",
+    "n": 747,
+    "note": ""
+  },
+  "bilibili-bocchi-bocchi_chess.json": {
+    "file": "bilibili-bocchi-bocchi_chess.json",
+    "kind": "items",
+    "n": 96,
+    "note": ""
+  },
+  "bilibili-bocchi-bocchi_fan_game.json": {
+    "file": "bilibili-bocchi-bocchi_fan_game.json",
+    "kind": "items",
+    "n": 80,
+    "note": ""
+  },
+  "bilibili-bocchi-bocchi_game.json": {
+    "file": "bilibili-bocchi-bocchi_game.json",
+    "kind": "items",
+    "n": 323,
+    "note": ""
+  },
+  "bilibili-bocchi-bocchi_rhythm.json": {
+    "file": "bilibili-bocchi-bocchi_rhythm.json",
+    "kind": "items",
+    "n": 40,
+    "note": ""
+  },
+  "bilibili-bocchi-bocchi_rock_band.json": {
+    "file": "bilibili-bocchi-bocchi_rock_band.json",
+    "kind": "items",
+    "n": 724,
+    "note": ""
+  },
+  "bilibili-bocchi-bocchi_typing.json": {
+    "file": "bilibili-bocchi-bocchi_typing.json",
+    "kind": "items",
+    "n": 277,
+    "note": ""
+  },
+  "bilibili-bocchi-bocchi_walking_simulator.json": {
+    "file": "bilibili-bocchi-bocchi_walking_simulator.json",
+    "kind": "items",
+    "n": 4,
+    "note": ""
+  },
+  "bilibili-bocchi-伊地知虹夏.json": {
+    "file": "bilibili-bocchi-伊地知虹夏.json",
+    "kind": "items",
+    "n": 822,
+    "note": ""
+  },
+  "bilibili-bocchi-后藤一里.json": {
+    "file": "bilibili-bocchi-后藤一里.json",
+    "kind": "items",
+    "n": 768,
+    "note": ""
+  },
+  "bilibili-bocchi-喜多郁代.json": {
+    "file": "bilibili-bocchi-喜多郁代.json",
+    "kind": "items",
+    "n": 766,
+    "note": ""
+  },
+  "bilibili-bocchi-孤独摇滚.json": {
+    "file": "bilibili-bocchi-孤独摇滚.json",
+    "kind": "items",
+    "n": 827,
+    "note": ""
+  },
+  "bilibili-bocchi-孤独摇滚_AMV.json": {
+    "file": "bilibili-bocchi-孤独摇滚_AMV.json",
+    "kind": "items",
+    "n": 797,
+    "note": ""
+  },
+  "bilibili-bocchi-孤独摇滚_ED.json": {
+    "file": "bilibili-bocchi-孤独摇滚_ED.json",
+    "kind": "items",
+    "n": 229,
+    "note": ""
+  },
+  "bilibili-bocchi-孤独摇滚_LIVE.json": {
+    "file": "bilibili-bocchi-孤独摇滚_LIVE.json",
+    "kind": "items",
+    "n": 915,
+    "note": ""
+  },
+  "bilibili-bocchi-孤独摇滚_MAD.json": {
+    "file": "bilibili-bocchi-孤独摇滚_MAD.json",
+    "kind": "items",
+    "n": 686,
+    "note": ""
+  },
+  "bilibili-bocchi-孤独摇滚_OP.json": {
+    "file": "bilibili-bocchi-孤独摇滚_OP.json",
+    "kind": "items",
+    "n": 733,
+    "note": ""
+  },
+  "bilibili-bocchi-孤独摇滚_OST.json": {
+    "file": "bilibili-bocchi-孤独摇滚_OST.json",
+    "kind": "items",
+    "n": 691,
+    "note": ""
+  },
+  "bilibili-bocchi-孤独摇滚_二创.json": {
+    "file": "bilibili-bocchi-孤独摇滚_二创.json",
+    "kind": "items",
+    "n": 719,
+    "note": ""
+  },
+  "bilibili-bocchi-孤独摇滚_剧情.json": {
+    "file": "bilibili-bocchi-孤独摇滚_剧情.json",
+    "kind": "items",
+    "n": 701,
+    "note": ""
+  },
+  "bilibili-bocchi-孤独摇滚_吉他.json": {
+    "file": "bilibili-bocchi-孤独摇滚_吉他.json",
+    "kind": "items",
+    "n": 815,
+    "note": ""
+  },
+  "bilibili-bocchi-孤独摇滚_同人.json": {
+    "file": "bilibili-bocchi-孤独摇滚_同人.json",
+    "kind": "items",
+    "n": 781,
+    "note": ""
+  },
+  "bilibili-bocchi-孤独摇滚_游戏.json": {
+    "file": "bilibili-bocchi-孤独摇滚_游戏.json",
+    "kind": "items",
+    "n": 844,
+    "note": ""
+  },
+  "bilibili-bocchi-孤独摇滚_现场.json": {
+    "file": "bilibili-bocchi-孤独摇滚_现场.json",
+    "kind": "items",
+    "n": 739,
+    "note": ""
+  },
+  "bilibili-bocchi-孤独摇滚_角色.json": {
+    "file": "bilibili-bocchi-孤独摇滚_角色.json",
+    "kind": "items",
+    "n": 318,
+    "note": ""
+  },
+  "bilibili-bocchi-孤独摇滚_音乐.json": {
+    "file": "bilibili-bocchi-孤独摇滚_音乐.json",
+    "kind": "items",
+    "n": 603,
+    "note": ""
+  },
+  "bilibili-bocchi-山田_.json": {
+    "file": "bilibili-bocchi-山田_.json",
+    "kind": "items",
+    "n": 474,
+    "note": ""
+  },
+  "bilibili-bocchi-結束_.json": {
+    "file": "bilibili-bocchi-結束_.json",
+    "kind": "items",
+    "n": 609,
+    "note": ""
+  },
+  "bilibili-bocchi-結束_吉他.json": {
+    "file": "bilibili-bocchi-結束_吉他.json",
+    "kind": "items",
+    "n": 595,
+    "note": ""
+  },
+  "bilibili-bocchi-結束_音楽.json": {
+    "file": "bilibili-bocchi-結束_音楽.json",
+    "kind": "items",
+    "n": 216,
+    "note": ""
+  },
+  "github-bocchi-repos.json": {
+    "file": "github-bocchi-repos.json",
+    "kind": "items",
+    "n": 200,
+    "note": ""
+  },
+  "images-bocchi-charart.json": {
+    "file": "images-bocchi-charart.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "images-bocchi-design-en.json": {
+    "file": "images-bocchi-design-en.json",
+    "kind": "items",
+    "n": 68,
+    "note": ""
+  },
+  "images-bocchi-design-zh.json": {
+    "file": "images-bocchi-design-zh.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "images-bocchi-illustration-jp.json": {
+    "file": "images-bocchi-illustration-jp.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "images-bocchi-illustration.json": {
+    "file": "images-bocchi-illustration.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "images-bocchi-keyvisual.json": {
+    "file": "images-bocchi-keyvisual.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "images-bocchi-layout-zh.json": {
+    "file": "images-bocchi-layout-zh.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "images-bocchi-material-zh.json": {
+    "file": "images-bocchi-material-zh.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "images-bocchi-material.json": {
+    "file": "images-bocchi-material.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "images-bocchi-officialart.json": {
+    "file": "images-bocchi-officialart.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "images-hitori-avatar.json": {
+    "file": "images-hitori-avatar.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "images-hitori-design.json": {
+    "file": "images-hitori-design.json",
+    "kind": "items",
+    "n": 69,
+    "note": ""
+  },
+  "images-hitori-layout.json": {
+    "file": "images-hitori-layout.json",
+    "kind": "items",
+    "n": 454,
+    "note": ""
+  },
+  "images-hitori-wallpaper.json": {
+    "file": "images-hitori-wallpaper.json",
+    "kind": "items",
+    "n": 397,
+    "note": ""
+  },
+  "images-ikuyo-avatar.json": {
+    "file": "images-ikuyo-avatar.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "images-ikuyo-design.json": {
+    "file": "images-ikuyo-design.json",
+    "kind": "items",
+    "n": 295,
+    "note": ""
+  },
+  "images-ikuyo-layout.json": {
+    "file": "images-ikuyo-layout.json",
+    "kind": "items",
+    "n": 390,
+    "note": ""
+  },
+  "images-kessoku-design-jp.json": {
+    "file": "images-kessoku-design-jp.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "images-kessoku-illustration-jp.json": {
+    "file": "images-kessoku-illustration-jp.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "images-nijika-avatar.json": {
+    "file": "images-nijika-avatar.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "images-nijika-design.json": {
+    "file": "images-nijika-design.json",
+    "kind": "items",
+    "n": 345,
+    "note": ""
+  },
+  "images-nijika-layout.json": {
+    "file": "images-nijika-layout.json",
+    "kind": "items",
+    "n": 222,
+    "note": ""
+  },
+  "images-ryo-avatar.json": {
+    "file": "images-ryo-avatar.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "images-ryo-design.json": {
+    "file": "images-ryo-design.json",
+    "kind": "items",
+    "n": 435,
+    "note": ""
+  },
+  "images-ryo-layout.json": {
+    "file": "images-ryo-layout.json",
+    "kind": "items",
+    "n": 275,
+    "note": ""
+  },
+  "pixiv-bocchi.json": {
+    "file": "pixiv-bocchi.json",
+    "kind": "items",
+    "n": 1181,
+    "note": ""
+  },
+  "pixiv-bocchi_en.json": {
+    "file": "pixiv-bocchi_en.json",
+    "kind": "items",
+    "n": 1087,
+    "note": ""
+  },
+  "pixiv-hitori.json": {
+    "file": "pixiv-hitori.json",
+    "kind": "items",
+    "n": 1181,
+    "note": ""
+  },
+  "pixiv-ikuyo.json": {
+    "file": "pixiv-ikuyo.json",
+    "kind": "items",
+    "n": 1181,
+    "note": ""
+  },
+  "pixiv-kessoku.json": {
+    "file": "pixiv-kessoku.json",
+    "kind": "items",
+    "n": 1181,
+    "note": ""
+  },
+  "pixiv-nijika.json": {
+    "file": "pixiv-nijika.json",
+    "kind": "items",
+    "n": 1181,
+    "note": ""
+  },
+  "pixiv-ryo.json": {
+    "file": "pixiv-ryo.json",
+    "kind": "items",
+    "n": 1181,
+    "note": ""
+  },
+  "reddit-bocchi-extra.json": {
+    "file": "reddit-bocchi-extra.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "web-ann-search.json": {
+    "file": "web-ann-search.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "web-bangumi-bocchi.json": {
+    "file": "web-bangumi-bocchi.json",
+    "kind": "items",
+    "n": 46,
+    "note": ""
+  },
+  "web-bangumi-ryo.json": {
+    "file": "web-bangumi-ryo.json",
+    "kind": "items",
+    "n": 13,
+    "note": ""
+  },
+  "web-bangumi-subject.json": {
+    "file": "web-bangumi-subject.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "web-crunchyroll.json": {
+    "file": "web-crunchyroll.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "web-fandom-characters.json": {
+    "file": "web-fandom-characters.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "web-fandom-collabs.json": {
+    "file": "web-fandom-collabs.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "web-fandom-episodes.json": {
+    "file": "web-fandom-episodes.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "web-fandom-main.json": {
+    "file": "web-fandom-main.json",
+    "kind": "items",
+    "n": 282,
+    "note": ""
+  },
+  "web-fandom-merchandise.json": {
+    "file": "web-fandom-merchandise.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "web-fandom-music.json": {
+    "file": "web-fandom-music.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "web-mal-characters.json": {
+    "file": "web-mal-characters.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "web-mal-main.json": {
+    "file": "web-mal-main.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "web-search-bilibili-article.json": {
+    "file": "web-search-bilibili-article.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "web-search-brands-en.json": {
+    "file": "web-search-brands-en.json",
+    "kind": "items",
+    "n": 1,
+    "note": ""
+  },
+  "web-search-brands-zh.json": {
+    "file": "web-search-brands-zh.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "web-search-fanart.json": {
+    "file": "web-search-fanart.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "web-search-fancreation-zh.json": {
+    "file": "web-search-fancreation-zh.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "web-search-niconico.json": {
+    "file": "web-search-niconico.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "web-search-opensource-zh.json": {
+    "file": "web-search-opensource-zh.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "web-search-opensource.json": {
+    "file": "web-search-opensource.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "web-search-reddit.json": {
+    "file": "web-search-reddit.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "web-search-twitter-en.json": {
+    "file": "web-search-twitter-en.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "web-search-twitter-zh.json": {
+    "file": "web-search-twitter-zh.json",
+    "kind": "items",
+    "n": 0,
+    "note": ""
+  },
+  "web-wikipedia-en.json": {
+    "file": "web-wikipedia-en.json",
+    "kind": "items",
+    "n": 34,
+    "note": ""
+  },
+  "web-wikipedia-zh.json": {
+    "file": "web-wikipedia-zh.json",
+    "kind": "items",
+    "n": 4,
+    "note": ""
+  }
+}

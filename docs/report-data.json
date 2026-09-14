@@ -1,0 +1,121 @@
+{
+  "meta": {
+    "title": "TapTap Maker 技术调研数据",
+    "date": "2026-09-10",
+    "source": "docs/taptap-maker-research.md",
+    "engine": "UrhoX"
+  },
+  "platform": {
+    "name": "TapTap Maker",
+    "tagline": "零门槛 AI 游戏创作工具 — 对话即创作，完成即发布",
+    "website": "https://maker.taptap.cn",
+    "studio": "https://developer.taptap.cn/forge",
+    "docs": "https://developer.taptap.cn/maker/docs"
+  },
+  "development_modes": [
+    {
+      "name": "云端 Maker Studio",
+      "type": "browser",
+      "url": "developer.taptap.cn/forge",
+      "requirements": ["TapTap 开发者账号"],
+      "accessible": false
+    },
+    {
+      "name": "本地开发 (MCP)",
+      "type": "cli",
+      "install_cmd": "npx -y @taptap/maker install --ide codex,cursor,claude",
+      "init_cmd": "npx -y @taptap/maker init",
+      "npm_package": "@taptap/maker",
+      "accessible": true
+    }
+  ],
+  "architecture": {
+    "engine": "UrhoX",
+    "capabilities": [
+      "AI Native 引擎 — Code-First 全栈掌控",
+      "工业级 3D 底座 — PBR 物理渲染、动态多光源、动力学解算",
+      "内置联网对战",
+      "免费 Token + TapTap 云原生托管"
+    ]
+  },
+  "limitations": [
+    "不提供源码导出",
+    "不生成独立运行包",
+    "不交付底层引擎代码"
+  ],
+  "publishing": {
+    "method": "一键发布到 TapTap 平台",
+    "hosting": "TapTap 云原生基础设施，零运维、自动扩缩",
+    "platforms": ["安卓", "iOS", "PC"]
+  },
+  "benchmark": {
+    "date": "2026-09-10",
+    "method": "UrhoX 引擎真实执行，无 LLM 裁判",
+    "top_10": [
+      { "rank": 1, "model": "claude-fable-5-1", "tier": "high", "l2_pass_rate": 90.5, "cost_per_problem": 25.20 },
+      { "rank": 2, "model": "claude-fable-5", "tier": "high", "l2_pass_rate": 89.0, "cost_per_problem": 31.82 },
+      { "rank": 3, "model": "gpt-6-astra", "tier": "xhigh", "l2_pass_rate": 88.9, "cost_per_problem": 21.85 },
+      { "rank": 4, "model": "claude-opus-5", "tier": "xhigh", "l2_pass_rate": 88.9, "cost_per_problem": 48.72 },
+      { "rank": 5, "model": "muse-spark-1.3", "tier": "xhigh", "l2_pass_rate": 87.3, "cost_per_problem": 4.93 },
+      { "rank": 6, "model": "grok-4.6", "tier": "xhigh", "l2_pass_rate": 87.3, "cost_per_problem": 7.96 },
+      { "rank": 7, "model": "gemini-3.8-flash", "tier": "high", "l2_pass_rate": 86.8, "cost_per_problem": 5.35 },
+      { "rank": 8, "model": "gpt-5.6-sol", "tier": "xhigh", "l2_pass_rate": 86.5, "cost_per_problem": 15.79 },
+      { "rank": 9, "model": "claude-opus-5", "tier": "high", "l2_pass_rate": 86.5, "cost_per_problem": 31.13 },
+      { "rank": 10, "model": "grok-4.6", "tier": "high", "l2_pass_rate": 84.1, "cost_per_problem": 6.12 }
+    ],
+    "best_value": [
+      { "model": "qwen3.8-flash", "tier": "xhigh", "l2_pass_rate": 82.5, "cost_per_problem": 0.69 },
+      { "model": "deepseek-v4.1-flash", "tier": "max", "l2_pass_rate": 82.5, "cost_per_problem": 0.95 },
+      { "model": "deepseek-v4-flash", "tier": "max", "l2_pass_rate": 74.6, "cost_per_problem": 0.73 }
+    ]
+  },
+  "showcase_games": [
+    {
+      "name": "微观战争",
+      "genre": ["弹幕射击", "割草", "模拟"],
+      "rating": 4.2,
+      "reviews": 8,
+      "description": "操控免疫细胞对抗病毒、细菌等病原体",
+      "controls": "WASD/方向键移动，鼠标瞄准射击，空格技能",
+      "feedback": "手机端操控困难，PC 端更好；难度较高"
+    },
+    {
+      "name": "TowerHell 塔楼跑酷",
+      "genre": ["3D 跑酷", "平台跳跃", "竞速"],
+      "rating": 3.6,
+      "reviews": 80,
+      "description": "从塔底攀爬到金色塔顶，六大平台类型",
+      "features": ["随机生成塔楼", "8 层递进难度", "计时挑战", "第三人称视角"],
+      "inspiration": "Roblox Tower of Hell",
+      "feedback": "跳跃按键太小、操控不灵敏、难度过高"
+    },
+    {
+      "name": "霓虹防线",
+      "genre": ["塔防", "割草", "策略"],
+      "rating": null,
+      "reviews": 2,
+      "description": "极简线条视觉风暴，霓虹塔可进化四次",
+      "features": ["数据主题", "赛博风格", "纯视觉爽感"],
+      "feedback": "类似保卫萝卜、激光晃眼、缺少音效"
+    }
+  ],
+  "project_recommendations": {
+    "constraints": [
+      "必须使用 TapTap Maker",
+      "只能在 TapTap 生态内发布",
+      "MCP 是本地开发的唯一路径"
+    ],
+    "suggestions": [
+      "优先使用 MCP 本地开发",
+      "考虑叙事向游戏（山田凉/后藤一里角色）",
+      "使用 Tripo Studio 生成 3D 模型",
+      "借鉴 mattpocock/skills 叙事工作流"
+    ],
+    "next_steps": [
+      "npx -y @taptap/maker install",
+      "npx -y @taptap/maker init",
+      "创建第一个简单场景验证",
+      "结合 Tripo 生成的 3D 模型进行集成测试"
+    ]
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "total": 62515,
+  "breakdown": [
+    {
+      "directory": "github",
+      "sources": 16872
+    },
+    {
+      "directory": "forums",
+      "sources": 52
+    },
+    {
+      "directory": "blogs",
+      "sources": 2565
+    },
+    {
+      "directory": "communities",
+      "sources": 288
+    },
+    {
+      "directory": "competitors",
+      "sources": 14156
+    },
+    {
+      "directory": "tutorials",
+      "sources": 1929
+    },
+    {
+      "directory": "game-jams",
+      "sources": 562
+    },
+    {
+      "directory": "chinese-community",
+      "sources": 1063
+    },
+    {
+      "directory": "bocchi",
+      "sources": 25028
+    }
+  ]
+}

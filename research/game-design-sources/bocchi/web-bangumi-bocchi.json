@@ -1,0 +1,234 @@
+{
+  "items": [
+    {
+      "source": "bangumi-bocchi",
+      "text": "关于我们",
+      "url": "https://bgm.tv/about"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "社区指导原则",
+      "url": "https://bgm.tv/about/guideline"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "版权声明",
+      "url": "https://bgm.tv/about/copyright"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "链接我们",
+      "url": "https://bgm.tv/about/link2us"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "BBCode",
+      "url": "https://bgm.tv/help/bbcode"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "站务论坛",
+      "url": "https://bgm.tv/group/forum"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "番组开发",
+      "url": "https://bgm.tv/group/dev"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "BUG追踪",
+      "url": "https://bgm.tv/group/issues"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "天窗站务",
+      "url": "https://bgm.tv/group/doujin"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "年鉴 2025",
+      "url": "https://bgm.tv/award/2025"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "TBA 2025",
+      "url": "https://bgm.tv/award/2025/winner"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "番組WIKI計画",
+      "url": "https://bgm.tv/group/wiki"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "etokei 绘时计",
+      "url": "https://bgm.tv/tokei"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "Bangumi 番组计划",
+      "url": "https://bgm.tv/"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "近期注目",
+      "url": "https://bgm.tv/anime/browser/?sort=trends"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "分类浏览",
+      "url": "https://bgm.tv/anime/browser"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "动画标签",
+      "url": "https://bgm.tv/anime/tag"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "每日放送",
+      "url": "https://bgm.tv/calendar"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "动画日志",
+      "url": "https://bgm.tv/anime/blog"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "近期注目",
+      "url": "https://bgm.tv/book/browser/?sort=trends"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "分类浏览",
+      "url": "https://bgm.tv/book/browser"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "图书标签",
+      "url": "https://bgm.tv/book/tag"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "图书日志",
+      "url": "https://bgm.tv/book/blog"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "近期注目",
+      "url": "https://bgm.tv/music/browser/?sort=trends"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "浏览全部",
+      "url": "https://bgm.tv/music/browser"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "音乐标签",
+      "url": "https://bgm.tv/music/tag"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "音乐日志",
+      "url": "https://bgm.tv/music/blog"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "近期注目",
+      "url": "https://bgm.tv/game/browser/?sort=trends"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "平台浏览",
+      "url": "https://bgm.tv/game/browser"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "游戏标签",
+      "url": "https://bgm.tv/game/tag"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "游戏日志",
+      "url": "https://bgm.tv/game/blog"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "近期注目",
+      "url": "https://bgm.tv/real/browser/?sort=trends"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "分类浏览",
+      "url": "https://bgm.tv/real/browser"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "三次元标签",
+      "url": "https://bgm.tv/real/tag"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "三次元日志",
+      "url": "https://bgm.tv/real/blog"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "虚构角色",
+      "url": "https://bgm.tv/character"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "现实人物",
+      "url": "https://bgm.tv/person"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "随便看看",
+      "url": "https://bgm.tv/group/discover"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "所有小组",
+      "url": "https://bgm.tv/group/all"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "时空管理局",
+      "url": "https://bgm.tv/timeline"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "开发者平台",
+      "url": "https://bgm.tv/dev"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "MAGI 问答",
+      "url": "https://bgm.tv/magi"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "Dollars",
+      "url": "https://bgm.tv/dollars"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "onAir",
+      "url": "https://bgm.tv/onair"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "Mobile",
+      "url": "https://bgm.tv/group/topic/5155"
+    },
+    {
+      "source": "bangumi-bocchi",
+      "text": "天窗联盟",
+      "url": "https://doujin.bgm.tv/"
+    }
+  ]
+}

@@ -1,0 +1,69 @@
+{
+  "items": [
+    {
+      "source": "bangumi-ryo",
+      "text": "关于我们",
+      "url": "https://bgm.tv/about"
+    },
+    {
+      "source": "bangumi-ryo",
+      "text": "社区指导原则",
+      "url": "https://bgm.tv/about/guideline"
+    },
+    {
+      "source": "bangumi-ryo",
+      "text": "版权声明",
+      "url": "https://bgm.tv/about/copyright"
+    },
+    {
+      "source": "bangumi-ryo",
+      "text": "链接我们",
+      "url": "https://bgm.tv/about/link2us"
+    },
+    {
+      "source": "bangumi-ryo",
+      "text": "BBCode",
+      "url": "https://bgm.tv/help/bbcode"
+    },
+    {
+      "source": "bangumi-ryo",
+      "text": "站务论坛",
+      "url": "https://bgm.tv/group/forum"
+    },
+    {
+      "source": "bangumi-ryo",
+      "text": "番组开发",
+      "url": "https://bgm.tv/group/dev"
+    },
+    {
+      "source": "bangumi-ryo",
+      "text": "BUG追踪",
+      "url": "https://bgm.tv/group/issues"
+    },
+    {
+      "source": "bangumi-ryo",
+      "text": "天窗站务",
+      "url": "https://bgm.tv/group/doujin"
+    },
+    {
+      "source": "bangumi-ryo",
+      "text": "年鉴 2025",
+      "url": "https://bgm.tv/award/2025"
+    },
+    {
+      "source": "bangumi-ryo",
+      "text": "TBA 2025",
+      "url": "https://bgm.tv/award/2025/winner"
+    },
+    {
+      "source": "bangumi-ryo",
+      "text": "番組WIKI計画",
+      "url": "https://bgm.tv/group/wiki"
+    },
+    {
+      "source": "bangumi-ryo",
+      "text": "etokei 绘时计",
+      "url": "https://bgm.tv/tokei"
+    }
+  ]
+}
