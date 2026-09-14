@@ -2,5 +2,6 @@ node_modules/
 .env
 .env.*
 .penguin/
-ShanTianLiang/__pycache__/
+ShanTianLiang/
+__pycache__/
 *.pyc
