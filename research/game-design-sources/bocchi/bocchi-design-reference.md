@@ -3,7 +3,7 @@
 > 本文档基于已收集的可审计来源整理，所有结论均指向 `research/game-design-sources/bocchi/` 下的原始 JSON。  
 > 角色设计图口径：`11,554` items / `9,411` unique URLs（统计脚本：`count-design-sources.mjs`）。  
 >
-> ⚠️ **审计更正（2026-09-14）**：原先「人物设定」一节引用的 `web-*` 权威数据库文件（MAL/ANN/Bangumi/Crunchyroll/Fandom/Wikipedia 等）经盘点**几乎全部为空壳（`items: []`）**，不能作为设定依据。角色设定的权威数据已切换为**官方现行版本**（番剧官网 `bocchi.rocks/character`、日文维基、中文维基），结构化解析见 `parsed/*.json`，冲突核查见 `parsed/CHARACTER_DATA_AUDIT.md`。本节以下引用空文件的条目均已加注。
+> ⚠️ **审计更正（2026-09-14）**：原先「人物设定」一节引用的 `web-*` 权威数据库文件（MAL/ANN/Bangumi/Crunchyroll/Fandom/Wikipedia 等）经盘点**几乎全部为空壳（`items: []`）**，不能作为设定依据。角色设定的权威数据已切换为**官方现行版本**（番剧官网 `bocchi.rocks/character`、日文维基、中文维基），结构化解析见 `docs/characters/*.json`，冲突核查见 `docs/characters/CHARACTER_DATA_AUDIT.md`。本节以下引用空文件的条目均已加注。
 
 ---
 
@@ -49,8 +49,8 @@
 | 伊地知虹夏 | 伊地知虹夏 | 鼓手 | 开朗、领队/まとめ役、常识人 |
 | 喜多郁代 | 喜多郁代 | 节奏吉他 / 主唱 | 现充、社交、SNS重度 |
 
-> ✅ **现行官方明细（已联网补齐）**：生日/血型/身高体重/班级/声优/乐器分工/家庭等结构化字段见 `parsed/hitori.json`、`parsed/ryo.json`、`parsed/nijika.json`、`parsed/ikuyo.json`，来源为番剧官网 `bocchi.rocks/character` + 日文维基 + 中文维基。
-> ⚠️ **更正**：原来源索引 `web-mal-characters.json` / `web-fandom-main.json` / `web-bangumi-subject.json` **均为空壳文件（`items: []`）**，无法支撑设定结论；`bilibili-*` 为粉丝二创/检索条目，同样非设定权威。设定数据以 `parsed/*.json` 为准。
+> ✅ **现行官方明细（已联网补齐）**：生日/血型/身高体重/班级/声优/乐器分工/家庭等结构化字段见 `docs/characters/hitori.json`、`docs/characters/ryo.json`、`docs/characters/nijika.json`、`docs/characters/ikuyo.json`、`docs/characters/band.json`（乐队与作品元数据），来源为番剧官网 `bocchi.rocks/character` + 日文维基 + 中文维基。
+> ⚠️ **更正**：原来源索引 `web-mal-characters.json` / `web-fandom-main.json` / `web-bangumi-subject.json` **均为空壳文件（`items: []`）**，无法支撑设定结论；`bilibili-*` 为粉丝二创/检索条目，同样非设定权威。设定数据以 `docs/characters/*.json` 为准。
 
 ### 3.2 次要 / 配角
 
@@ -290,7 +290,7 @@
 
 > ⚠️ **审计更正（2026-09-14）**：
 > - **「维基 / 数据库来源已覆盖 …」的说法不实**。`web-wikipedia-*.json`、`web-mal-*.json`、`web-ann-search.json`、`web-bangumi-*.json`、`web-crunchyroll.json`、`web-fandom-*.json`、`web-search-*.json` 共 **45 个权威数据库文件为空壳（`items: []`）**，实际未采集到内容。
-> - **角色设定数据已切换为官方现行版本**（番剧官网 `bocchi.rocks/character` + 日文维基 + 中文维基），结构化结果见 `parsed/*.json`。
+> - **角色设定数据已切换为官方现行版本**（番剧官网 `bocchi.rocks/character` + 日文维基 + 中文维基），结构化结果见 `docs/characters/*.json`。
 > - 上述 11,554 / 9,411 数字仅指**图片/检索条目**（Pixiv + Bing + Bilibili 专栏），不代表角色设定资料已采集，两者需区分。
 
 ### 已完成脚本

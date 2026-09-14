@@ -2,7 +2,7 @@
 
 > 核查日期：2026-09-14
 > 范围：`research/game-design-sources/bocchi/` 下后藤一里、山田凉、伊地知虹夏、喜多郁代、结束バンド的设定数据
-> 结论：把数据切换到**官方现行版本**（番剧官网 + 日文维基 + 中文维基），补齐了结构化解析版本（`parsed/*.json`），并核查了跨来源冲突。
+> 结论：把数据切换到**官方现行版本**（番剧官网 + 日文维基 + 中文维基），补齐了结构化解析版本（`docs/characters/*.json`），并核查了跨来源冲突。
 
 ---
 
@@ -11,7 +11,7 @@
 1. **本地权威来源文件几乎全是空壳**。`research/game-design-sources/bocchi/` 下 124 个 JSON 中 **45 个为 `items: []`**，包括全部 `web-*` 权威数据库文件：`web-mal-main.json`、`web-mal-characters.json`、`web-ann-search.json`、`web-bangumi-subject.json`、`web-crunchyroll.json`、`web-fandom-*.json`、`web-wikipedia-*.json`、`web-search-*.json`。完整清单见附录 A。
 2. **`bocchi-design-reference.md` 存在悬空引用**。该文档第 3/11/12 节以这些空文件为设定依据，并宣称「11,554 items / 9,411 unique URLs」——但实际这些文件没有可审计内容，设定结论无真实来源支撑。
 3. **本地有真实内容的**是 bilibili 视频/专栏、pixiv 图片的 URL 检索条目（79 个文件），属于**粉丝二创/检索产物**，不能作为设定权威，仅作「民间说法」对照。
-4. **权威数据已联网补齐**（来源：番剧官网 `bocchi.rocks/character`、日文维基「ぼっち・ざ・ろっく!」、中文维基「孤獨搖滾！」），完整明细见 `parsed/*.json`。
+4. **权威数据已联网补齐**（来源：番剧官网 `bocchi.rocks/character`、日文维基「ぼっち・ざ・ろっく!」、中文维基「孤獨搖滾！」），完整明细见 `docs/characters/*.json`。
 
 ---
 
@@ -80,8 +80,8 @@
 
 | # | 冲突/问题 | 现状 | 修正 |
 |---|---|---|---|
-| C1 | **权威来源空壳** | 45 个 `web-*.json` 为 `items:[]` | 以官方现行数据补齐（见 `parsed/`），原文件保留 |
-| C2 | **bocchi-design-reference.md 悬空引用** | 引用空文件、宣称 11,554/9,411 | 标注「原引用文件为空」，改指向 parsed 官方数据 |
+| C1 | **权威来源空壳** | 45 个 `web-*.json` 为 `items:[]` | 以官方现行数据补齐（见 `docs/characters/`），原文件保留 |
+| C2 | **bocchi-design-reference.md 悬空引用** | 引用空文件、宣称 11,554/9,411 | 标注「原引用文件为空」，改指向 docs/characters 官方数据 |
 | C3 | **设置地点中文译名不一** | 結束バンド 大陆=纽带/结束乐队、台湾=团结Band | 三译名并存，注释说明（非数据错误） |
 | C4 | **一里二年级班级跨卷矛盾** | 4卷 2年3組 vs 6卷 2年C組 | 以作者2024-05确认为准=2年3組 |
 | C5 | **作品年表易混淆** | 连载开始时间：2017-12-19 客串 vs 2018-03-19 正式连载 | 客串/正式分列，均已标注 |
@@ -92,13 +92,13 @@
 
 | 文件 | 内容 | 字段数 |
 |---|---|---|
-| `parsed/hitori.json` | 后藤一里官方设定 | 14 |
-| `parsed/ryo.json` | 山田凉官方设定 | 14 |
-| `parsed/nijika.json` | 伊地知虹夏官方设定 | 12 |
-| `parsed/ikuyo.json` | 喜多郁代官方设定 | 12 |
-| `parsed/band.json` | 結束バンド + 作品元数据 | 7+6 |
-| `parsed/_raw/characters_official.md` | 权威来源原始摘录 | — |
-| `parsed/_inventory.json` | 本地 124 个文件盘点 | — |
+| `docs/characters/hitori.json` | 后藤一里官方设定 | 14 |
+| `docs/characters/ryo.json` | 山田凉官方设定 | 14 |
+| `docs/characters/nijika.json` | 伊地知虹夏官方设定 | 12 |
+| `docs/characters/ikuyo.json` | 喜多郁代官方设定 | 12 |
+| `docs/characters/band.json` | 結束バンド + 作品元数据 | 7+6 |
+| `docs/characters/_raw/characters_official.md` | 权威来源原始摘录 | — |
+| `docs/characters/_inventory.json` | 本地 124 个文件盘点 | — |
 
 每个字段含 `value`、`source`、`source_authority`（high=官网/维基）。
 
