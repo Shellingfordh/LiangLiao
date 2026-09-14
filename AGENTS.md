@@ -82,7 +82,7 @@
 ## 易错点
 
 1. **45 个空壳来源文件**：`research/game-design-sources/bocchi/` 下 `web-mal-*.json`、`web-ann-search.json`、`web-bangumi-*.json`、`web-crunchyroll.json`、`web-fandom-*.json`、`web-wikipedia-*.json`、`web-search-*.json` 的 `items` 均为 `[]`（空壳），**不能作为设定依据**。它们只是采集失败留下的空文件。
-2. **角色核查产出位置**：原 `bocchi/parsed/` 已迁移到 `docs/characters/`。仓库内不应再引用 `parsed/`。
+2. **角色核查产出位置**：角色核查产出已迁至 `docs/characters/`，仓库内不应再引用旧路径。
 3. **`ShanTianLiang/` 是空目录**：仓库根目录下有个与仓库同名的嵌套目录，内容为空，已在 `.gitignore` 忽略，勿写入文件。
 4. **`.penguin/` 忽略**：历史 scratch 会话，不在版本控制中。
 5. **Tripo 模型版本约束**：Tripo 下游 task 需要上游模型版本 ≥ 特定版本（见 `poc/tripo-gen.py` 与 `docs/integration.md`），报错时先查版本。

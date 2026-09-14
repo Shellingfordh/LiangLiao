@@ -29,7 +29,7 @@
 ### Changed
 - 发现并标注 `research/game-design-sources/bocchi/` 下 **45 个 `web-*` 权威来源文件为空壳（`items: []`）**
 - 修正 `bocchi-design-reference.md` 对空壳文件的悬空引用，设定数据切换为官方现行版本（番剧官网 `bocchi.rocks/character` + 日文维基 + 中文维基）
-- 角色核查引用链全部从 `bocchi/parsed/` 更新为 `docs/characters/`
+- 角色核查引用链全部更新为 `docs/characters/` 路径
 
 ### Related
 - 冲突核查详情：[`docs/characters/CHARACTER_DATA_AUDIT.md`](docs/characters/CHARACTER_DATA_AUDIT.md)
