@@ -21,6 +21,8 @@
 | `docs/demand.md` | Tripothon S1 赛事规则与提交物 |
 | `CHANGELOG.md` | 当前阶段与已完成决策 |
 
+`research/game-design-sources/` 保留非 IP 的通用竞品、叙事、关系系统与生活模拟原始调研；不得恢复其旧的 `bocchi/` 目录或以原作角色为查询目标。
+
 ## 实施起点
 
 1. 先完成 Tripo 角色 GLB 和 Marble 背景/镜头在 Maker 真机的 M0 Spike；

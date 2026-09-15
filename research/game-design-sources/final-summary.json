@@ -1,0 +1,117 @@
+{
+  "total": 14909,
+  "breakdown": [
+    {
+      "directory": "github",
+      "sources": 14909,
+      "files": [
+        {
+          "file": "bocchi-games.json",
+          "count": 6
+        },
+        {
+          "file": "gh-anime-style-game.json",
+          "count": 151
+        },
+        {
+          "file": "gh-character-interaction-game.json",
+          "count": 246
+        },
+        {
+          "file": "gh-cozy-game.json",
+          "count": 1535
+        },
+        {
+          "file": "gh-dating-sim-engine.json",
+          "count": 27
+        },
+        {
+          "file": "gh-dialogue-system-game.json",
+          "count": 288
+        },
+        {
+          "file": "gh-game-jam-2024.json",
+          "count": 3964
+        },
+        {
+          "file": "gh-indie-game-design.json",
+          "count": 148
+        },
+        {
+          "file": "gh-low-poly-game.json",
+          "count": 713
+        },
+        {
+          "file": "gh-music-rhythm-game.json",
+          "count": 579
+        },
+        {
+          "file": "gh-narrative-game-engine.json",
+          "count": 196
+        },
+        {
+          "file": "gh-pixel-art-game.json",
+          "count": 3574
+        },
+        {
+          "file": "gh-relationship-game.json",
+          "count": 1052
+        },
+        {
+          "file": "gh-slice-of-life-game.json",
+          "count": 47
+        },
+        {
+          "file": "gh-story-driven-game.json",
+          "count": 661
+        },
+        {
+          "file": "gh-taptap-maker.json",
+          "count": 33
+        },
+        {
+          "file": "gh-tripo-3d.json",
+          "count": 129
+        },
+        {
+          "file": "gh-visual-novel-engine.json",
+          "count": 1080
+        },
+        {
+          "file": "gh-walking-simulator.json",
+          "count": 480
+        }
+      ]
+    },
+    {
+      "directory": "forums",
+      "sources": 0,
+      "files": []
+    },
+    {
+      "directory": "blogs",
+      "sources": 0,
+      "files": []
+    },
+    {
+      "directory": "communities",
+      "sources": 0,
+      "files": []
+    },
+    {
+      "directory": "competitors",
+      "sources": 0,
+      "files": []
+    },
+    {
+      "directory": "tutorials",
+      "sources": 0,
+      "files": []
+    },
+    {
+      "directory": "game-jams",
+      "sources": 0,
+      "files": []
+    }
+  ]
+}
