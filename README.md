@@ -1,54 +1,24 @@
 # 送给你这个回来的人
 
-> **Tripothon S1**（Tripo AI 世界构建黑客松）参赛项目 —— 「A Gift for ______」
->
-> 一座会自动运转的小镇：你离开时，角色们在真实时间里继续生活、写日记、想心事；你回来时，他们还记得你。
+Tripothon S1 原创参赛项目：一位生活在另一座城市、与你共处同一真实时间线的人。用户以聊天为主和她相处；她的当地时间、日程和生活事件决定何时回复，而 3D 状态窗展示她此刻所在的咖啡馆、公寓、通勤路上或休闲地点。
 
----
+## 当前设计
 
-## 简介
+- 单一核心人格；关系前史与所在城市决定她的一条平行人生；
+- 首轮城市：上海、成都、洛杉矶、伦敦；
+- 用户消息可排队；她忙碌或睡眠后带着经历自然回复；
+- 关系和共同记忆会影响以后她愿意分享的内容；
+- 仅使用原创资产，不使用现有动漫 IP。
 
-一款 3D 二次元陪伴体验（TapTap Maker 构建）：玩家回到小镇，三位角色（小满 / 阿泽 / 奶奶）基于**真实时间差**自主生成事件与日记，让玩家感受到「我不在的时候，这个世界仍在运转」。核心体验不是通关，而是**被记得**。
+## 文档
 
-- **引擎**：TapTap Maker（UrhoX + Lua）
-- **3D 角色**：Tripo `text_to_model` 生成 GLB
-- **AI**：Maker 内置 AI + 角色 system prompt（Lua 调度事件）
+| 文件 | 内容 |
+| --- | --- |
+| [设计规格](docs/superpowers/specs/2026-09-15-parallel-companion-design.md) | 产品机制、数据模型、状态机、PoC 与验收 |
+| [平台能力与资产规格](docs/platform-capabilities.md) | Tripo、Marble、TapTap Maker 的用法、格式和限制 |
+| [赛事规则](docs/demand.md) | Tripothon S1 赛道、提交物与评审规则 |
+| [变更记录](CHANGELOG.md) | 当前阶段与历史决策 |
 
----
+## 实施顺序
 
-## 关键文档
-
-| 文档 | 内容 |
-|------|------|
-| [赛事规则](docs/demand.md) | Tripothon S1 赛道、交付物、评审权重、验收清单 |
-| [选题与设计](docs/topic.md) | 故事、角色、技术架构、7 天 PoC 计划、设计决策 |
-| [设计方向汇报](docs/design-summary-report.md) | 玩法 / 表现 / 操作 / 核心循环设计 |
-| [Tripo × Maker 联动调研](docs/integration.md) | Tripo API 与 TapTap Maker 的集成方案 |
-| [角色设定核查](docs/characters/CHARACTER_DATA_AUDIT.md) | 孤独摇滚角色官方数据 + 冲突核查（结构化数据见 `docs/characters/`） |
-
-## 开发日志
-
-- **[CHANGELOG.md](CHANGELOG.md)** — 里程碑进度（当前进度表）
-- **[poc/build-log.md](poc/build-log.md)** — 每日开发日志（Day 0 完成 / Day 1 计划）
-
-## 给 AI Agent
-
-接手本仓库前请先读 **[AGENTS.md](AGENTS.md)**：目录结构、文档地图、权威度约定与易错点。
-
----
-
-## 快速开始（PoC）
-
-```bash
-# 1. 生成第一个角色 GLB（需 TRIPO_API_KEY）
-cd poc
-python tripo-gen.py --only xiaoman
-
-# 2. 初始化 TapTap Maker 项目
-npx -y @taptap/maker init
-
-# 3. 实机预览 / 测试
-#    详见 poc/README.md
-```
-
-> 提交截止：**2026-10-05**（线上）· 详情见 `docs/demand.md`。
+先完成 M0：导入一位原创 Tripo 角色，并把 Marble 生成的城市氛围以轻量背景/镜头接入 TapTap Maker 状态窗，在真机验证性能。通过后再实现时区、消息排队和关系记忆。
