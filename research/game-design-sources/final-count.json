@@ -1,16 +1,12 @@
 {
-  "total": 19309,
+  "total": 36327,
   "target": 2000,
   "achieved": true,
   "breakdown": [
     {
       "directory": "github",
-      "sources": 15095,
+      "sources": 17046,
       "files": [
-        {
-          "file": "bocchi-games.json",
-          "count": 6
-        },
         {
           "file": "gh-anime-style-game.json",
           "count": 151
@@ -30,6 +26,14 @@
         {
           "file": "gh-dialogue-system-game.json",
           "count": 288
+        },
+        {
+          "file": "gh-expanded-batch2.json",
+          "count": 1486
+        },
+        {
+          "file": "gh-expanded-results.json",
+          "count": 397
         },
         {
           "file": "gh-game-jam-2024.json",
@@ -84,8 +88,12 @@
           "count": 480
         },
         {
+          "file": "representative-repos.json",
+          "count": 80
+        },
+        {
           "file": "top-repos-by-category.json",
-          "count": 186
+          "count": 180
         }
       ]
     },
@@ -101,7 +109,7 @@
     },
     {
       "directory": "blogs",
-      "sources": 445,
+      "sources": 2565,
       "files": [
         {
           "file": "blog-results.json",
@@ -110,23 +118,43 @@
         {
           "file": "case-studies-results.json",
           "count": 300
+        },
+        {
+          "file": "design-media-results.json",
+          "count": 2120
         }
       ]
     },
     {
       "directory": "communities",
-      "sources": 174,
+      "sources": 288,
       "files": [
         {
           "file": "community-results.json",
           "count": 174
+        },
+        {
+          "file": "expanded-forums-results.json",
+          "count": 93
+        },
+        {
+          "file": "expanded-reddit-results.json",
+          "count": 21
         }
       ]
     },
     {
       "directory": "competitors",
-      "sources": 1052,
+      "sources": 14156,
       "files": [
+        {
+          "file": "deep-stores-results.json",
+          "count": 7533
+        },
+        {
+          "file": "expanded-stores-results.json",
+          "count": 5571
+        },
         {
           "file": "similar-results.json",
           "count": 694
@@ -139,15 +167,11 @@
     },
     {
       "directory": "tutorials",
-      "sources": 1929,
+      "sources": 1658,
       "files": [
         {
           "file": "3d-indie-results.json",
           "count": 71
-        },
-        {
-          "file": "bocchi-anime-results.json",
-          "count": 271
         },
         {
           "file": "books-results.json",

@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 
 const rootDir = process.cwd();
-const dirs = ['github', 'forums', 'blogs', 'communities', 'competitors', 'tutorials', 'game-jams', 'chinese-community', 'bocchi'];
+const dirs = ['github', 'forums', 'blogs', 'communities', 'competitors', 'tutorials', 'game-jams', 'chinese-community'];
 
 const uniqueUrls = new Set();
 const dirStats = {};

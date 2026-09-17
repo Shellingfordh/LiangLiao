@@ -1,29 +1,16 @@
 {
-  "total_unique": 25746,
+  "total_unique": 12882,
   "breakdown": {
-    "github": 5189,
+    "github": 5177,
     "forums": 52,
     "blogs": 2565,
     "communities": 288,
     "competitors": 14156,
-    "tutorials": 1929,
+    "tutorials": 1658,
     "game-jams": 562,
-    "chinese-community": 1063,
-    "bocchi": 24396
+    "chinese-community": 1063
   },
   "sample": [
-    "https://api.github.com/repos/SamToki/Yamanobo-Ryou",
-    "https://github.com/SamToki/Yamanobo-Ryou",
-    "https://api.github.com/repos/PolyNub/BOCCHI-THE-GAME",
-    "https://github.com/PolyNub/BOCCHI-THE-GAME",
-    "https://api.github.com/repos/Cameron-Programer/Bocchi-Chess",
-    "https://github.com/Cameron-Programer/Bocchi-Chess",
-    "https://api.github.com/repos/Pineapple840/project_kessoku",
-    "https://github.com/Pineapple840/project_kessoku",
-    "https://api.github.com/repos/ReiRingo/Hitori-Days",
-    "https://github.com/ReiRingo/Hitori-Days",
-    "https://api.github.com/repos/Rockyjrg/FinalProjectcs4953",
-    "https://github.com/Rockyjrg/FinalProjectcs4953",
     "https://api.github.com/repos/DoublePigeon/RegentCardsAnimeRework",
     "https://github.com/DoublePigeon/RegentCardsAnimeRework",
     "https://api.github.com/repos/lassedds/Melonloader-AnimeGaming",
@@ -111,6 +98,18 @@
     "https://api.github.com/repos/snehakn-18/Portfolio-Page-For-Editkaro.in",
     "https://github.com/snehakn-18/Portfolio-Page-For-Editkaro.in",
     "https://api.github.com/repos/Bala170/wallpaper-website",
-    "https://github.com/Bala170/wallpaper-website"
+    "https://github.com/Bala170/wallpaper-website",
+    "https://api.github.com/repos/Nim-2007/Anime-style-game",
+    "https://github.com/Nim-2007/Anime-style-game",
+    "https://api.github.com/repos/1Poseidon3/Animedle",
+    "https://github.com/1Poseidon3/Animedle",
+    "https://api.github.com/repos/omass06335yr-bit/anime-fighting-game",
+    "https://github.com/omass06335yr-bit/anime-fighting-game",
+    "https://api.github.com/repos/brianahlers/anime-fighter",
+    "https://github.com/brianahlers/anime-fighter",
+    "https://api.github.com/repos/KingKhand/Uno-rebirth-",
+    "https://github.com/KingKhand/Uno-rebirth-",
+    "https://api.github.com/repos/0Xiaohei0/FortressInTheSky2",
+    "https://github.com/0Xiaohei0/FortressInTheSky2"
   ]
 }

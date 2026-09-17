@@ -22,3 +22,7 @@ Tripothon S1 原创参赛项目：一位生活在另一座城市、与你共处�
 ## 实施顺序
 
 先完成 M0：导入一位原创 Tripo 角色，并把 Marble 生成的城市氛围以轻量背景/镜头接入 TapTap Maker 状态窗，在真机验证性能。通过后再实现时区、消息排队和关系记忆。
+
+## 当前交接
+
+M0-0 已冻结为可开工基线：先在 Maker 真机中展示原创角色“林若夕”的 A-pose GLB 与一张 4:3 洛杉矶咖啡馆背景。角色参考图和四视图交付到 `poc/art/source/lin-ruoxi/`；完整资产契约、验收标准与下一阶段边界见[设计规格的 M0-0](docs/superpowers/specs/2026-09-15-parallel-companion-design.md#m0-0林若夕可见状态窗已冻结开工基线2026-09-16)。

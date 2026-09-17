@@ -1190,56 +1190,6 @@
       "topics": []
     }
   ],
-  "bocchi": [
-    {
-      "name": "SamToki/Yamanobo-Ryou",
-      "stars": 15,
-      "desc": "山田凉上山，「孤独摇滚！」同人打字训练游戏。屑凉被讨债的波奇酱追上山，开始无尽的逃亡。 ／ Yamanobo-Ryou (lit. Yamada Ryou climbing mountain) is a \"Bocchi the Rock!\"",
-      "url": "https://github.com/SamToki/Yamanobo-Ryou",
-      "topics": [
-        "bocchi-the-rock",
-        "typing-game",
-        "typing-practice",
-        "typing-trainer",
-        "web-application"
-      ]
-    },
-    {
-      "name": "PolyNub/BOCCHI-THE-GAME",
-      "stars": 8,
-      "desc": "Simple 4 key rhythm game themed after Bocchi The Rock, made for a school project",
-      "url": "https://github.com/PolyNub/BOCCHI-THE-GAME",
-      "topics": []
-    },
-    {
-      "name": "Cameron-Programer/Bocchi-Chess",
-      "stars": 1,
-      "desc": "Bocchi the rock chess game. ",
-      "url": "https://github.com/Cameron-Programer/Bocchi-Chess",
-      "topics": []
-    },
-    {
-      "name": "Pineapple840/project_kessoku",
-      "stars": 0,
-      "desc": "A rhythm game based on 'Bocchi the Rock'",
-      "url": "https://github.com/Pineapple840/project_kessoku",
-      "topics": []
-    },
-    {
-      "name": "ReiRingo/Hitori-Days",
-      "stars": 0,
-      "desc": "Cozy walking simulator RPG fan game of the beloved Japanese animation series Bocchi The Rock!",
-      "url": "https://github.com/ReiRingo/Hitori-Days",
-      "topics": []
-    },
-    {
-      "name": "Rockyjrg/FinalProjectcs4953",
-      "stars": 0,
-      "desc": "The goal is to make a rhythm game surrounding bocchi the rock using golang and raylib",
-      "url": "https://github.com/Rockyjrg/FinalProjectcs4953",
-      "topics": []
-    }
-  ],
   "taptap": [
     {
       "name": "2624111503-bot/tap-maker-ui-generator",

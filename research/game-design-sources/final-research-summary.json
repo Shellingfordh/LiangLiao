@@ -1,17 +1,17 @@
 {
-  "total_sources": 37407,
-  "total_unique_urls": 13047,
+  "total_sources": 37210,
+  "total_unique_urls": 12882,
   "baseline_unique_urls": 6168,
-  "net_new_unique_urls": 6879,
+  "net_new_unique_urls": 6714,
   "baseline_total_sources": 17946,
-  "net_new_total_sources": 19461,
+  "net_new_total_sources": 19264,
   "breakdown": {
-    "github": 5109,
+    "github": 5177,
     "forums": 52,
     "blogs": 2565,
     "communities": 288,
     "competitors": 14156,
-    "tutorials": 1929,
+    "tutorials": 1658,
     "game-jams": 562,
     "chinese-community": 1063
   },

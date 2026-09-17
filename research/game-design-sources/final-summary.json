@@ -1,14 +1,10 @@
 {
-  "total": 14909,
+  "total": 16469,
   "breakdown": [
     {
       "directory": "github",
-      "sources": 14909,
+      "sources": 16469,
       "files": [
-        {
-          "file": "bocchi-games.json",
-          "count": 6
-        },
         {
           "file": "gh-anime-style-game.json",
           "count": 151
@@ -28,6 +24,10 @@
         {
           "file": "gh-dialogue-system-game.json",
           "count": 288
+        },
+        {
+          "file": "gh-expanded-batch2.json",
+          "count": 1486
         },
         {
           "file": "gh-game-jam-2024.json",
@@ -80,6 +80,10 @@
         {
           "file": "gh-walking-simulator.json",
           "count": 480
+        },
+        {
+          "file": "representative-repos.json",
+          "count": 80
         }
       ]
     },

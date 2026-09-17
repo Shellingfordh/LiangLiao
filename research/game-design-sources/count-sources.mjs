@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
-const dirs = ['github', 'forums', 'blogs', 'communities', 'competitors', 'tutorials', 'game-jams', 'chinese-community', 'bocchi'];
+const dirs = ['github', 'forums', 'blogs', 'communities', 'competitors', 'tutorials', 'game-jams', 'chinese-community'];
 let totalSources = 0;
 const summary = [];
 

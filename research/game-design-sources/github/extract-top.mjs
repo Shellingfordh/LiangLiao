@@ -7,7 +7,6 @@ const categories = {
   'cozy': ['gh-cozy-game.json', 'gh-slice-of-life-game.json'],
   'anime': ['gh-anime-style-game.json'],
   'dating': ['gh-dating-sim-engine.json'],
-  'bocchi': ['bocchi-games.json'],
   'taptap': ['gh-taptap-maker.json'],
   'tripo': ['gh-tripo-3d.json'],
   'rhythm': ['gh-music-rhythm-game.json'],

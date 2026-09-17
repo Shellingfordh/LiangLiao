@@ -8,8 +8,6 @@ const searches = [
   { name: 'character-interaction', url: 'https://www.google.com/search?q=character+interaction+game+mechanic+design' },
   { name: 'cozy-game-design', url: 'https://www.google.com/search?q=cozy+game+design+patterns+best+practices' },
   { name: 'visual-novel-mechanics', url: 'https://www.google.com/search?q=visual+novel+game+mechanics+design+guide' },
-  { name: 'bocchi-rock-game', url: 'https://www.google.com/search?q=bocchi+the+rock+game+development' },
-  { name: 'yamada-ryo-character', url: 'https://www.google.com/search?q=yamada+ryo+bocchi+rock+character+analysis' },
 ];
 
 const browser = await chromium.launch();
