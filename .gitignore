@@ -27,8 +27,23 @@ tools/
 urhox-libs/
 # <<< TapTap Maker AI dev kit (local only) <<<
 
-# >>> local-only (Maker MCP 绑定与凭据，不入库) >>>
+# >>> Maker 构建产物与临时态 >>>
+.build/
+.tmp/
+dist/
+*.log
+logs/
+logs/.nfs*
+lua-tools/
+.vscode/
+*.crswap
+.ossutil_checkpoint/
+ossutil_output/
+.sce/build/build_steps/__pycache__/
+.sce/logs/
+# <<< Maker 构建产物与临时态 <<<
+
+# >>> 本地-only（Maker MCP 绑定与凭据，不入库）>>>
 .qoder/settings.local.json
 .maker-mcp/
-logs/
-# <<< local-only <<<
+# <<< 本地-only <<<
