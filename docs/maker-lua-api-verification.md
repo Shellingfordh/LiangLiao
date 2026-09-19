@@ -426,8 +426,19 @@ Uncaught InvalidStateError: An operation that depends on state cached in an inte
 
 **已做处置**：干净重建 ×2 + preview-refresh ✅200 ×2；用 `build.asset_ignores` 把 9.7 MB 非运行时文件
 （源 `.glb`、Tripo 多视图缩略图、`lin-ruoxi.mdl.bak`）剔出构建包（文件保留在库内）。
+**回归核验**：三条 glob 恰好命中 16 个文件，且 `Meshes/lin-ruoxi.mdl`、`Materials/lin-ruoxi_00_tripo_mat_*.xml`、
+`Textures/lin-ruoxi_00_D.jpg`、`Prefabs/lin-ruoxi.prefab`、`Textures/lin-ruoxi_00_N.png` 五个运行时必需路径
+**均不被任何 glob 命中**——即该改动不会自己造成资源缺失。
 **不要用 `asset_ignores` 剔贴图**：`lin-ruoxi.mdl`(UMD2) 整份压缩，全文件对 `tex|mat|jpg|png|normal`
 零明文匹配，无法证明某张贴图未被引用，剔了有打断模型的风险。
+
+**另已排除的两条代码侧假设**：
+
+- **模块加载期副作用**：`StatusWindow.lua` 与 `main.lua` 顶层**没有任何可执行语句**，全是 `local`/`function`
+  声明，实际工作都在 `Start()` 里。所以不存在"加载期抛错被宿主报成 `ErrorEvent`"这条路。
+- **候选路径探测打爆网络**：`resourceExists()` 走的是 `cache:Exists(path)`（清单查询，非 HTTP 请求），
+  `findFirstExisting()` 命中即返回。缺失的 `la-cafe-4x3.png` 由 `RefreshResourceNotices()` 优雅降级成
+  一条 UI 提示，不会形成 404 风暴。
 
 **未闭环**：`runtime.log` 至今不存在，说明还没有一次会话真正加载过。浏览器预览页需 TapTap 开发者会话，
 自动化浏览器会被 302 到 `/intro`，`generate_test_qrcode` 的 schema 禁止在构建/预览流程自动调用，
