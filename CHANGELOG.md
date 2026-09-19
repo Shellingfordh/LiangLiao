@@ -27,6 +27,17 @@
 - 工程内遗留 `assets/Meshes/lin-ruoxi.mdl.bak`（753,790 字节旧模型）。
 - 状态窗 RenderTarget 用 `SURFACE_UPDATEALWAYS` 每帧重渲，且全局 HDR 开启后未在 `Shutdown()` 复原。
 - 背景 `la-cafe-4x3.png` 缺失；图标与 3 张实机截图未产出，真机二维码仍被阻塞（但 `app_id` / `developer_id` / `miniapp_id` 已由云端写入）。
+- **预览卡 `Initializing… 0%`**（console 报 Chromium IndexedDB `InvalidStateError`）：定性为浏览器资源缓存
+  与当天被改三次的云端工作树不同步，属装载层而非 Lua 报错。悬空引用、`raw-assets/` 进包、DWP 预下载配置、
+  工程健康四类假设均已用独立证据排除；远端构建 ✅100% ×2、preview-refresh ✅200 ×2。
+  完整排查表与平台契约见 `docs/maker-lua-api-verification.md` §11。**待用户侧硬刷新后由 `runtime.log` 判定闭环。**
+- `.project/settings.json` 新增 `build.asset_ignores`，把 9.7 MB 非运行时文件（源 `.glb`、Tripo 多视图缩略图、
+  `lin-ruoxi.mdl.bak`）剔出构建包；文件仍留在库内，未删除。
+- 云端 19:57 自动产生作者 `TapCode Rollback` 的同步 commit，把此前删掉的资产原样塞回项目根 `raw-assets/`（+24 MB）。
+  该目录不在 `asset_dirs` 内所以不进包，但已进 git 历史；**结论：不要靠删 Maker 侧已追踪资产来瘦身。**
+- `maker_build_current_directory` 会把 `origin` 改指回 Maker 云端 URL（与 `maker init` 同症状），GitHub 那条远端整个消失。
+  已复原为 `git@github.com:melondy101/LiangLiao.git`；本批仍未推 GitHub。另将 `http.postBuffer=524288000` 固化到本仓
+  `--local` 配置，避免 24 MB 增量再次触发 `send-pack: unexpected disconnect`。
 
 ### 与云端的双向合并
 

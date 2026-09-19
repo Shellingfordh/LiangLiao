@@ -384,3 +384,52 @@ Dev Kit 中未检索到 IME 相关说明。这是移动端文本输入的经典�
    增加本地文件存储作为离线兜底。
 6. **§7.2**：Marble 全景可用 `convert-panorama` 转 Cubemap 天空球，作为 M0-1/M1 的视觉升级项。
 7. **AGENTS.md**：权威文档改指 AI Dev Kit；标注 `research/taptap-pages/` API 快照无效。
+
+---
+
+## 11. 预览卡 `Initializing… 0%` 的定性（2026-09-19 实测）
+
+**现象**：Maker 网页预览停在 `Initializing… 0%`，console 两条：
+
+```
+Uncaught [object ErrorEvent]
+Uncaught InvalidStateError: An operation that depends on state cached in an interface
+           object was made but the state had changed since it was read from disk.
+```
+
+第二句是 **Chromium IndexedDB 的 `InvalidStateError` 原文**，失败点在**引擎启动前的资源装载层**，
+不是 Lua 报错。触发条件是浏览器缓存的资源状态与其对应的服务端工作树不再一致——本项目当天工作树被
+改过三次（16:35 云端重导入 → 19:35 我们推送 → 19:57 平台 `TapCode Rollback`），符合该成因。
+
+**逐项排除的"代码/资产缺陷"假设**（每条都有独立证据，不是"应该没事"）：
+
+| 假设 | 结论 | 依据 |
+| --- | --- | --- |
+| 推送删掉了被引用的资产 | 否 | `prefab → Meshes/lin-ruoxi.mdl` ✅、`material → Textures/lin-ruoxi_00_D.jpg` ✅；全库 `uuid://` 引用 0 条；无孤儿 `.meta` |
+| 云端塞回的 `raw-assets/`（24 MB）撑爆包 | 否 | `build.asset_dirs` 只有 `../assets`、`../scripts`；schema 原文「groups 中的本地路径**相对于这些目录**匹配」 |
+| `preload_groups: []` 导致启动取不到资源 | 否 | `download-while-playing.md`：`.mdl/.xml/.prefab` 属 render-blocking，脚本启动前已就绪；`Texture2D` 自动触发 DWP |
+| 报错由 19:35 的推送引起 | 否 | reflog 钉死推送时间 19:35:53，**晚于** 19:09:13 的报错 |
+| 工程/凭据不健康 | 否 | `maker_status_lite`：`project_health: ready`，auth/git/python/lua_lsp 全绿；远端构建 ✅ 100% ×2 |
+
+**平台契约（读 `@taptap/maker` 0.0.33 的 `dist/maker.js` 与包内 `skills/taptap-maker-local/SKILL.md` 得到，仓库文档里没有）**：
+
+- 「预览 / 跑一下 / 看结果」的官方路径**就是** `maker_build_current_directory` + 读 `runtime_logs.local_file`，
+  agent 侧没有浏览器步骤。包内两份 skill 文档与连接排障文档**均无 0% / IndexedDB / 清缓存条目**——
+  因为这属浏览器环境态，不是工程态。
+- `preview-refresh` 是**纯服务端**动作：`POST {apiBase}/apps/{projectId}/preview-refresh`，
+  `Authorization: Bearer <PAT>`，body `{}`，每次成功构建自动调一次。**它刷不到浏览器里的 IndexedDB。**
+- 运行日志窗口有上限：`DEFAULT_RUNTIME_LOG_SINCE_SECONDS = 600`、`MAX_RUNTIME_LOG_WINDOW_SECONDS = 3600`，
+  且抓取器空转 10 分钟即退出（`DEFAULT_RUNTIME_LOG_IDLE_TIMEOUT_MS`）。
+  ⚠️ 手改 `.maker/logs/runtime/state.json` 的 `nextStartTime` 倒回历史**无效**（会被窗口夹住 +
+  `isFreshRuntimeLogCursor()` 判定不新鲜）。 topics 含 `engine`，所以引擎层报错也会进 `runtime.log`。
+- `logs watch --reset` 会连 `state.json` 与 `runtime.log` 一起清空，补拉时**不要带**。
+
+**已做处置**：干净重建 ×2 + preview-refresh ✅200 ×2；用 `build.asset_ignores` 把 9.7 MB 非运行时文件
+（源 `.glb`、Tripo 多视图缩略图、`lin-ruoxi.mdl.bak`）剔出构建包（文件保留在库内）。
+**不要用 `asset_ignores` 剔贴图**：`lin-ruoxi.mdl`(UMD2) 整份压缩，全文件对 `tex|mat|jpg|png|normal`
+零明文匹配，无法证明某张贴图未被引用，剔了有打断模型的风险。
+
+**未闭环**：`runtime.log` 至今不存在，说明还没有一次会话真正加载过。浏览器预览页需 TapTap 开发者会话，
+自动化浏览器会被 302 到 `/intro`，`generate_test_qrcode` 的 schema 禁止在构建/预览流程自动调用，
+故**最后一步只能由人在自己浏览器里做**：关掉多余预览标签页 → `Ctrl+Shift+R`；仍卡 0% 则
+Clear site data for `maker.taptap.cn` 后重开。
