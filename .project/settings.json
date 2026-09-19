@@ -18,7 +18,11 @@
       "../assets",
       "../scripts"
     ],
-    "asset_ignores": []
+    "asset_ignores": [
+      "assets/models/**",
+      "assets/model/**",
+      "assets/Meshes/*.bak"
+    ]
   },
   "@runtime": {
     "multiplayer": {
