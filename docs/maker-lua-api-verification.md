@@ -459,10 +459,9 @@ Clear site data for `maker.taptap.cn` 后重开。
 #    判据：文件出现且含 "[M0-0] 启动 M0-0 原型" → Lua 已跑到，问题在代码层；
 #          文件仍不存在 → 仍在装载层。
 
-# 2) ★ 必做收尾 ★：logs watch 会把 origin 改指回 Maker URL，跑完立刻复原
-git remote set-url origin git@github.com:melondy101/LiangLiao.git
-git fetch origin main          # 不 fetch 的话 tracking ref 残留 Maker 旧值，ahead/behind 是假的
-git remote -v                  # 期望 origin/github=GitHub，maker=Maker 云端
+# 2) 收尾：logs watch 会把 origin 改指回 Maker URL —— 按 2026-09-19 的决定这已是预期行为，
+#    不需要纠正（见 AGENTS.md「Git 拓扑」：所有推送只发 maker，GitHub 暂不管，github 远端仅留档）。
+#    只有当你确实要动 GitHub 时，才临时 set-url 并重新 fetch（tracking ref 不重 fetch 会残留假值）。
 ```
 
 服务端只读探针（本次全部跑过，均正常，别再重复）：`maker_status_lite`（`project_health: ready`）、

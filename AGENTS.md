@@ -23,12 +23,18 @@
 - **API 依据只有本地 AI Dev Kit。** `engine-docs/`、`.emmylua/`、`examples/`、`templates/`、
   `urhox-libs/` 为准；`research/taptap-pages/` 是登录墙快照（38 份中 27 份内容相同），无效。
 
-## Git 拓扑（不要改动）
+## Git 拓扑（2026-09-19 用户改定：只推 Maker）
 
-- `origin` = `git@github.com:melondy101/LiangLiao.git`（设计文档仓，main 的 upstream）
-- `maker` = Maker 云端工程仓（`.git/config` 中该 URL 内嵌临时 token，勿外传）
-- 两条历史**无共同祖先**。禁止在两者之间 force push；`scripts/`、`assets/`、`.project/` 属 Maker 仓，
-  `docs/`、`research/`、`README.md`、`CHANGELOG.md` 属文档仓。
+- **所有推送只发 `maker`**（Maker 云端工程仓）。GitHub 那条**暂时不管**，不再作为 upstream。
+- `origin` 与 `maker` 现指向同一个 Maker URL（`.git/config` 中该 URL 内嵌临时 token，勿外传）。
+  Maker 工具链（`init` / `build` / 连只读的 `logs watch`）会反复把 `origin` 抢回 Maker URL，
+  **这是预期行为，不要再手工纠正**；跑完 `logs watch` 也不必备份还原。
+- `github` = `git@github.com:melondy101/LiangLiao.git`，仅作为设计文档仓的**只读留档把手**保留，
+  未推之前不要假设它和 main 同步。
+- 两条历史**已合并成一棵树**（`a23e2ba` 以 `--allow-unrelated-histories` 并入），"无共同祖先"已失效。
+  仍然**禁止在 GitHub 与 Maker 之间 force push**。
+- 归属约定不变：`scripts/`、`assets/`、`.project/` 属 Maker 工程；`docs/`、`research/`、`README.md`、
+  `CHANGELOG.md` 属文档。两者现在同在一棵工作树里，推 Maker 时会一起带走。
 
 ## 权威文档
 
