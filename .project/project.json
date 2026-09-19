@@ -13,11 +13,17 @@
     "screen_orientation": "portrait",
     "collection_type": "adventure",
     "trial_note": "M0-0 仅状态窗预览，无聊天与完整玩法。",
-    "app_platforms": "1,2"
+    "app_platforms": "1,2",
+    "developer_id": 471831,
+    "app_id": 940330,
+    "miniapp_id": "tapmc1yds3rzoloihc"
   },
   "assets": {
     "icon": "",
     "screenshots": [],
     "promotional_image": ""
+  },
+  "metadata": {
+    "updated_at": "2026-09-19T08:25:42.927Z"
   }
 }
