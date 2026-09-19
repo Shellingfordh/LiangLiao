@@ -31,6 +31,10 @@
 `assets/model/` 又是 Maker `create_3d_asset` 的自动落地位——三份并存是文档冲突而非误操作，
 现以本表为唯一约定。
 
+### 云端同步隔离副本
+
+Maker 云端在 2026-09-19 自动回填了 `raw-assets/` 下的源 GLB、解包贴图和四视图。这些文件是云端同步保留的隔离副本：不在 `asset_dirs` 内，且已被 `build.asset_ignores` 排除，因而不进入运行包；它们也不构成新的资产真源。不要仅为瘦身删除该目录或其中已追踪文件，后续变更须先在 `maker/main` 核实云端同步行为与两种引用方式（UUID 和路径）。
+
 ## 源 GLB 实测（`assets/models/characters/lin-ruoxi/lin-ruoxi.glb`）
 
 | 项 | 实测值 |
