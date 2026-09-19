@@ -46,4 +46,6 @@ ossutil_output/
 # >>> 本地-only（Maker MCP 绑定与凭据，不入库）>>>
 .qoder/settings.local.json
 .maker-mcp/
+# .superpowers/ = agent 会话运行时状态（server.log/pid、决策卡），非工程产物
+.superpowers/
 # <<< 本地-only <<<
