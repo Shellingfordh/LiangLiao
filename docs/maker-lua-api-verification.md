@@ -444,3 +444,32 @@ Uncaught InvalidStateError: An operation that depends on state cached in an inte
 自动化浏览器会被 302 到 `/intro`，`generate_test_qrcode` 的 schema 禁止在构建/预览流程自动调用，
 故**最后一步只能由人在自己浏览器里做**：关掉多余预览标签页 → `Ctrl+Shift+R`；仍卡 0% 则
 Clear site data for `maker.taptap.cn` 后重开。
+
+### 复现/收尾 runbook（下一次照抄即可，不要重新探索）
+
+```bash
+# 0) 用户侧：关掉多余预览标签页，硬刷新预览页
+#    https://maker.taptap.cn/app/720b27bf-ca69-44ac-a776-a88ec2ec2b28?localDev=1
+
+# 1) 拉最近一次会话的运行日志（窗口上限 1 小时，切勿带 --reset）
+"C:/nvm4w/nodejs/node.exe" "C:/Users/20145/.taptap-maker/mcp-runtime/0.0.33/dist/maker.js" \
+  logs watch --target-dir "D:/Develop/ShanTianLiang" --interval 5s \
+  --env production --server-url "https://maker.taptap.cn/mcp/v1"
+#    跑 ~20s 后 Ctrl-C；结果看 .maker/logs/runtime/runtime.log
+#    判据：文件出现且含 "[M0-0] 启动 M0-0 原型" → Lua 已跑到，问题在代码层；
+#          文件仍不存在 → 仍在装载层。
+
+# 2) ★ 必做收尾 ★：logs watch 会把 origin 改指回 Maker URL，跑完立刻复原
+git remote set-url origin git@github.com:melondy101/LiangLiao.git
+git fetch origin main          # 不 fetch 的话 tracking ref 残留 Maker 旧值，ahead/behind 是假的
+git remote -v                  # 期望 origin/github=GitHub，maker=Maker 云端
+```
+
+服务端只读探针（本次全部跑过，均正常，别再重复）：`maker_status_lite`（`project_health: ready`）、
+`get_ad_config`（`app_id 940330` / `developer_id 471831` 均在，广告未开通与预览无关；
+顺带暴露云端工作树在 `/userspaces/<project_id>/workspace/`）、
+`get_debug_feedbacks` 全量（`total: 0`）。
+
+**已穷举并排除的假设清单**（11 条，含依据）：悬空引用 / `raw-assets` 进包 / DWP 预下载配置 /
+推送时间因果 / 工程健康 / 模块加载期副作用 / 候选路径 404 风暴 / `asset_ignores` 误剔必需资源 /
+headless 引擎验证（本地无此能力）/ 自动化浏览器（无登录态）/ 反馈与历史日志通道（恒空且窗口仅 1 小时）。
