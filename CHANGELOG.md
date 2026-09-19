@@ -22,9 +22,16 @@
 ### Known issues
 
 - 源 GLB 14,298 三角面，超 `face_limit <= 5000` 约 2.9 倍；三张内嵌贴图均为 4096×4096。
-- `import-gltf` 丢弃了源 GLB 的 65 关节 skin，MDL 内骨骼命中数为 0；metallicRoughness 贴图未导出，材质退化为常量粗糙度。
+- `import-gltf` 丢弃了源 GLB 的 65 关节 skin；**16:35 云端二次导入后 MDL 内骨骼命中数仍为 0**，问题未解决。
+- 二次同步新增缺陷：材质由 `PBRDiffNormal.xml` 退成 `PBRDiff.xml`，**法线贴图丢失**，`lin-ruoxi_00_N.png` 成孤儿资源；metallicRoughness 依然未导出，材质用常量粗糙度。
+- 工程内遗留 `assets/Meshes/lin-ruoxi.mdl.bak`（753,790 字节旧模型）。
 - 状态窗 RenderTarget 用 `SURFACE_UPDATEALWAYS` 每帧重渲，且全局 HDR 开启后未在 `Shutdown()` 复原。
-- 背景 `la-cafe-4x3.png` 缺失；图标与 3 张实机截图未产出，真机二维码仍被阻塞。
+- 背景 `la-cafe-4x3.png` 缺失；图标与 3 张实机截图未产出，真机二维码仍被阻塞（但 `app_id` / `developer_id` / `miniapp_id` 已由云端写入）。
+
+### 与云端的双向合并
+
+- 本地合并了云端 16:35 的 `4e8d55a`（重导 MDL、改材质/预制体/`StatusWindow.lua`、写入发布元数据），零冲突，代码与资产一律取云端版本。
+- 反向推送时**会带走本地对 `assets/model/fashion+model+3d+model.glb` 与 `lin-ruoxi.gbm/` 的删除**（共 15 MB 非运行时资产）。判断依据是「无引用」，但材质引用已由 `uuid://` 改为路径，该结论需在推送时再确认一次。
 
 ### Next
 

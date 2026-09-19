@@ -309,11 +309,13 @@ assets/Textures/backgrounds/la-cafe-4x3.png        # 背景（待补，代码实
 
 - 通过：Maker 真机稳定显示林若夕 A-pose 的 **MDL** 与 4:3 洛杉矶咖啡馆背景；固定镜头中人物和场景均清楚可读，无黑 / 白屏或崩溃。
 - 不在 M0-0：自由输入、消息排队、真实异步回复、存档、音频、重播、全景交互、角色动作、复杂动画。
-- **M0-1 前置修复项**（不修则动画与材质无从谈起，实测依据见 `docs/asset-provenance.md`）：
-  ① `import-gltf` 丢弃了源 GLB 的 65 关节 `Armature` skin，MDL 内骨骼命中数为 0；
-  ② 导入器未导出 metallicRoughness 贴图，材质退化为常量 `Metallic=0 / Roughness=0.62`，皮革、牛仔、皮肤、帆布共用一种光泽；
-  ③ 面数与贴图预算超配；
-  ④ 状态窗 RenderTarget 用 `SURFACE_UPDATEALWAYS` 每帧重渲 960×720，且 `renderer.hdrRendering = true` 全局开启、`Shutdown()` 不复原——官方 `scene-to-nanovg.md` 要求静态画面用 `SURFACE_MANUALUPDATE` + 变化后 `QueueUpdate()`。
+- **M0-1 前置修复项**（实测依据见 `docs/asset-provenance.md` 的「云端二次同步后的状态」）：
+  ① **骨骼仍缺失**——源 GLB 带 65 关节 `Armature` skin，但 12:38 与 16:35 两次 `import-gltf` 之后 MDL 内骨骼命中数都是 0，动画没有绑定可用；
+  ② **法线贴图在 16:35 那次同步里丢了**——材质从 `PBRDiffNormal.xml`（diffuse+normal）退成 `PBRDiff.xml`（只有 diffuse），`assets/Textures/lin-ruoxi_00_N.png` 成了 3.23 MB 的孤儿资源；
+  ③ **metallicRoughness 从未导出**，材质退化为常量 `Metallic=0 / Roughness=0.62`，皮革、牛仔、皮肤、帆布共用一种光泽；
+  ④ 面数与贴图预算超配（14,298 面 / 3×4096²）；
+  ⑤ 状态窗 RenderTarget 用 `SURFACE_UPDATEALWAYS` 每帧重渲 960×720，且 `renderer.hdrRendering = true` 全局开启、`Shutdown()` 不复原——官方 `scene-to-nanovg.md` 要求静态画面用 `SURFACE_MANUALUPDATE` + 变化后 `QueueUpdate()`；
+  ⑥ 工程里留着 753,790 字节的 `assets/Meshes/lin-ruoxi.mdl.bak`，确认新版可用后清掉。
 - M0-1 才制作情绪化垂直切片：默认可编辑消息“你那边是不是快傍晚了？今天的活动还顺利吗？”，显示“洛杉矶 · 18:20 · 还在外面”，以约 10 秒演示等待后，出现引用咖啡馆活动的预置回复。首版可编辑输入不要求对任意文本生成语义匹配回复。移动端中文 IME 是这一阶段第一个要验证的坑。
 - 后续自由输入不另起状态机：Lua 始终保存用户原文、发送时间与送达状态，并先选择生活事件事实；回复以“事件事实 + 用户原文”模板化。扩展只是增加事件和文案能力。
 - 音频接口现在预留：每个状态窗有 `scene_id` 和可选 `audio_profile_id`，统一经 `AudioService.play(profile)` 调用；首版受配置控制为安全 no-op，后续补资源与映射表即可。
