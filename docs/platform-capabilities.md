@@ -103,6 +103,13 @@ Marble 高质量 GLB 不直接作为 Maker 移动端主场景：官方规格约�
 - `clientCloud` 读写全异步、配额 300 次/分、昵称不可存云变量，详见规格 §4.2；
 - Lua API 名称以本地 AI Dev Kit（`engine-docs/`、`.emmylua/`、`examples/`）为准，不从旧模板或历史快照推断；
 - 构建前须过 Lua LSP 诊断（无 Error）再提交构建；
+- **什么进包由 `build.asset_dirs` 决定**（当前只有 `../assets` 与 `../scripts`）。`resources.json` 里
+  `groups` 的 glob 是**相对 `asset_dirs`** 匹配的，所以项目根其它目录（含云端回填的 `raw-assets/`）不进包。
+  瘦身只用 `build.asset_ignores`（glob，**相对项目根**），文件留在库里；**不要靠删已追踪资产来瘦身**——
+  Maker 云端会用 `TapCode Rollback` commit 把它们原样塞回 `raw-assets/`；
+- 不要用 `asset_ignores` 排除贴图：导入后的 `.mdl` 是压缩的，无法从模型侧证明某张贴图未被引用；
+- **本仓库没有本地运行时**，唯一的运行/预览入口是 Maker 云端；验证走 `runtime.log`，详见
+  `maker-lua-api-verification.md` §11 的收尾 runbook；
 - 发布前准备图标、至少 3 张截图、宣传图/封面、简介、开发者的话和实机视频。
 
 官方入口：<https://maker.taptap.cn/help>、<https://maker.taptap.cn/skills>。

@@ -42,7 +42,8 @@
 | --- | --- |
 | `docs/2026-09-15-parallel-companion-design.md` | 产品、数据模型、时间状态、场景、PoC 范围与验收 |
 | `docs/platform-capabilities.md` | Tripo、Marble、TapTap Maker 的能力、格式、资产流程与限制 |
-| `docs/maker-lua-api-verification.md` | Maker 平台假设逐项验证（时区 / 运行时 LLM / GLB→MDL / clientCloud / 全景） |
+| `docs/maker-lua-api-verification.md` | Maker 平台假设逐项验证（时区 / 运行时 LLM / GLB→MDL / clientCloud / 全景 / 预览 0% 定性与收尾 runbook） |
+| `docs/asset-provenance.md` | 资产唯一真源表、GLB/MDL 实测差异、重导入命令、M0-1 阻塞项 |
 | `docs/demand.md` | Tripothon S1 赛事规则与提交物 |
 | `CHANGELOG.md` | 当前阶段与已完成决策 |
 
@@ -50,12 +51,20 @@
 
 ## 实施起点
 
-1. M0-0（林若夕 A-pose + 洛杉矶咖啡馆状态窗）已在 Maker 云端工程实现于 `maker/main` 的
-   `scripts/main.lua`、`scripts/StatusWindow.lua`；本机 `scripts/`、`assets/` 为空，需从 `maker` 取回。
+1. M0-0（林若夕 A-pose + 洛杉矶咖啡馆状态窗）已在 Maker 云端工程实现，代码与资产均已取回到本地并
+   与云端同步：`scripts/main.lua`、`scripts/StatusWindow.lua`、`assets/`（MDL + 材质 + 贴图 + prefab）。
 2. M0-0 尚缺：`assets/Textures/backgrounds/la-cafe-4x3.png`、图标与 3 张实机截图（真机二维码依赖项）。
 3. 通过 M0-0 真机验收后，才实现时区表、消息排队与关系记忆。
 
 不要恢复或引用已移除的旧"三位 NPC 小镇"方案、旧角色名或旧 PoC 模板。
+
+## 没有本地运行时
+
+本仓库不含可执行引擎：`scripts/` 与 `assets/` 只是源码，**唯一的运行/预览入口是 Maker 云端**。
+「跑一下 / 预览 / 看结果」的正规路径是 `maker_build_current_directory`，随后读
+`.maker/logs/runtime/runtime.log`（topics 含 `engine`，引擎层报错也会落这里）。
+判据：该文件出现且含 `[M0-0] 启动 M0-0 原型` → 已进入 Lua；文件不出现 → 仍卡在资源装载层。
+不要试图在本地启动游戏，也不要为此找本地端口/进程。
 
 <!-- >>> TapTap Maker managed AGENTS policy version=3 hash=sha256:9c5d550755a0d1a3e40606e2e4b35fd3e7c5232057490debc4c82197ef46ff9e >>> -->
 # TapTap Maker Project Asset Tool Policy

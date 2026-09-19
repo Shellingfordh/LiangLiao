@@ -25,6 +25,18 @@ Tripothon S1 原创参赛项目：一位生活在另一座城市、与你共处�
 
 先完成 M0：把一位原创 Tripo 角色导入为 MDL，配一张 Marble 生成的 4:3 咖啡馆远景，在 Maker 真机验证加载与帧率。通过后再实现时区、消息排队和关系记忆。
 
+## 怎么跑起来
+
+**没有本地运行方式。** 本仓库只放源码（`scripts/` 的 Lua 与 `assets/` 的 MDL/材质/贴图），引擎跑在
+TapTap Maker 云端。改完代码的验证路径只有两步：
+
+1. 用 Maker MCP 的 `maker_build_current_directory` 提交并触发云端构建；
+2. 读构建成功后自动生成的 `.maker/logs/runtime/runtime.log` 看运行结果（引擎层报错也会落这里）。
+
+预览页：<https://maker.taptap.cn/app/720b27bf-ca69-44ac-a776-a88ec2ec2b28?localDev=1>（需 TapTap 开发者登录）。
+仓库绑定关系、Git 拓扑与打包规则见 `AGENTS.md`；踩过的坑与逐项验证结论见
+[Maker 平台假设验证报告](docs/maker-lua-api-verification.md)。
+
 ## 当前交接
 
 M0-0 的代码与角色资产已在 Maker 云端工程实现并同步到本仓库：竖屏页面、顶部固定 4:3 状态窗（RenderTarget 渲染 3D 预览）、静态状态文案，见 `scripts/main.lua` 与 `scripts/StatusWindow.lua`。

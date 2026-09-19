@@ -11,13 +11,16 @@
 
 ### Changed
 
-- 远端拓扑：`origin` 改回 `git@github.com:melondy101/LiangLiao.git` 并作为 main 的 upstream，Maker 云端改名为 `maker`；本地保留 `maker-main` 分支作为 M0-0 的离线引用。
+- 远端拓扑（2026-09-19 两次变更，最终态）：先把两条无共同祖先的历史并成一棵树并短暂以 GitHub 为 `origin`；随后用户改定**所有推送只发 `maker`**，GitHub 暂不管。现 `origin` 与 `maker` 同指 Maker 云端 URL，另留 `github` 远端作只读留档把手。Maker 工具链（`init` / `build` / `logs watch`）会反复把 `origin` 抢回 Maker URL，已定为预期行为、不再手工纠正。本地保留 `maker-main` 分支作为 M0-0 的离线引用。
 - 设计规格收敛到单一真源 `docs/2026-09-15-parallel-companion-design.md`（原 `docs/superpowers/specs/` 副本与之逐字节等价，仅行尾不同）。
 - 按 2026-09-18 验证报告落地此前未写入的修订：§4.2 补 `clientCloud` 异步/配额/昵称禁令与本地文件兜底；§5.1 时间源改为 `common.get_server_time()` 并写明无 IANA 时区库、`os.date` 需 `"!"` 前缀；§7.2 补 `convert-panorama` 转 Cubemap 与「禁止从全景裁 4:3」；§7.3 与 §8 删除运行时 `Maker AI`，`ContentService` 改为纯模板；§9 M0-0 验收措辞 GLB→MDL 并新增 M0-1 前置修复项；§10 风险表重写；§12 改指 AI Dev Kit。
 - `docs/platform-capabilities.md`：GLB→MDL 的交付/运行时双列、真实目录结构、无法溯源的大小上限统一标注「未核验」。
 - `AGENTS.md`：恢复被 Maker 托管策略覆盖的项目段，并补入四条实测平台边界与双远端拓扑规则。
 - 角色资产去重：确立单一真源，删除 2 份重复 GLB 与 `.gbm` 解包残留（删除前逐份 md5 比对并确认 uuid 无人引用），回收约 15 MB；`poc/` 交接位由 `docs/asset-provenance.md` 取代。
 - 清理 26 份重复登录墙快照与 `research/node_modules`（与根副本同为 playwright 1.63.0）。
+- `docs/maker-lua-api-verification.md` 新增 §11：预览卡 `Initializing 0%` 的定性（Chromium IndexedDB `InvalidStateError`，失败在 Lua 之前的资源装载层）、11 条已穷举排除假设的依据、从 `@taptap/maker` 0.0.33 源码与包内 skill 挖出的平台契约（预览验证 = build + `runtime.log`；`preview-refresh` 只刷服务端；日志窗口硬上限 1 小时），以及照抄可执行的收尾 runbook。
+- 构建包瘦身：`.project/settings.json` 新增 `build.asset_ignores`，把 9.7 MB 非运行时文件（源 `.glb`、Tripo 多视图缩略图、`lin-ruoxi.mdl.bak`）剔出包；三条 glob 经 `fnmatch` 全量核验恰好命中 16 个文件，五个运行时必需路径均不被命中。
+- 文档补齐"怎么跑"这一外部视角缺口：`README.md` 新增「怎么跑起来」、`AGENTS.md` 新增「没有本地运行时」硬边界、`docs/platform-capabilities.md` 补入包与瘦身规则；并修正 `AGENTS.md`「实施起点」里"本机 `scripts/`、`assets/` 为空需取回"的失效陈述与权威文档表缺失的 `asset-provenance.md` 条目。
 
 ### Known issues
 
