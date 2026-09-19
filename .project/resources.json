@@ -2,12 +2,14 @@
   "$schema": "../schemas/resources.schema.json",
 
   "preload_groups": [
-
   ],
 
   "groups": {
     "default": [
-      "**"
+      "**.lua",
+      "Meshes/*.mdl",
+      "Materials/**",
+      "Prefabs/**"
     ]
   }
 }

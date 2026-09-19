@@ -19,9 +19,10 @@
       "../scripts"
     ],
     "asset_ignores": [
-      "assets/models/**",
-      "assets/model/**",
-      "assets/Meshes/*.bak"
+      "**/models/**",
+      "**/model/**",
+      "**/*.glb",
+      "**/*.bak"
     ]
   },
   "@runtime": {
