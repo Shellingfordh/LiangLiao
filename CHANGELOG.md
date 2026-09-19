@@ -22,7 +22,7 @@
 
 ### Added
 
-- `docs/superpowers/specs/2026-09-15-parallel-companion-design.md`：正式设计规格。
+- `docs/2026-09-15-parallel-companion-design.md`：正式设计规格。
 - `docs/platform-capabilities.md`：Tripo、Marble、TapTap Maker 的独立平台与资产规格。
 
 ### Next

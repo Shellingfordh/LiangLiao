@@ -14,7 +14,7 @@ Tripothon S1 原创参赛项目：一位生活在另一座城市、与你共处�
 
 | 文件 | 内容 |
 | --- | --- |
-| [设计规格](docs/superpowers/specs/2026-09-15-parallel-companion-design.md) | 产品机制、数据模型、状态机、PoC 与验收 |
+| [设计规格](docs/2026-09-15-parallel-companion-design.md) | 产品机制、数据模型、状态机、PoC 与验收 |
 | [平台能力与资产规格](docs/platform-capabilities.md) | Tripo、Marble、TapTap Maker 的用法、格式和限制 |
 | [赛事规则](docs/demand.md) | Tripothon S1 赛道、提交物与评审规则 |
 | [变更记录](CHANGELOG.md) | 当前阶段与历史决策 |
@@ -25,4 +25,4 @@ Tripothon S1 原创参赛项目：一位生活在另一座城市、与你共处�
 
 ## 当前交接
 
-M0-0 已冻结为可开工基线：先在 Maker 真机中展示原创角色“林若夕”的 A-pose GLB 与一张 4:3 洛杉矶咖啡馆背景。角色参考图和四视图交付到 `poc/art/source/lin-ruoxi/`；完整资产契约、验收标准与下一阶段边界见[设计规格的 M0-0](docs/superpowers/specs/2026-09-15-parallel-companion-design.md#m0-0林若夕可见状态窗已冻结开工基线2026-09-16)。
+M0-0 已冻结为可开工基线：先在 Maker 真机中展示原创角色“林若夕”的 A-pose GLB 与一张 4:3 洛杉矶咖啡馆背景。角色参考图和四视图交付到 `poc/art/source/lin-ruoxi/`；完整资产契约、验收标准与下一阶段边界见[设计规格的 M0-0](docs/2026-09-15-parallel-companion-design.md#m0-0林若夕可见状态窗已冻结开工基线2026-09-16)。

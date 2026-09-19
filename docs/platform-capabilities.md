@@ -4,7 +4,7 @@
 >
 > 核验日期：2026-09-15
 >
-> 用途：实施时唯一的平台能力速查；产品规则见 `docs/superpowers/specs/2026-09-15-parallel-companion-design.md`。
+> 用途：实施时唯一的平台能力速查；产品规则见 `docs/2026-09-15-parallel-companion-design.md`。
 
 ## 1. 结论
 

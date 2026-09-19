@@ -34,7 +34,7 @@
 
 | 文件 | 用途 |
 | --- | --- |
-| `docs/superpowers/specs/2026-09-15-parallel-companion-design.md` | 产品、数据模型、时间状态、场景、PoC 范围与验收 |
+| `docs/2026-09-15-parallel-companion-design.md` | 产品、数据模型、时间状态、场景、PoC 范围与验收 |
 | `docs/platform-capabilities.md` | Tripo、Marble、TapTap Maker 的能力、格式、资产流程与限制 |
 | `docs/maker-lua-api-verification.md` | Maker 平台假设逐项验证（时区 / 运行时 LLM / GLB→MDL / clientCloud / 全景） |
 | `docs/demand.md` | Tripothon S1 赛事规则与提交物 |

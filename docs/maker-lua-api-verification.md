@@ -3,7 +3,7 @@
 > 验证日期：2026-09-18
 >
 > 方法：下载官方 AI Dev Kit（`@taptap/maker` CLI 内嵌的公开 CDN 地址），对照
-> `docs/superpowers/specs/2026-09-15-parallel-companion-design.md` 与 `docs/platform-capabilities.md`
+> `docs/2026-09-15-parallel-companion-design.md` 与 `docs/platform-capabilities.md`
 > 中的每一条平台假设逐项核对。
 >
 > 证据来源（均为官方产物，非推测）：
