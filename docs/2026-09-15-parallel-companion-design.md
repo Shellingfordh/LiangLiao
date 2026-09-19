@@ -94,6 +94,14 @@
 
 关系的变化只能由对话与事件造成。用户不点击“+10 好感”；系统应把行为变化呈现为她更愿意分享、主动联系或记得更多细节。
 
+**`clientCloud` 实施约束（2026-09-18 在 AI Dev Kit 中核实，见 `docs/maker-lua-api-verification.md` §1）**
+
+- 读写**全异步**，走 `events = { ok = ..., error = function(code, reason) }` 回调。`MemoryService` 不能按同步接口设计，冷启动必须有「记忆加载中」状态。
+- `Set` 写 `values`，`SetInt`/`Add` 写 `iscores`，两张表分开；本项目只用 `values`。
+- 配额：读 300 次/分、写 300 次/分、数据量 48 MB/分，超限 `error(-429)`。**不要每条消息单独写一次**，用 `BatchSet()` 合并。
+- 昵称不能存云变量（官方明确警告），TapTap 账号昵称用 `GetUserNickname()` 查；她怎么称呼用户属于游戏内数据，可以存。
+- 离线兜底改用引擎的本地文件存档（`engine-docs/recipes/file-storage.md`，项目 + 用户双重隔离），比 §10 原先写的「内存保底」更强：重启后仍在。
+
 ### 4.3 开放生活上下文
 
 `life-context.md` 不保存“未完成主线”，只保存生活在继续发生的证据。例如：
@@ -110,7 +118,7 @@
 ### 5.1 时间状态
 
 ```
-可信 UTC 时间源
+common.get_server_time()（权威 UTC 秒，用户改系统时间无效）
         + 角色城市的离线偏移规则表（含 DST 生效区间）
         + 当地日期与季节
         + 城市 + 当日日期的固定随机种子
@@ -118,7 +126,11 @@
 → 角色当地时间、天气、地点、可用性、事件候选
 ```
 
-季节取角色城市的当地日期。天气不调用实时服务，而由 `city_id + YYYY-MM-DD` 的种子确定，且全天一致；它只在晴、阴、雨、风等低风险状态之间变化。
+引擎**没有 IANA 时区库**（`engine-docs/recipes/server-time.md` 明确「返回值是 UTC 秒，显示本地时区时间要自己偏移」）。四城各写一张带生效区间的偏移表，Lua 查表即可；表必须从 Unix epoch 起覆盖存档可能读到的全部时间范围，不能把赛期内的 PDT / BST 当成永久默认值。`os.date` **必须带 `"!"` 前缀**强制按 UTC 解析，否则会叠加运行设备本地时区——这个 bug 在开发者自己机器上往往看不出来。
+
+时间源必须是 `common.get_server_time()` 而不是 `os.time()`：后者是用户设备时间，改一下系统时间就能跳过「她在忙」的等待，会直接摧毁 §1.1 主题陈述的全部分量。用户自己那一侧显示「我的时间」时才用 `os.time()`。
+
+季节取角色城市的当地日期。天气不调用实时服务，而由 `city_id + YYYY-MM-DD` 的种子确定，且全天一致；它只在晴、阴、雨、风等低风险状态之间变化。两者都必须基于换算后的**当地**日期，不能基于 UTC 日期，否则跨日线的城市会算错一天。
 
 ### 5.2 可用性状态
 
@@ -188,19 +200,24 @@ Marble 网页会员用于生成四城的“空间母版”：公寓、咖啡馆�
 
 **首选落地方式：** 将 Marble 生成的 360 全景、缩略图或录制的短镜头作为 Maker 3D 状态窗的背景/远景，并在前景放置 Tripo 角色和少量低模道具。
 
+**全景可以升格为天空球（2026-09-18 核实）。** 官方 Dev Kit 有专用工具 `UrhoXCLI convert-panorama -i <panorama> -o <cubemap.dds> --mips`，接受 **2:1 等距柱状投影**；Marble 导出的 360 全景正好是 2560×1280 = 2:1，可直接转 Cubemap。因此远景不必是一张贴死的静帧，固定机位下可保留轻微视差。M0-0 仍用静帧先过真机，**M0-1 / M1 升级为 Cubemap**。
+
+**不要从 2560×1280 全景上裁 4:3 当背景。** 2560 px 铺满 360°，即 0.1406°/px；4:3 状态窗约需 70° 水平视角，裁出来只有约 498×373，放到 1080 宽的状态窗要放大 2.2 倍，必糊。要静帧就从 Marble 世界视口直接出高分辨率 4:3 截图。
+
 **不要把 Marble 高质量 GLB 直接作为移动端主场景。** 官方规格中，高质量网格约 60 万至 100 万三角面，生成可达约一小时且每用户每小时有限流；Collider GLB 也约 10–20 万三角面。它们适合作为概念、镜头、远景和少量离线预渲染资产；若尝试导入 Maker，必须先做单场景真机性能 Spike。Marble 的世界合成、镜头录制和浏览器分享可直接服务于视觉看板和 1–2 分钟 walkthrough。
 
 ### 7.3 TapTap Maker：运行时与发布
 
-TapTap Maker 是唯一运行时：聊天 UI、Lua 状态机、`clientCloud` 存档、GLB 导入、预览与真机二维码测试都由它承担。
+TapTap Maker 是唯一运行时：聊天 UI、Lua 状态机、`clientCloud` 存档、3D 资源显示、预览与真机二维码测试都由它承担。
 
-- 角色与低模道具放入 `assets/`；
+- **GLB 不是运行时格式。** 运行时一律加载 MDL：`Tripo 导出 GLB → UrhoXCLI import-gltf → .mdl + 材质 .xml + 纹理 + .prefab（+ .ani）→ cache:GetResource("Model", …)`。角色与道具的源 GLB 与转换产物都放 `assets/`，具体路径见 §9 的「唯一真源」表；
 - Lua 负责时区换算、状态选择、事件去重和存档；
-- Maker AI（若实测可用）只负责把已选事实润色成角色对话；
+- **运行时没有任何 LLM / 文案生成接口。** Dev Kit 全量检索 `LLM`/`大模型`/`generate_text`/`Maker AI` 的命中全部指向「写代码的 AI」或构建期 MCP 工具。`ContentService` 因此是**纯模板 + 变量替换**：原先设想的「LLM 润色 + 模板降级」里，模板不是降级方案，而是唯一方案。这意味着文案量是**写作工作量**，必须显式计入排期；
+- 构建期 MCP 的 `text_to_dialogue`（ElevenLabs）可给关键回复配音，把「文案是预置的」转成「她的声音」——属 M4 打磨，不进 M0；
 - `clientCloud` 保存单人关系数据；WASM 预览刷新会丢内存，因此记忆与离线事件必须在真机测试验证；
 - 发布前完成图标、截图、封面、简介、开发者的话与实机视频。
 
-Maker 能否在当前项目中直接使用 Marble 的全景格式、复杂 GLB 动画与具体 Lua API 名称，均是实施前必须验证的集成点；不可把历史文档中的推测 API 当作已验收事实。
+原列为「实施前必须验证」的集成点已在 2026-09-18 逐项核实，结论见 `docs/maker-lua-api-verification.md`：全景可转 Cubemap（可用，优于预期）、文本输入控件 `LineEdit` 存在（可用）、权威时间源存在（可用）、`clientCloud` 可用；IANA 时区、运行时 LLM、GLB 直接加载三项**不成立**，相应规则已改写入本节与 §5.1。仍未验证的是移动端中文 IME 行为、资产单文件大小上限、`clientCloud` 单值大小上限。
 
 ### 7.4 资产数据流
 
@@ -222,8 +239,8 @@ TapTap Maker 客户端
 ├─ TimeService：可信 UTC → 城市偏移规则 → 角色当地时间、季节、天气种子
 ├─ AvailabilityService：作息 → 空闲/碎片/忙碌/离线
 ├─ EventService：选择模板、记录事件、保底文案
-├─ MemoryService：clientCloud JSON 读写、摘要与上限
-└─ ContentService：Soul/Profile/关系上下文 → Maker AI 文案（可降级）
+├─ MemoryService：clientCloud 异步读写 + 本地文件兜底、摘要与上限
+└─ ContentService：Soul/Profile/关系上下文 + 事件事实 → 纯模板 + 变量替换（无运行时 LLM）
 ```
 
 职责边界：Lua 决定事实与时机；生成式文本不能篡改事件事实、地点或时间。运行时不调用 Tripo 或 Marble。
@@ -261,9 +278,10 @@ M0-0 是 M0 的第一个可验收子阶段。目标不是先完成聊天系统�
 - 视觉关键词：柔和鹅蛋至轻微方圆脸、平缓下颌、圆杏眼和自然浅双眼皮、低而柔和的鼻梁、暖调肤色；自然黑色中长发，空气感八字刘海或侧分碎发；安静、观察力强、有分寸。
 - 这些是原创的抽象审美约束，不能以现有角色名、现有角色图、真人未授权照片或“某角色写实版”作为生成指令。
 - 若用真人照片作为参考，该照片必须由用户本人提供且拥有肖像使用授权；它只可作为非识别性的比例与气质参考。最终角色不得被设计为可识别的真人复制。
-- 第一份 3D 资产只做中性 A-pose 全身 GLB，先验证导入；坐姿和背包离开的站姿属于 M0-1 或后续独立静态资源 / 绑定产物。
+- 第一份 3D 资产只做中性 A-pose 全身 GLB，导入为 MDL 后验证；坐姿和背包离开的站姿属于 M0-1 或后续独立静态资源 / 绑定产物。
 - 主视图与多视图准备为四个同尺寸独立文件：正面 A-pose、左侧、背面、右前 45°。统一浅灰背景、镜头高度、光线、服装和配饰；单人无遮挡、无文字。
-- 角色 GLB 首选低模且单角色不超过 5,000 faces；先验证 Maker 真机加载、脸与服装可读性、资源体积和帧率，再追求动作或精修。
+- 角色 GLB 首选低模且单角色不超过 5,000 faces；先验证 Maker 真机加载、脸与服装可读性、资源体积和帧率，再追求动作或精修。**现状不达标**：`lin-ruoxi.glb` 实测 14,298 三角面（约 2.9 倍），且三张内嵌贴图全为 4096×4096；见 `docs/asset-provenance.md`。
+- baseColor 是 UV 图集，单独打开看像「碎脸 + 黑底噪点」，这是正常展开结果，不得据此判定资产损坏。
 
 **工具与资产边界**
 
@@ -271,24 +289,32 @@ M0-0 是 M0 的第一个可验收子阶段。目标不是先完成聊天系统�
 2. Marble 只负责咖啡馆世界母版与提交镜头。首版从其世界中导出一张固定机位、横向 4:3 的 PNG / JPG 静帧，保留世界链接和录制；不得把 Marble 高面数 GLB 导入 Maker 主场景。
 3. TapTap Maker 只负责运行时导入与显示：Tripo 低模角色在前景，Marble 静帧为远景。音频、全景交互、复杂动作均不阻塞 M0-0。
 
-**资产交接目录（新对话入口）**
+**资产唯一真源（取代原 `poc/` 交接目录，2026-09-19）**
+
+原先在 `poc/art/source/lin-ruoxi/`、`assets/models/characters/lin-ruoxi/` 与 `assets/model/` 三处各存一份同一 GLB，属文档冲突而非误操作。现确立单一真源，完整表格、实测数据与云端权威重导入命令见 **`docs/asset-provenance.md`**。摘要：
 
 ```text
-poc/
-  art/source/lin-ruoxi/                 # 用户交付的授权参考图、主视图和四张多视图
-  art/briefs/                            # 可复用角色、场景提示词与资产 Brief
-  maker/                                 # 初始化后的 TapTap Maker 项目
-    assets/models/characters/lin-ruoxi/  # Tripo 导出的最终 GLB
-    assets/image/backgrounds/la-cafe/    # Marble 导出的背景图 / 全景
+assets/models/characters/lin-ruoxi/lin-ruoxi.glb   # 源 GLB（唯一）
+assets/model/multiview_{0..3}_*.jpeg               # 四张多视图参考（唯一）
+assets/Meshes/lin-ruoxi.mdl                        # 运行时模型
+assets/Materials/lin-ruoxi_00_tripo_mat_*.xml      # 运行时材质
+assets/Textures/lin-ruoxi_00_D.jpg / _N.png        # 运行时贴图
+assets/Prefabs/lin-ruoxi.prefab                    # 运行时优先加载
+assets/Textures/backgrounds/la-cafe-4x3.png        # 背景（待补，代码实际查找路径）
 ```
 
-任何非 Markdown 的新交付物（包括参考图片）须先按仓库约定用 MarkItDown 转换为相邻 Markdown 留档；源文件保留在上述目录，不能只留临时上传副本。
+任何非 Markdown 的新交付物须先在 `docs/asset-provenance.md` 登记来源与测量值，再落到上述路径；不留临时上传副本。
 
 **M0-0 验收与后续边界**
 
-- 通过：Maker 真机稳定显示林若夕 A-pose GLB 与 4:3 洛杉矶咖啡馆背景；固定镜头中人物和场景均清楚可读，无黑 / 白屏或崩溃。
+- 通过：Maker 真机稳定显示林若夕 A-pose 的 **MDL** 与 4:3 洛杉矶咖啡馆背景；固定镜头中人物和场景均清楚可读，无黑 / 白屏或崩溃。
 - 不在 M0-0：自由输入、消息排队、真实异步回复、存档、音频、重播、全景交互、角色动作、复杂动画。
-- M0-1 才制作情绪化垂直切片：默认可编辑消息“你那边是不是快傍晚了？今天的活动还顺利吗？”，显示“洛杉矶 · 18:20 · 还在外面”，以约 10 秒演示等待后，出现引用咖啡馆活动的预置回复。首版可编辑输入不要求对任意文本生成语义匹配回复。
+- **M0-1 前置修复项**（不修则动画与材质无从谈起，实测依据见 `docs/asset-provenance.md`）：
+  ① `import-gltf` 丢弃了源 GLB 的 65 关节 `Armature` skin，MDL 内骨骼命中数为 0；
+  ② 导入器未导出 metallicRoughness 贴图，材质退化为常量 `Metallic=0 / Roughness=0.62`，皮革、牛仔、皮肤、帆布共用一种光泽；
+  ③ 面数与贴图预算超配；
+  ④ 状态窗 RenderTarget 用 `SURFACE_UPDATEALWAYS` 每帧重渲 960×720，且 `renderer.hdrRendering = true` 全局开启、`Shutdown()` 不复原——官方 `scene-to-nanovg.md` 要求静态画面用 `SURFACE_MANUALUPDATE` + 变化后 `QueueUpdate()`。
+- M0-1 才制作情绪化垂直切片：默认可编辑消息“你那边是不是快傍晚了？今天的活动还顺利吗？”，显示“洛杉矶 · 18:20 · 还在外面”，以约 10 秒演示等待后，出现引用咖啡馆活动的预置回复。首版可编辑输入不要求对任意文本生成语义匹配回复。移动端中文 IME 是这一阶段第一个要验证的坑。
 - 后续自由输入不另起状态机：Lua 始终保存用户原文、发送时间与送达状态，并先选择生活事件事实；回复以“事件事实 + 用户原文”模板化。扩展只是增加事件和文案能力。
 - 音频接口现在预留：每个状态窗有 `scene_id` 和可选 `audio_profile_id`，统一经 `AudioService.play(profile)` 调用；首版受配置控制为安全 no-op，后续补资源与映射表即可。
 
@@ -327,10 +353,14 @@ poc/
 
 | 风险 | 回退 |
 | --- | --- |
-| Maker AI 角色扮演不稳定 | 事件事实由 Lua 固定；用模板文案与短句兜底 |
-| Marble 网格或 splat 无法高效接入 Maker | 用 Marble 全景/短镜头做背景，Maker 仅渲染低模前景 |
+| 文案量被低估（运行时没有 LLM，模板是唯一方案） | 按事件模板逐条预置短句；把写作工作量显式排进 M1–M2，不当作技术风险而当作文案任务 |
+| Marble 网格或 splat 无法高效接入 Maker | 用 Marble 全景（可转 Cubemap 天空球）/短镜头做背景，Maker 仅渲染低模前景 |
 | Tripo 角色无法直接播放所需动作 | 先用 idle + 相机/表情/气泡营造状态；动作作为增量 |
-| `clientCloud` 或离线时间异常 | 本地内存保底并提供“重新整理记忆”，不清空用户历史 |
+| **`import-gltf` 丢弃 skin，MDL 无骨骼** | 回云端调整导入参数或改用带绑定的导出；M0-1 前必须解决，否则动画无从谈起。临时回退：静态站姿 + 相机/表情 |
+| **导入器不导出 metallicRoughness** | 用常量粗糙度顶住，或从 RM 图离线烘一张 AO/粗糙度变体贴回材质 |
+| **面数与贴图超配（14,298 面 / 3×4096²）** | 重生成或减面到 ≤5,000；basecolor 降到 2048²、normal 降到 1024²；真机帧率不达标时优先降贴图 |
+| **状态窗每帧重渲 + 全局 HDR** | 改 `SURFACE_MANUALUPDATE` + 变化后 `QueueUpdate()`；`Shutdown()` 复原 `hdrRendering` |
+| `clientCloud` 或离线时间异常 | 本地文件存档兜底（比内存强，重启仍在）并提供“重新整理记忆”，不清空用户历史 |
 | 角色长时间不回造成挫败 | 给出含蓄状态描述，设定最大回复窗口并保证后续解释 |
 | 城市太多导致资产碎片化 | M1 先锁洛杉矶，M3 后再扩到四城 |
 
@@ -344,7 +374,9 @@ poc/
 4. 重进后共同记忆和事件去重正确；
 5. 四城差异、视觉打磨和提交物完整。
 
-## 12. 研究依据（2026-09-15 核验）
+## 12. 研究依据（2026-09-15 核验；2026-09-19 补充平台依据来源）
+
+**平台与 API 的唯一依据是本地 AI Dev Kit**：`engine-docs/`、`.emmylua/`、`examples/`、`templates/`、`urhox-libs/`。逐项核实结论见 `docs/maker-lua-api-verification.md`，资产实测数据见 `docs/asset-provenance.md`。`research/taptap-pages/` 的 38 份 HTML 快照中 27 份是 TapTap 登录墙，**不得**作为 API 或资产限制的依据（该目录内 README 记录了判定过程）。
 
 - [Tripo Studio](https://studio.tripo3d.ai/)：网页 3D Workspace，首页展示图像生成 3D 与资产工作流。
 - [Tripo Developers — Quick Start](https://developers.tripo3d.ai/en/docs/quick-start)：文本到模型任务完成后可下载 GLB；文档亦列出游戏角色相关工作流。

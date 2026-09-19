@@ -26,11 +26,13 @@
 
 ### 文件与性能契约
 
-| 资产 | 首选格式 | 目标 | 说明 |
+| 资产 | 交付格式 | 运行时格式 | 目标 |
 | --- | --- | --- | --- |
-| 主角 | GLB | 单角色 ≤ 5,000 faces | 仅保留 PoC 需要的 idle、坐/看手机、walk 动作 |
-| 小道具 | GLB | 单件 1,000–3,000 faces | 咖啡杯、书、唱片、背包、台灯等 |
-| 备选 | FBX | 仅 GLB 导入失败时使用 | 必须先做 Maker 真机验证 |
+| 主角 | GLB（A-pose 低模） | **MDL**（`UrhoXCLI import-gltf` 转换） | 单角色 ≤ 5,000 faces；仅保留 PoC 需要的 idle、坐/看手机、walk |
+| 小道具 | GLB | **MDL** | 单件 1,000–3,000 faces（咖啡杯、书、唱片、背包、台灯） |
+| 备选 | FBX | MDL | 仅 GLB 转换失败时使用，且必须先做 Maker 真机验证 |
+
+**GLB 不是 Maker 的运行时格式。** 运行时一律 `cache:GetResource("Model", "…mdl")`；导入会自动处理坐标系转换（右手系→左手系）、UV 翻转与单位换算。配套工具：`skills/model-info` 查面数（验证 ≤5,000 目标）、`skills/anim-info` 查动画轨道。实测导入注意事项（丢 skin、丢 metallicRoughness）见 `docs/asset-provenance.md`。
 
 不要使用现有 IP 的人名、外形特征、台词、音乐或场景素材。Tripo Studio 网页会员和 OpenAPI 权益是否互通未核验；当前实施以网页导出为准。
 
@@ -56,7 +58,8 @@ Marble 高质量 GLB 不直接作为 Maker 移动端主场景：官方规格约�
 
 | Marble 输出 | 本项目决策 |
 | --- | --- |
-| 360 panorama PNG（2560×1280） | 首选远景，先验证 Maker 图片/材质承载方式 |
+| 360 panorama PNG（2560×1280，2:1 等距柱状） | **可用 `UrhoXCLI convert-panorama -i <panorama> -o <cubemap.dds> --mips` 转 Cubemap 天空球**（官方专用工具，输入格式正好匹配）。M0-0 先用静帧过真机，M0-1/M1 升 Cubemap |
+| 从全景裁 4:3 | **禁止**：2560 px 铺 360° ⇒ 0.1406°/px，4:3 约需 70° 水平视角 ⇒ 仅约 498×373，放大到 1080 宽必糊。要 4:3 就从世界视口直接出高分辨率截图 |
 | 录制镜头 | 用于 walkthrough 与视觉资产看板 |
 | SPZ / PLY splat | 不进入首轮 Maker 运行时 |
 | Collider GLB | 仅性能 Spike 候选 |
@@ -76,29 +79,40 @@ Marble 高质量 GLB 不直接作为 Maker 移动端主场景：官方规格约�
 
 ### 项目目录与格式
 
-| 内容 | 放置位置 | 接受格式 / 限制 |
-| --- | --- | --- |
-| 角色、低模道具 | `assets/` | GLB 首选；FBX 备选；单个 3D 文件上限 50 MB |
-| 背景 / 远景 | `assets/image/` | PNG / JPG / JPEG / WebP / GIF；单文件上限 16 MB |
-| 环境音 | `assets/audio/` | OGG / MP3；单文件上限 16 MB |
-| 录制片段 | `assets/video/` | MP4 / WebM；单文件上限 50 MB |
-| 状态与记忆 | `clientCloud` | JSON 序列化，真机验证持久化 |
+下表的**路径**按当前工程实际结构（`scripts/` 为用户代码，`assets/` 各子目录为引擎导入产物）；**大小上限一栏全部标注为未核验**——原始出处是 `research/taptap-pages/` 的登录墙快照，在 AI Dev Kit 中找不到对应依据。
+
+| 内容 | 放置位置 | 格式 | 大小上限 |
+| --- | --- | --- | --- |
+| 用户 Lua 代码 | `scripts/` | `.lua`（Lua 5.4） | — |
+| 运行时模型 | `assets/Meshes/` | `.mdl` | 未核验 |
+| 运行时材质 | `assets/Materials/` | `.xml`（Technique 见 §2） | 未核验 |
+| 运行时贴图 | `assets/Textures/` | `.jpg` / `.png` + 同名 `.xml` | 未核验 |
+| 预制体 | `assets/Prefabs/` | `.prefab` | 未核验 |
+| 源 GLB / 参考图 | `assets/models/characters/…`、`assets/model/` | `.glb`、`.jpeg`、`.webp` | 未核验 |
+| 背景 / 远景 | `assets/Textures/backgrounds/` | PNG / JPG / WebP | 未核验 |
+| 环境音 | `assets/audio/` | OGG / MP3 | 未核验 |
+| 录制片段 | `assets/video/` | MP4 / WebM | 未核验 |
+| 状态与记忆 | `clientCloud`（`values` 表）+ 本地文件存档兜底 | 任意 Lua table / JSON | 单值上限未核验 |
+
+**资源引用不带目录前缀**：`assets/` 与 `scripts/` 都是资源根，代码里写 `cache:GetResource("Model", "Meshes/lin-ruoxi.mdl")`，不写 `assets/Meshes/…`。
 
 ### 实施边界
 
-- Lua 决定时区、可用性、事件事实与去重；生成式文本只能润色既定事实；
+- Lua 决定时区、可用性、事件事实与去重；**运行时没有 LLM 接口**，回复一律模板 + 变量替换（`docs/maker-lua-api-verification.md` §3）；
 - WASM 预览的内存状态不等于真机/线上持久化，离线事件与记忆必须在真机测试；
-- Maker 中具体 Lua API 名称、Marble 全景的贴图接入与复杂 GLB 动画支持都必须先实测，不能从旧模板推断；
+- `clientCloud` 读写全异步、配额 300 次/分、昵称不可存云变量，详见规格 §4.2；
+- Lua API 名称以本地 AI Dev Kit（`engine-docs/`、`.emmylua/`、`examples/`）为准，不从旧模板或历史快照推断；
+- 构建前须过 Lua LSP 诊断（无 Error）再提交构建；
 - 发布前准备图标、至少 3 张截图、宣传图/封面、简介、开发者的话和实机视频。
 
 官方入口：<https://maker.taptap.cn/help>、<https://maker.taptap.cn/skills>。
 
 ## 5. 最小验证顺序
 
-1. Tripo 导出原创角色 GLB → Maker 真机显示；
-2. Marble 导出一个咖啡馆全景/镜头 → Maker 状态窗背景；
-3. Lua 计算洛杉矶当地时间并切换状态；
-4. `clientCloud` 保存一条消息、一次事件和一条共同记忆；
+1. Tripo 导出原创角色 GLB → `import-gltf` 转 MDL → Maker 真机显示；**（M0-0 进行中：GLB 与 MDL 已就位，缺背景与真机验收）**
+2. Marble 导出咖啡馆 4:3 静帧 → Maker 状态窗远景；后续可升 Cubemap 天空球；
+3. Lua 用 `common.get_server_time()` + 城市偏移表算洛杉矶当地时间并切换状态；
+4. `clientCloud` 保存一条消息、一次事件和一条共同记忆（异步回调 + `BatchSet` + 本地文件兜底）；
 5. 之后才扩展城市、动画、音效和视觉资产。
 
 若任一步失败，保留上一步已验收资产，选择低成本回退；不在运行时引入新的外部服务。
