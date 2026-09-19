@@ -28,6 +28,7 @@ local BACKGROUND_CANDIDATES = {
 }
 
 local GLB_PATH = "models/characters/lin-ruoxi/lin-ruoxi.glb"
+local MATERIAL_PATH = "Materials/lin-ruoxi_00_tripo_mat_8ae16fc0-7a3a-402e-9a6e-1180f6c269f7.xml"
 local BACKGROUND_CANONICAL = "Textures/backgrounds/la-cafe-4x3.png"
 
 ---@type integer
@@ -339,6 +340,25 @@ local function createPlaceholderCharacter(parent)
     logInfo("已创建几何占位角色（若夕服装配色）。等待 GLB 导入为 MDL 后替换")
 end
 
+---@param node Node
+local function bindCharacterMaterial(node)
+    local mat = cache:GetResource("Material", MATERIAL_PATH)
+    if not mat then
+        logError("角色材质加载失败: " .. MATERIAL_PATH)
+        return
+    end
+    local animated = node:GetComponent("AnimatedModel", true)
+    local staticModel = node:GetComponent("StaticModel", true)
+    local drawable = animated or staticModel
+    if not drawable then
+        logWarn("绑定材质时未找到 StaticModel/AnimatedModel")
+        return
+    end
+    drawable:SetMaterial(mat)
+    drawable.castShadows = true
+    logInfo("已绑定角色漫反射材质: " .. MATERIAL_PATH)
+end
+
 ---@param mdlPath string
 ---@return boolean
 local function tryLoadModelFile(mdlPath)
@@ -367,8 +387,8 @@ local function tryLoadModelFile(mdlPath)
         logInfo("模型无骨骼，使用 StaticModel")
     end
     drawable:SetModel(model)
-    drawable:ApplyMaterialList()
     drawable.castShadows = true
+    bindCharacterMaterial(characterRoot_)
     return true
 end
 
@@ -389,6 +409,7 @@ local function tryLoadPrefab(prefabPath)
         return false
     end
     logInfo("已加载角色预制体: " .. prefabPath)
+    bindCharacterMaterial(characterRoot_)
     return true
 end
 
@@ -602,7 +623,8 @@ function StatusWindow.Init()
 
     frameFixedCamera()
     createRenderTarget()
-    renderer.hdrRendering = true
+    -- 状态窗 RenderTarget 走 NanoVG 采样，关闭 HDR 避免贴图被当成乱码 atlas
+    renderer.hdrRendering = false
 end
 
 function StatusWindow.IsModelLoaded()

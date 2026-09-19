@@ -8,8 +8,8 @@
 	<attribute name="Scale" value="1 1 1" />
 	<attribute name="Variables" value="" />
 	<component type="StaticModel">
-		<attribute name="Model" value="Model;uuid://GecwCejOvmwT9vm6qB1iaCfF" />
-		<attribute name="Material" value="Material;uuid://FWN_uUnKdTocgYIHjRcJ9GQo" />
+		<attribute name="Model" value="Model;Meshes/lin-ruoxi.mdl" />
+		<attribute name="Material" value="Material;Materials/lin-ruoxi_00_tripo_mat_8ae16fc0-7a3a-402e-9a6e-1180f6c269f7.xml" />
 		<attribute name="Cast Shadows" value="true" />
 	</component>
 </node>
