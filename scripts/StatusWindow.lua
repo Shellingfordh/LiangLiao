@@ -48,15 +48,6 @@ local cameraNode_ = nil
 local camera_ = nil
 ---@type Node|nil
 local characterRoot_ = nil
----@type Node|nil
-local placeholderHolder_ = nil
----@type Node|nil
-local backdropNode_ = nil
-
---- 固定镜头参数（供背景平面按视锥铺满复用）；positionBackdrop 定义在下方，先前置声明
----@type {camPos:Vector3, look:Vector3, dist:number, tanHalfV:number, tanHalfH:number}|nil
-local frameParams_ = nil
-local positionBackdrop
 ---@type Texture2D|nil
 local texture_ = nil
 ---@type RenderSurface|nil
@@ -71,12 +62,9 @@ local nvgCreateFailed_ = false
 
 local modelLoaded_ = false
 local usingPlaceholderCharacter_ = false
-local usingPlaceholderBackground_ = false
 
 ---@type string
 local modelError_ = ""
----@type string
-local backgroundNote_ = ""
 
 ---@type fun()|nil
 local noticesChanged_ = nil
@@ -260,110 +248,6 @@ local function createLighting(scene)
     fill.castShadows = false
 end
 
---- 中性临时咖啡馆窗景（背景图缺失时使用）
----@param scene Scene
-local function createPlaceholderBackground(scene)
-    usingPlaceholderBackground_ = true
-    backgroundNote_ = "待替换 la-cafe-4x3.png"
-    logInfo("待替换 la-cafe-4x3.png")
-
-    local holder = scene:CreateChild("PlaceholderBgRoot")
-    placeholderHolder_ = holder
-
-    local wallMat = makePbrColor(0.62, 0.55, 0.48, 0.0, 0.78)
-    local trimMat = makePbrColor(0.42, 0.36, 0.30, 0.0, 0.7)
-    local glassMat = makePbrColor(0.93, 0.86, 0.72, 0.0, 0.18)
-    glassMat:SetShaderParameter("MatEmissiveColor", Variant(Color(1.6, 1.25, 0.85)))
-    local floorMat = makePbrColor(0.28, 0.25, 0.22, 0.0, 0.85)
-
-    -- 左侧重景墙 + 窗
-    addPrimitive(holder, "Wall", "Models/Box.mdl", Vector3(-1.55, 1.35, -1.8), Vector3(3.2, 2.8, 0.08), wallMat)
-    addPrimitive(holder, "Window", "Models/Box.mdl", Vector3(-1.85, 1.45, -1.74), Vector3(1.4, 1.7, 0.04), glassMat)
-    addPrimitive(holder, "WindowTrim", "Models/Box.mdl", Vector3(-1.85, 1.45, -1.76), Vector3(1.55, 1.85, 0.03), trimMat)
-    addPrimitive(holder, "Sill", "Models/Box.mdl", Vector3(-1.85, 0.52, -1.55), Vector3(1.5, 0.08, 0.35), trimMat)
-    addPrimitive(holder, "Floor", "Models/Box.mdl", Vector3(0.1, -0.04, 0.2), Vector3(5.5, 0.08, 4.0), floorMat)
-end
-
---- 用已加载的贴图构建远景平面（背景）
----@param scene Scene
----@param tex Texture2D
-local function buildBackdrop(scene, tex)
-    local tech = cache:GetResource("Technique", "Techniques/DiffUnlit.xml")
-    if not tech then
-        return false
-    end
-
-    local mat = Material:new()
-    mat:SetTechnique(0, tech)
-    mat:SetTexture(TU_DIFFUSE, tex)
-    mat:SetShaderParameter("MatDiffColor", Variant(Color(1.0, 1.0, 1.0, 1.0)))
-
-    -- Plane 默认躺在 XZ，旋转为竖直朝向相机（+Z）。尺寸/位置在 frameFixedCamera 里
-    -- 按相机视锥精确铺满 4:3 画面（远景平面必须与相机绑定，否则盖不满或露黑边）。
-    local bg = scene:CreateChild("CafeBackdrop")
-    bg.rotation = Quaternion(90, 0, 0)
-    local modelComp = bg:CreateComponent("StaticModel")
-    local plane = cache:GetResource("Model", "Models/Plane.mdl")
-    if plane then
-        modelComp:SetModel(plane)
-    end
-    modelComp:SetMaterial(mat)
-    modelComp.castShadows = false
-    backdropNode_ = bg
-
-    local floorMat = makePbrColor(0.22, 0.20, 0.18, 0.0, 0.9)
-    addPrimitive(scene, "Floor", "Models/Box.mdl", Vector3(0.2, -0.04, 0.4), Vector3(4.5, 0.08, 3.2), floorMat)
-    return true
-end
-
---- 异步下载并加载背景贴图（DWP 兜底）。成功则替换占位窗景。
----@param scene Scene
----@param texturePath string
-local function loadBackgroundAsync(scene, texturePath)
-    cache:GetResourceAsync("Texture2D", texturePath, function(resource)
-        local tex = resource and (resource --[[@as Texture2D]]) or nil
-        if not tex or not scene_ then
-            logWarn("背景异步加载失败（保持占位）: " .. texturePath)
-            return
-        end
-        if not buildBackdrop(scene, tex) then
-            logError("背景贴图已加载但远景平面构建失败: " .. texturePath)
-            return
-        end
-        -- 真实远景就绪后移除占位窗景
-        if placeholderHolder_ then
-            placeholderHolder_:Dispose()
-            placeholderHolder_ = nil
-        end
-        usingPlaceholderBackground_ = false
-        backgroundNote_ = "已加载 " .. texturePath
-        logInfo("背景图已作为远景平面加载(异步): " .. texturePath)
-        positionBackdrop(frameParams_)
-        if surface_ then
-            surface_:QueueUpdate()
-        end
-        if noticesChanged_ then
-            noticesChanged_()
-        end
-    end)
-end
-
----@param scene Scene
----@param texturePath string
-local function createTexturedBackground(scene, texturePath)
-    -- DWP：GetResource 返回占位并自动触发下载与热替换；返回 nil 才走异步兜底
-    local tex = cache:GetResource("Texture2D", texturePath)
-    if tex and buildBackdrop(scene, tex) then
-        usingPlaceholderBackground_ = false
-        backgroundNote_ = "已加载 " .. texturePath
-        logInfo("背景图已作为远景平面加载: " .. texturePath)
-        return
-    end
-    logInfo("背景贴图未就绪，先占位再异步下载: " .. texturePath)
-    createPlaceholderBackground(scene)
-    loadBackgroundAsync(scene, texturePath)
-end
-
 --- 几何占位人（深墨绿夹克 / 米白针织 / 深色牛仔裤 / 白鞋）
 ---@param parent Node
 local function createPlaceholderCharacter(parent)
@@ -522,28 +406,7 @@ local function normalizeCharacterScale()
     end
 end
 
-local BACKDROP_BEHIND = 2.2   -- 远景平面在角色身后 2.2 m
-local BACKDROP_MARGIN = 1.12  -- 铺满画面的安全余量
-
---- 按当前相机视锥把背景平面精确铺满 4:3 画面（消除右侧/边缘黑边）
----@param p {camPos:Vector3, look:Vector3, dist:number, tanHalfV:number, tanHalfH:number}
-positionBackdrop = function(p)
-    if not backdropNode_ or not p then
-        return
-    end
-    local planeZ = p.look.z - BACKDROP_BEHIND
-    local dd = p.camPos.z - planeZ
-    local k = dd / p.dist
-    local px = p.camPos.x + (p.look.x - p.camPos.x) * k
-    local py = p.camPos.y + (p.look.y - p.camPos.y) * k
-    local halfW = dd * p.tanHalfH * BACKDROP_MARGIN
-    local halfH = dd * p.tanHalfV * BACKDROP_MARGIN
-    backdropNode_.position = Vector3(px, py, planeZ)
-    -- Plane 旋转 90° 后：局部 X→宽，局部 Z→高
-    backdropNode_.scale = Vector3(halfW * 2.0, 1.0, halfH * 2.0)
-end
-
---- 固定镜头：人物在画面右侧约占 60% 高度（留头量），背景留在左侧
+--- 固定镜头：人物在画面右侧约占 60% 高度（留头量），背景静帧留在左侧
 local function frameFixedCamera()
     if not cameraNode_ or not characterRoot_ then
         return
@@ -578,18 +441,13 @@ local function frameFixedCamera()
     cameraNode_.position = camPos
     cameraNode_:LookAt(look, Vector3.UP, TS_WORLD)
 
-    -- 角色只绕 Y 转向相机，保持站姿，不引入俯仰
+    -- 角色只绕 Y 转向相机，保持站姿，不引入俯仰。
+    -- LookAt 把节点局部 -Z 对准目标，而 lin-ruoxi MDL 正面朝局部 +Z，
+    -- 不补这 180° 实机看到的就是后脑勺（2026-09-20 预览截图实测）。
     local charPos = characterRoot_.position
     characterRoot_:LookAt(Vector3(camPos.x, charPos.y, camPos.z), Vector3.UP, TS_WORLD)
+    characterRoot_:Rotate(Quaternion(180, Vector3.UP))
 
-    frameParams_ = {
-        camPos = camPos,
-        look = look,
-        dist = dist,
-        tanHalfV = math.tan(vfov * 0.5),
-        tanHalfH = math.tan(hfov * 0.5),
-    }
-    positionBackdrop(frameParams_)
     if surface_ then
         surface_:QueueUpdate()
     end
@@ -647,13 +505,12 @@ local function loadCharacter()
     end
 end
 
-local function loadBackground()
-    if not scene_ then
-        return
-    end
-    -- 本地已存在则用其路径；否则用规范路径，交给 DWP 下载热替换（设备冷启动 Exists 为假）
-    local bgPath = findFirstExisting(BACKGROUND_CANDIDATES) or BACKGROUND_CANONICAL
-    createTexturedBackground(scene_, bgPath)
+--- 远景静帧路径。由 UI 层作为状态窗 backgroundImage 绘制：
+--- 走 3D 平面贴图时 Plane 的 UV 轴向会把静帧镜像，UI 图片路径没有这个问题。
+---@return string
+function StatusWindow.GetBackgroundImagePath()
+    -- 本地已存在则用其路径；否则用规范路径，交给 DWP 下载（设备冷启动 Exists 为假）
+    return findFirstExisting(BACKGROUND_CANDIDATES) or BACKGROUND_CANONICAL
 end
 
 local function createRenderTarget()
@@ -684,7 +541,8 @@ local function createRenderTarget()
                 local command = path:GetCommand(i)
                 if command and command.type == CMD_CLEAR then
                     command.useFogColor = false
-                    command.clearColor = Color(0.12, 0.11, 0.10, 1.0)
+                    -- 透明底：4:3 咖啡馆静帧由 UI 画在本层之下，这里只出角色
+                    command.clearColor = Color(0, 0, 0, 0)
                 end
             end
         end
@@ -711,7 +569,6 @@ function StatusWindow.Init()
     scene_:CreateComponent("DebugRenderer")
 
     createLighting(scene_)
-    loadBackground()
     loadCharacter()
 
     cameraNode_ = scene_:CreateChild("FixedCamera")
@@ -740,15 +597,7 @@ function StatusWindow.GetModelError()
     return modelError_
 end
 
-function StatusWindow.GetBackgroundNote()
-    return backgroundNote_
-end
-
-function StatusWindow.IsUsingPlaceholderBackground()
-    return usingPlaceholderBackground_
-end
-
---- 背景/角色贴图等异步资源就绪后回调（用于主界面回填资源提示）。
+--- 角色漫反射贴图等异步资源就绪后回调（用于主界面回填资源提示）。
 ---@param cb fun()
 function StatusWindow.SetNoticesChanged(cb)
     noticesChanged_ = cb
@@ -813,7 +662,6 @@ function StatusWindow.Shutdown()
     camera_ = nil
     cameraNode_ = nil
     characterRoot_ = nil
-    placeholderHolder_ = nil
     noticesChanged_ = nil
     if scene_ then
         scene_:Dispose()

@@ -91,11 +91,14 @@ function CreatePage()
     }
 
     -- 高度跟随顶部 35% 区域，宽度由 4:3 算出，避免竖屏上被拉满整宽
+    -- 远景 = Marble 静帧（UI 背景图，cover 铺满 4:3），前景 = 透明底 3D 角色 RT
     local preview = StatusWindow.CreatePreviewWidget({
         id = "statusPreview",
         height = "100%",
         maxWidth = "100%",
         aspectRatio = 4 / 3,
+        backgroundImage = StatusWindow.GetBackgroundImagePath(),
+        backgroundFit = "cover",
         backgroundColor = { 18, 16, 15, 255 },
         borderRadius = 14,
         overflow = "hidden",
@@ -157,17 +160,9 @@ function CreatePage()
 end
 
 function RefreshResourceNotices()
-    local messages = {}
     local modelError = StatusWindow.GetModelError()
     if modelError ~= "" then
-        messages[#messages + 1] = modelError
-    end
-    if StatusWindow.IsUsingPlaceholderBackground() then
-        messages[#messages + 1] = "背景图尚未导入，已使用中性临时窗景。待替换 la-cafe-4x3.png"
-    end
-
-    if #messages > 0 then
-        errorLabel_:SetText(table.concat(messages, " "))
+        errorLabel_:SetText(modelError)
         errorLabel_:SetVisible(true)
     else
         errorLabel_:SetText("")

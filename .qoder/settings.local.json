@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "taptap-maker": {
+      "command": "C:/nvm4w/nodejs/node.exe",
+      "args": [
+        "C:/Users/20145/.taptap-maker/mcp-runtime/0.0.33/dist/maker.js"
+      ]
+    }
+  }
+}
