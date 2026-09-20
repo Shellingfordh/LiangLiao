@@ -92,12 +92,12 @@ function CreatePage()
 
     -- 高度跟随顶部 35% 区域，宽度由 4:3 算出，避免竖屏上被拉满整宽
     -- 远景 = Marble 静帧（UI 背景图，cover 铺满 4:3），前景 = 透明底 3D 角色 RT
+    -- backgroundImage 不在这里给：要等静帧到手后再设，见下方 WarmUpBackground
     local preview = StatusWindow.CreatePreviewWidget({
         id = "statusPreview",
         height = "100%",
         maxWidth = "100%",
         aspectRatio = 4 / 3,
-        backgroundImage = StatusWindow.GetBackgroundImagePath(),
         backgroundFit = "cover",
         backgroundColor = { 18, 16, 15, 255 },
         borderRadius = 14,
@@ -157,6 +157,13 @@ function CreatePage()
 
     UI.SetRoot(uiRoot_)
     logInfo("竖屏页面已创建：顶部 4:3 状态窗约占 35% 高度")
+
+    -- 静帧到手之后才挂背景：UI 的 ImageCache 会把首次加载失败永久缓存，
+    -- DWP 冷启动时提前挂上去会让背景在整个会话里静默缺失。
+    StatusWindow.WarmUpBackground(function(path)
+        preview:SetBackgroundImage(path)
+        logInfo("状态窗背景已挂载: " .. path)
+    end)
 end
 
 function RefreshResourceNotices()

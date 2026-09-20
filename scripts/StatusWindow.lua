@@ -513,6 +513,28 @@ function StatusWindow.GetBackgroundImagePath()
     return findFirstExisting(BACKGROUND_CANDIDATES) or BACKGROUND_CANONICAL
 end
 
+--- 先把背景静帧拉到手，再让调用方把它交给 UI 绘制。
+--- UI 的 ImageCache.Get 会把首次失败永久缓存且不再重试
+--- （urhox-libs/UI/Core/ImageCache.lua:64），而 DWP 冷启动时纹理尚未下载；
+--- 若在首帧就设好 backgroundImage，背景会在整个会话里静默缺失。
+---@param onReady fun(path: string)
+function StatusWindow.WarmUpBackground(onReady)
+    local path = StatusWindow.GetBackgroundImagePath()
+    if resourceExists(path) then
+        logInfo("背景静帧已在本地: " .. path)
+        onReady(path)
+        return
+    end
+    cache:GetResourceAsync("Texture2D", path, function(resource)
+        if not resource then
+            logError("背景静帧异步下载失败，状态窗将只有角色: " .. path)
+            return
+        end
+        logInfo("背景静帧下载就绪: " .. path)
+        onReady(path)
+    end)
+end
+
 local function createRenderTarget()
     texture_ = Texture2D:new()
     texture_:SetNumLevels(1)

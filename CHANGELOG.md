@@ -16,6 +16,14 @@
   已按配置把 `generate_image` 生成件（512×512）复制到该路径。但随即实测到 **Maker 远端 pre-receive 用
   `EXCLUDE_PATTERNS` 硬拒 `game_material/*`**，push 被 `! [remote rejected]` 退回——所以这个路径本就
   不可能进仓库，图标属**本地暂存素材**，云端生效需走 Maker 网页侧发布素材流程（见「Known issues」）。
+- **背景静帧在 DWP 冷启动下会整会话缺失**（本次改造自己引入、复查时抓出）：UI 的
+  `ImageCache.Get` 对首次加载失败**永久缓存且不再重试**（`urhox-libs/UI/Core/ImageCache.lua:64-66`），
+  而 `backgroundImage` 原先在建控件时就设好，首帧即触发加载。现改为
+  `StatusWindow.WarmUpBackground()` 先把静帧拿到手（本地已存在则直接回调，否则
+  `cache:GetResourceAsync` 等 DWP 下载完成），就绪后再 `preview:SetBackgroundImage(path)`。
+  同时 `.project/resources.json` 的 `groups.default` 补 `Textures/backgrounds/**`：该项目无独立 `**`
+  条目，属**增强引用**模式，未可达资源会被裁出包，而背景改由 UI 字符串引用后不再走
+  `cache:GetResource`，不该把交付物押在构建器的静态字面量匹配上。
 - **`maker_build_current_directory` 把 19 MB 的 `node_modules/` 与 `.qoder/.penguin/.superpowers/`
   一并提交并推上 Maker 云端**（该工具默认提交全部本地变更，而这些目录此前只是未跟踪）。
   `.gitignore` 补齐这些目录与 `game_material/`，并把它们移出索引（磁盘文件保留）。
