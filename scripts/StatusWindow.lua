@@ -50,6 +50,13 @@ local camera_ = nil
 local characterRoot_ = nil
 ---@type Node|nil
 local placeholderHolder_ = nil
+---@type Node|nil
+local backdropNode_ = nil
+
+--- 固定镜头参数（供背景平面按视锥铺满复用）；positionBackdrop 定义在下方，先前置声明
+---@type {camPos:Vector3, look:Vector3, dist:number, tanHalfV:number, tanHalfH:number}|nil
+local frameParams_ = nil
+local positionBackdrop
 ---@type Texture2D|nil
 local texture_ = nil
 ---@type RenderSurface|nil
@@ -291,11 +298,10 @@ local function buildBackdrop(scene, tex)
     mat:SetTexture(TU_DIFFUSE, tex)
     mat:SetShaderParameter("MatDiffColor", Variant(Color(1.0, 1.0, 1.0, 1.0)))
 
-    -- Plane 默认躺在 XZ，旋转为竖直朝向相机（+Z）
+    -- Plane 默认躺在 XZ，旋转为竖直朝向相机（+Z）。尺寸/位置在 frameFixedCamera 里
+    -- 按相机视锥精确铺满 4:3 画面（远景平面必须与相机绑定，否则盖不满或露黑边）。
     local bg = scene:CreateChild("CafeBackdrop")
-    bg.position = Vector3(-0.85, 1.35, -1.65)
     bg.rotation = Quaternion(90, 0, 0)
-    bg.scale = Vector3(4.8, 1.0, 3.6)
     local modelComp = bg:CreateComponent("StaticModel")
     local plane = cache:GetResource("Model", "Models/Plane.mdl")
     if plane then
@@ -303,6 +309,7 @@ local function buildBackdrop(scene, tex)
     end
     modelComp:SetMaterial(mat)
     modelComp.castShadows = false
+    backdropNode_ = bg
 
     local floorMat = makePbrColor(0.22, 0.20, 0.18, 0.0, 0.9)
     addPrimitive(scene, "Floor", "Models/Box.mdl", Vector3(0.2, -0.04, 0.4), Vector3(4.5, 0.08, 3.2), floorMat)
@@ -331,6 +338,10 @@ local function loadBackgroundAsync(scene, texturePath)
         usingPlaceholderBackground_ = false
         backgroundNote_ = "已加载 " .. texturePath
         logInfo("背景图已作为远景平面加载(异步): " .. texturePath)
+        positionBackdrop(frameParams_)
+        if surface_ then
+            surface_:QueueUpdate()
+        end
         if noticesChanged_ then
             noticesChanged_()
         end
@@ -511,7 +522,28 @@ local function normalizeCharacterScale()
     end
 end
 
---- 固定镜头：人物在画面右侧，全身入画，脚不裁切
+local BACKDROP_BEHIND = 2.2   -- 远景平面在角色身后 2.2 m
+local BACKDROP_MARGIN = 1.12  -- 铺满画面的安全余量
+
+--- 按当前相机视锥把背景平面精确铺满 4:3 画面（消除右侧/边缘黑边）
+---@param p {camPos:Vector3, look:Vector3, dist:number, tanHalfV:number, tanHalfH:number}
+positionBackdrop = function(p)
+    if not backdropNode_ or not p then
+        return
+    end
+    local planeZ = p.look.z - BACKDROP_BEHIND
+    local dd = p.camPos.z - planeZ
+    local k = dd / p.dist
+    local px = p.camPos.x + (p.look.x - p.camPos.x) * k
+    local py = p.camPos.y + (p.look.y - p.camPos.y) * k
+    local halfW = dd * p.tanHalfH * BACKDROP_MARGIN
+    local halfH = dd * p.tanHalfV * BACKDROP_MARGIN
+    backdropNode_.position = Vector3(px, py, planeZ)
+    -- Plane 旋转 90° 后：局部 X→宽，局部 Z→高
+    backdropNode_.scale = Vector3(halfW * 2.0, 1.0, halfH * 2.0)
+end
+
+--- 固定镜头：人物在画面右侧约占 60% 高度（留头量），背景留在左侧
 local function frameFixedCamera()
     if not cameraNode_ or not characterRoot_ then
         return
@@ -525,7 +557,8 @@ local function frameFixedCamera()
     end
 
     local vfov = CAMERA_FOV * math.pi / 180.0
-    local padding = 1.22
+    -- 角色占画面高度约 1/1.65 ≈ 60%（旧 1.22 太近，人物顶到画框）
+    local padding = 1.65
     local dist = (height * 0.5 * padding) / math.tan(vfov * 0.5)
     if dist < 1.8 then
         dist = 1.8
@@ -538,8 +571,8 @@ local function frameFixedCamera()
     local hfov = 2.0 * math.atan(math.tan(vfov * 0.5) * aspect)
     local viewW = 2.0 * dist * math.tan(hfov * 0.5)
 
-    -- 将注视点左移，使人物落在画面右侧；背景留在左侧
-    local look = Vector3(center.x - viewW * 0.22, bbox and (bbox.min.y + height * 0.52) or 0.86, center.z)
+    -- 将注视点左移，使人物落在画面右侧约 71% 处；背景留在左侧
+    local look = Vector3(center.x - viewW * 0.21, bbox and (bbox.min.y + height * 0.52) or 0.86, center.z)
     local camPos = Vector3(look.x, look.y + height * 0.04, center.z + dist)
 
     cameraNode_.position = camPos
@@ -548,6 +581,18 @@ local function frameFixedCamera()
     -- 角色只绕 Y 转向相机，保持站姿，不引入俯仰
     local charPos = characterRoot_.position
     characterRoot_:LookAt(Vector3(camPos.x, charPos.y, camPos.z), Vector3.UP, TS_WORLD)
+
+    frameParams_ = {
+        camPos = camPos,
+        look = look,
+        dist = dist,
+        tanHalfV = math.tan(vfov * 0.5),
+        tanHalfH = math.tan(hfov * 0.5),
+    }
+    positionBackdrop(frameParams_)
+    if surface_ then
+        surface_:QueueUpdate()
+    end
 
     logInfo(string.format(
         "固定相机 pos=(%.2f,%.2f,%.2f) look=(%.2f,%.2f,%.2f) dist=%.2f",

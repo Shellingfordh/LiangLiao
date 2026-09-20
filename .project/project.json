@@ -5,7 +5,7 @@
     "id": "863014094"
   },
   "entry": "main.lua",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "taptap_publish": {
     "title": "送给你这个回来的人",
     "description": "M0-0 原型：竖屏固定镜头展示原创角色若夕的 3D 状态窗。",
@@ -24,10 +24,10 @@
     "promotional_image": ""
   },
   "metadata": {
-    "updated_at": "2026-09-20T13:25:59.199Z"
+    "updated_at": "2026-09-20T13:51:15.496Z"
   },
   "test_qrcode": {
-    "url": "https://tapcode-sce.spark.xd.com/qrcode/m_c7s3_1789910759069.png",
-    "generated_at": "2026-09-20T13:25:59.199Z"
+    "url": "https://tapcode-sce.spark.xd.com/qrcode/m_c7s3_1789912275366.png",
+    "generated_at": "2026-09-20T13:51:15.496Z"
   }
 }
