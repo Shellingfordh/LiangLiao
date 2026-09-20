@@ -30,6 +30,8 @@ local BACKGROUND_CANDIDATES = {
 local GLB_PATH = "models/characters/lin-ruoxi/lin-ruoxi.glb"
 local MATERIAL_PATH = "Materials/lin-ruoxi_00_tripo_mat_8ae16fc0-7a3a-402e-9a6e-1180f6c269f7.xml"
 local BACKGROUND_CANONICAL = "Textures/backgrounds/la-cafe-4x3.png"
+-- 角色漫反射贴图：DWP 资源，设备冷启动时材质内引用可能是占位，需异步补载
+local CHARACTER_DIFFUSE_TEXTURE = "Textures/lin-ruoxi_00_D.jpg"
 
 ---@type integer
 local RT_WIDTH = 960
@@ -46,6 +48,8 @@ local cameraNode_ = nil
 local camera_ = nil
 ---@type Node|nil
 local characterRoot_ = nil
+---@type Node|nil
+local placeholderHolder_ = nil
 ---@type Texture2D|nil
 local texture_ = nil
 ---@type RenderSurface|nil
@@ -66,6 +70,9 @@ local usingPlaceholderBackground_ = false
 local modelError_ = ""
 ---@type string
 local backgroundNote_ = ""
+
+---@type fun()|nil
+local noticesChanged_ = nil
 
 local function logInfo(msg)
     print(TAG .. " " .. msg)
@@ -253,6 +260,9 @@ local function createPlaceholderBackground(scene)
     backgroundNote_ = "待替换 la-cafe-4x3.png"
     logInfo("待替换 la-cafe-4x3.png")
 
+    local holder = scene:CreateChild("PlaceholderBgRoot")
+    placeholderHolder_ = holder
+
     local wallMat = makePbrColor(0.62, 0.55, 0.48, 0.0, 0.78)
     local trimMat = makePbrColor(0.42, 0.36, 0.30, 0.0, 0.7)
     local glassMat = makePbrColor(0.93, 0.86, 0.72, 0.0, 0.18)
@@ -260,28 +270,20 @@ local function createPlaceholderBackground(scene)
     local floorMat = makePbrColor(0.28, 0.25, 0.22, 0.0, 0.85)
 
     -- 左侧重景墙 + 窗
-    addPrimitive(scene, "Wall", "Models/Box.mdl", Vector3(-1.55, 1.35, -1.8), Vector3(3.2, 2.8, 0.08), wallMat)
-    addPrimitive(scene, "Window", "Models/Box.mdl", Vector3(-1.85, 1.45, -1.74), Vector3(1.4, 1.7, 0.04), glassMat)
-    addPrimitive(scene, "WindowTrim", "Models/Box.mdl", Vector3(-1.85, 1.45, -1.76), Vector3(1.55, 1.85, 0.03), trimMat)
-    addPrimitive(scene, "Sill", "Models/Box.mdl", Vector3(-1.85, 0.52, -1.55), Vector3(1.5, 0.08, 0.35), trimMat)
-    addPrimitive(scene, "Floor", "Models/Box.mdl", Vector3(0.1, -0.04, 0.2), Vector3(5.5, 0.08, 4.0), floorMat)
+    addPrimitive(holder, "Wall", "Models/Box.mdl", Vector3(-1.55, 1.35, -1.8), Vector3(3.2, 2.8, 0.08), wallMat)
+    addPrimitive(holder, "Window", "Models/Box.mdl", Vector3(-1.85, 1.45, -1.74), Vector3(1.4, 1.7, 0.04), glassMat)
+    addPrimitive(holder, "WindowTrim", "Models/Box.mdl", Vector3(-1.85, 1.45, -1.76), Vector3(1.55, 1.85, 0.03), trimMat)
+    addPrimitive(holder, "Sill", "Models/Box.mdl", Vector3(-1.85, 0.52, -1.55), Vector3(1.5, 0.08, 0.35), trimMat)
+    addPrimitive(holder, "Floor", "Models/Box.mdl", Vector3(0.1, -0.04, 0.2), Vector3(5.5, 0.08, 4.0), floorMat)
 end
 
+--- 用已加载的贴图构建远景平面（背景）
 ---@param scene Scene
----@param texturePath string
-local function createTexturedBackground(scene, texturePath)
-    local tex = cache:GetResource("Texture2D", texturePath)
-    if not tex then
-        logError("背景贴图 Exists 成功但 GetResource 失败: " .. texturePath)
-        createPlaceholderBackground(scene)
-        return
-    end
-
+---@param tex Texture2D
+local function buildBackdrop(scene, tex)
     local tech = cache:GetResource("Technique", "Techniques/DiffUnlit.xml")
     if not tech then
-        logError("缺少 Techniques/DiffUnlit.xml，改用临时背景")
-        createPlaceholderBackground(scene)
-        return
+        return false
     end
 
     local mat = Material:new()
@@ -304,10 +306,51 @@ local function createTexturedBackground(scene, texturePath)
 
     local floorMat = makePbrColor(0.22, 0.20, 0.18, 0.0, 0.9)
     addPrimitive(scene, "Floor", "Models/Box.mdl", Vector3(0.2, -0.04, 0.4), Vector3(4.5, 0.08, 3.2), floorMat)
+    return true
+end
 
-    usingPlaceholderBackground_ = false
-    backgroundNote_ = "已加载 " .. texturePath
-    logInfo("背景图已作为远景平面加载: " .. texturePath)
+--- 异步下载并加载背景贴图（DWP 兜底）。成功则替换占位窗景。
+---@param scene Scene
+---@param texturePath string
+local function loadBackgroundAsync(scene, texturePath)
+    cache:GetResourceAsync("Texture2D", texturePath, function(resource)
+        local tex = resource and (resource --[[@as Texture2D]]) or nil
+        if not tex or not scene_ then
+            logWarn("背景异步加载失败（保持占位）: " .. texturePath)
+            return
+        end
+        if not buildBackdrop(scene, tex) then
+            logError("背景贴图已加载但远景平面构建失败: " .. texturePath)
+            return
+        end
+        -- 真实远景就绪后移除占位窗景
+        if placeholderHolder_ then
+            placeholderHolder_:Dispose()
+            placeholderHolder_ = nil
+        end
+        usingPlaceholderBackground_ = false
+        backgroundNote_ = "已加载 " .. texturePath
+        logInfo("背景图已作为远景平面加载(异步): " .. texturePath)
+        if noticesChanged_ then
+            noticesChanged_()
+        end
+    end)
+end
+
+---@param scene Scene
+---@param texturePath string
+local function createTexturedBackground(scene, texturePath)
+    -- DWP：GetResource 返回占位并自动触发下载与热替换；返回 nil 才走异步兜底
+    local tex = cache:GetResource("Texture2D", texturePath)
+    if tex and buildBackdrop(scene, tex) then
+        usingPlaceholderBackground_ = false
+        backgroundNote_ = "已加载 " .. texturePath
+        logInfo("背景图已作为远景平面加载: " .. texturePath)
+        return
+    end
+    logInfo("背景贴图未就绪，先占位再异步下载: " .. texturePath)
+    createPlaceholderBackground(scene)
+    loadBackgroundAsync(scene, texturePath)
 end
 
 --- 几何占位人（深墨绿夹克 / 米白针织 / 深色牛仔裤 / 白鞋）
@@ -357,6 +400,24 @@ local function bindCharacterMaterial(node)
     drawable:SetMaterial(mat)
     drawable.castShadows = true
     logInfo("已绑定角色漫反射材质: " .. MATERIAL_PATH)
+
+    -- 角色漫反射贴图是 DWP 资源：设备冷启动时材质内引用可能是占位（角色偏黑）。
+    -- 显式异步补载并在就绪后回填到材质贴图槽 + 重渲染，仅涉及“加载”，不改 Technique/法线等 M0-1 内容。
+    cache:GetResourceAsync("Texture2D", CHARACTER_DIFFUSE_TEXTURE, function(resource)
+        local tex = resource and (resource --[[@as Texture2D]]) or nil
+        if not tex then
+            logWarn("角色漫反射贴图异步加载失败: " .. CHARACTER_DIFFUSE_TEXTURE)
+            return
+        end
+        mat:SetTexture(TU_DIFFUSE, tex)
+        logInfo("已回填角色漫反射贴图: " .. CHARACTER_DIFFUSE_TEXTURE)
+        if surface_ then
+            surface_:QueueUpdate()
+        end
+        if noticesChanged_ then
+            noticesChanged_()
+        end
+    end)
 end
 
 ---@param mdlPath string
@@ -545,14 +606,9 @@ local function loadBackground()
     if not scene_ then
         return
     end
-    local bgPath = findFirstExisting(BACKGROUND_CANDIDATES)
-    if bgPath then
-        createTexturedBackground(scene_, bgPath)
-    else
-        logInfo("背景图尚未导入（期望 " .. BACKGROUND_CANONICAL .. "）")
-        logInfo("待替换 la-cafe-4x3.png")
-        createPlaceholderBackground(scene_)
-    end
+    -- 本地已存在则用其路径；否则用规范路径，交给 DWP 下载热替换（设备冷启动 Exists 为假）
+    local bgPath = findFirstExisting(BACKGROUND_CANDIDATES) or BACKGROUND_CANONICAL
+    createTexturedBackground(scene_, bgPath)
 end
 
 local function createRenderTarget()
@@ -647,6 +703,12 @@ function StatusWindow.IsUsingPlaceholderBackground()
     return usingPlaceholderBackground_
 end
 
+--- 背景/角色贴图等异步资源就绪后回调（用于主界面回填资源提示）。
+---@param cb fun()
+function StatusWindow.SetNoticesChanged(cb)
+    noticesChanged_ = cb
+end
+
 ---@param nvg NVGContextWrapper
 ---@param x number
 ---@param y number
@@ -675,6 +737,13 @@ function StatusWindow.Draw(nvg, x, y, w, h)
     nvgIntersectScissor(nvg, x, y, w, h)
     nvgBeginPath(nvg)
     nvgRoundedRect(nvg, x, y, w, h, radius)
+    -- RenderSurface 纹理在 nvgCreateVideo 下呈现 180° 翻转（本地 surfaceless 出图实测）；
+    -- 将 image pattern 绕矩形中心旋转 180° 修正回正立。
+    local cx = x + w * 0.5
+    local cy = y + h * 0.5
+    nvgTranslate(nvg, cx, cy)
+    nvgRotate(nvg, math.pi)
+    nvgTranslate(nvg, -cx, -cy)
     nvgFillPaint(nvg, nvgImagePattern(nvg, x, y, w, h, 0, nvgImage_, 1))
     nvgFill(nvg)
     nvgRestore(nvg)
@@ -699,6 +768,8 @@ function StatusWindow.Shutdown()
     camera_ = nil
     cameraNode_ = nil
     characterRoot_ = nil
+    placeholderHolder_ = nil
+    noticesChanged_ = nil
     if scene_ then
         scene_:Dispose()
     end

@@ -40,6 +40,7 @@ function Start()
     StatusWindow.Init()
     CreatePage()
     SubscribeToEvents()
+    StatusWindow.SetNoticesChanged(RefreshResourceNotices)
     RefreshResourceNotices()
 
     logInfo("M0-0 已就绪：固定镜头状态窗，无摇杆/旋转/点击互动")
