@@ -19,11 +19,15 @@
     "miniapp_id": "tapmc1yds3rzoloihc"
   },
   "assets": {
-    "icon": "",
+    "icon": "./game_material/la-cafe-icon.png",
     "screenshots": [],
     "promotional_image": ""
   },
   "metadata": {
-    "updated_at": "2026-09-19T08:25:42.927Z"
+    "updated_at": "2026-09-20T12:27:33.012Z"
+  },
+  "test_qrcode": {
+    "url": "https://tapcode-sce.spark.xd.com/qrcode/m_c7s3_1789907252886.png",
+    "generated_at": "2026-09-20T12:27:33.012Z"
   }
 }
