@@ -26,6 +26,14 @@ ossutil_output/
 .emmylua/
 .installer/
 .maker/
+.qoder/
+.penguin/
+.superpowers/
+.agents/
+.opencode/
+
+# Local tooling / research deps (never project source)
+node_modules/
 
 # Maker engine assets & agent files (provided by ai-dev-kit, not user source)
 engine-docs/
