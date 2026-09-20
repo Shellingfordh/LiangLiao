@@ -53,7 +53,8 @@
 
 1. M0-0（林若夕 A-pose + 洛杉矶咖啡馆状态窗）已在 Maker 云端工程实现，代码与资产均已取回到本地并
    与云端同步：`scripts/main.lua`、`scripts/StatusWindow.lua`、`assets/`（MDL + 材质 + 贴图 + prefab）。
-2. M0-0 尚缺：`assets/Textures/backgrounds/la-cafe-4x3.png`、图标与 3 张实机截图（真机二维码依赖项）。
+2. M0-0 尚缺：图标与 3 张实机截图（真机二维码依赖项）。背景图 `assets/Textures/backgrounds/la-cafe-4x3.png`
+   已于 2026-09-20 从 Marble 世界视口原生导出并落地（溯源见 `docs/asset-provenance.md`），但尚未回传 Maker 云端工程。
 3. 通过 M0-0 真机验收后，才实现时区表、消息排队与关系记忆。
 
 不要恢复或引用已移除的旧"三位 NPC 小镇"方案、旧角色名或旧 PoC 模板。

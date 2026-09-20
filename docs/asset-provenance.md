@@ -16,7 +16,7 @@
 | 运行时材质 | `assets/Materials/lin-ruoxi_00_tripo_mat_8ae16fc0-7a3a-402e-9a6e-1180f6c269f7.xml` | Technique 与贴图引用方式见下方「云端二次同步」一节 |
 | 运行时贴图 | `assets/Textures/lin-ruoxi_00_D.jpg` / `lin-ruoxi_00_N.png` | `_N.png` 目前**未被材质引用**（见下） |
 | 角色预制体 | `assets/Prefabs/lin-ruoxi.prefab` | 运行时优先加载对象 |
-| 背景（待补） | `assets/Textures/backgrounds/la-cafe-4x3.png` | 代码实际查找路径，见 `scripts/StatusWindow.lua` |
+| 背景静帧 | `assets/Textures/backgrounds/la-cafe-4x3.png` | 代码实际查找路径，见 `scripts/StatusWindow.lua`；Marble 世界视口原生导出，详见下方「背景静帧溯源」 |
 
 ### 本次清理掉的重复副本
 
@@ -91,6 +91,23 @@ Maker 云端在 2026-09-19 自动回填了 `raw-assets/` 下的源 GLB、解包�
 > 材质引用从 `uuid://` 改成路径，意味着早先「按 uuid 判定某文件无人引用」的结论**只对当时那一版成立**。
 > 后续再判断资产是否可删，必须同时检查 uuid 与路径两种引用。
 
+## 背景静帧溯源（Marble 世界视口原生导出，2026-09-20）
+
+| 项 | 实测值 |
+| --- | --- |
+| 世界 | Marble「Los Angeles Coffee Shop Evening」，Marble 1.1，世界编号 `ca969969` |
+| 世界链接 | `https://marble.worldlabs.ai/world/a77b4852-ffac-4030-a5c3-bfaa515467e8` |
+| 导出方式 | 世界视口工具条 `Screenshot`（原生导出，画面无任何网页 UI 叠加）；**不是** 2:1 全景裁切 |
+| 导出分辨率来源 | 该按钮的出图尺寸等于浏览器视口 CSS 尺寸，故先把视口设为 1280×960 再导出，得到精确 4:3 |
+| 尺寸 / 格式 | 1280×960（1.3333），8-bit RGBA PNG，非隔行 |
+| 文件大小 | 2,407,171 字节 |
+| md5 | `ee5e1430f5bfc44b42ed90463af29c4c` |
+| 原始文件名 | `screenshot-2026-09-20T11_46_36.028Z.png`（UTC） |
+| 用途 | M0-0 洛杉矶咖啡馆状态窗背景；命中 `scripts/StatusWindow.lua` 的 `BACKGROUND_CANDIDATES[1]`，贴到 960×720 RenderTarget |
+
+构图与规格的差异留档：窗外街景与蓝调暮色在左、软木板海报在右（右侧留给角色立位）均符合，
+但**画面内没有出现吊灯**，吊灯需另行调整机位或后期确认。
+
 ## 待办（阻塞项，按优先级）
 
 1. **恢复 normal 贴图槽**：材质改回 `Techniques/PBR/PBRDiffNormal.xml` 并接上 `Textures/lin-ruoxi_00_N.png`，否则 3.23 MB 的法线图白备着，角色表面细节全平。
@@ -99,7 +116,7 @@ Maker 云端在 2026-09-19 自动回填了 `raw-assets/` 下的源 GLB、解包�
 4. **面数**：14,298 面对 `spec` 与 `docs/demand.md` 的 `face_limit <= 5000` 不达标。
 5. **贴图预算**：三张 4096² 对 14k 面角色过配；状态窗只占竖屏约 35%，建议 basecolor/normal 降到 2048² 与 1024²。
 6. **清理 `assets/Meshes/lin-ruoxi.mdl.bak`**：753,790 字节的旧模型备份，确认新版可用后删除。
-7. **背景**：`assets/Textures/backgrounds/la-cafe-4x3.png` 仍缺；不要从 2560×1280 全景裁 4:3（有效分辨率仅约 498×373），应从 Marble 世界视口直接出高分辨率 4:3 静帧。
+7. **背景包体预算**：`assets/Textures/backgrounds/la-cafe-4x3.png` 已于 2026-09-20 从 Marble 世界视口导出并落地（见上节），但 2.30 MB 相对当前 1.20 MB 运行包偏大，且 RGBA 的 alpha 通道并未使用；进包前确认是否需要转 RGB 或压缩。
 
 ## 原始留档（MarkItDown 转换记录，自 `poc/art/source/lin-ruoxi/*.md` 收拢）
 
