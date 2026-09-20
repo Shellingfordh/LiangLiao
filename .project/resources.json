@@ -9,7 +9,8 @@
       "**.lua",
       "Meshes/*.mdl",
       "Materials/**",
-      "Prefabs/**"
+      "Prefabs/**",
+      "Textures/backgrounds/**"
     ]
   }
 }

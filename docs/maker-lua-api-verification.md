@@ -472,3 +472,36 @@ Clear site data for `maker.taptap.cn` 后重开。
 **已穷举并排除的假设清单**（11 条，含依据）：悬空引用 / `raw-assets` 进包 / DWP 预下载配置 /
 推送时间因果 / 工程健康 / 模块加载期副作用 / 候选路径 404 风暴 / `asset_ignores` 误剔必需资源 /
 headless 引擎验证（本地无此能力）/ 自动化浏览器（无登录态）/ 反馈与历史日志通道（恒空且窗口仅 1 小时）。
+
+## 12. ⚠️ 未定：`nvgCreateVideo` 对 RenderTarget 的方向处理，文档与实测冲突（2026-09-20）
+
+M0-0 状态窗把独立 3D 场景渲到 `Texture2D` RenderTarget，再用 `nvgCreateVideo` + `nvgImagePattern`
+画进 UI。这条路径的**画面方向**目前只有矛盾证据，没有定论：
+
+| 来源 | 说法 |
+| --- | --- |
+| `engine-docs/recipes/scene-to-nanovg.md:13` | 「`nvgCreateVideo` 已处理预览纹理的上下方向，按普通图片绘制即可，不需要额外翻转 Y」 |
+| `.emmylua/NanoVG.d.lua:299-300` | 「Render targets are normalized to NanoVG image orientation internally」 |
+| 本项目 2026-09-20 浏览器预览实测 | **不加任何旋转时角色上下颠倒**（`screenshots/m00-check.png`，commit `94a317e` 引入 `nvgRotate` 之前的状态）；加 `nvgRotate(π)` 后角色正立（`screenshots/m00-frame-check.png`） |
+
+两条文档依据与一条实机证据直接对立。按 AGENTS.md「API 依据只有本地 AI Dev Kit」应以文档为准，
+但文档无法解释那张颠倒的截图，故当前代码**保留** `StatusWindow.Draw()` 里的 `nvgRotate(math.pi)`，
+把它标记为待真机裁决的假设而非结论。
+
+一个能同时容纳两者的解释：`nvgCreateVideo` 的类型注释自己写了「or 0 on failure/**unsupported platform**」，
+即方向归一化可能分平台；`m00-check.png` 出自 WebGL 浏览器预览，而验收目标是原生 Android/iOS，
+两者行为可以不一致。此解释同样未经证实。
+
+**真机扫码时的判读表**（一次扫码即可定论，无需改代码再跑）：
+
+| 真机现象 | 结论 | 动作 |
+| --- | --- | --- |
+| 角色正立、窗景方向正确 | 保留 `nvgRotate(π)` 正确，且原生与 WebGL 一致 | 删掉本节冲突，转为 ✅ |
+| 角色**上下颠倒** | 原生端已归一化，文档正确，`nvgRotate(π)` 是多余补偿 | 删 `Draw()` 里的 translate/rotate/translate 三行 |
+| 角色正立但**左右镜像** | 归一化只处理了 Y，X 仍需修正 | 把 `nvgRotate(π)` 换成水平翻转 |
+| 状态窗整块变黑、只剩窗景 | 透明底 RT 的 alpha 未被保留 | 退回「远景也进 3D 场景」方案，改为预先把静帧按实测轴向翻转后再生成贴图 |
+
+窗景本身的方向已与本冲突解耦：静帧不再贴 3D `Plane`（Plane 的 UV 轴向会镜像静帧，
+且为修正角色而加的 `nvgRotate(π)` 会把该镜像变成可见的上下翻转），改由 UI 层
+`backgroundImage` + `backgroundFit="cover"` 绘制，走的是普通 UI 图片路径。
+
