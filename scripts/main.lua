@@ -90,13 +90,12 @@ function CreatePage()
         pointerEvents = "none",
     }
 
-    -- 高度跟随顶部 35% 区域，宽度由 4:3 算出，避免竖屏上被拉满整宽
-    -- 远景 = Marble 静帧（UI 背景图，cover 铺满 4:3），前景 = 透明底 3D 角色 RT
+    -- 宽度撑满、高度由 4:3 算出：反过来用高度定宽度时，竖屏上 maxWidth 会把宽度夹到
+    -- 100%，画框就不是真 4:3，cover 会裁掉静帧两侧。
     -- backgroundImage 不在这里给：要等静帧到手后再设，见下方 WarmUpBackground
     local preview = StatusWindow.CreatePreviewWidget({
         id = "statusPreview",
-        height = "100%",
-        maxWidth = "100%",
+        width = "100%",
         aspectRatio = 4 / 3,
         backgroundFit = "cover",
         backgroundColor = { 18, 16, 15, 255 },
@@ -133,8 +132,6 @@ function CreatePage()
                     UI.Panel {
                         id = "statusWindowFrame",
                         width = "100%",
-                        height = "35%",
-                        minHeight = 160,
                         justifyContent = "center",
                         alignItems = "center",
                         pointerEvents = "none",
@@ -156,7 +153,7 @@ function CreatePage()
     }
 
     UI.SetRoot(uiRoot_)
-    logInfo("竖屏页面已创建：顶部 4:3 状态窗约占 35% 高度")
+    logInfo("竖屏页面已创建：顶部真 4:3 状态窗，高度由宽度推出")
 
     -- 静帧到手之后才挂背景：UI 的 ImageCache 会把首次加载失败永久缓存，
     -- DWP 冷启动时提前挂上去会让背景在整个会话里静默缺失。
@@ -167,9 +164,18 @@ function CreatePage()
 end
 
 function RefreshResourceNotices()
+    local messages = {}
     local modelError = StatusWindow.GetModelError()
     if modelError ~= "" then
-        errorLabel_:SetText(modelError)
+        messages[#messages + 1] = modelError
+    end
+    local bgError = StatusWindow.GetBackgroundError()
+    if bgError ~= "" then
+        messages[#messages + 1] = bgError
+    end
+
+    if #messages > 0 then
+        errorLabel_:SetText(table.concat(messages, " "))
         errorLabel_:SetVisible(true)
     else
         errorLabel_:SetText("")

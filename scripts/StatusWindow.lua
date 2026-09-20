@@ -21,15 +21,11 @@ local PREFAB_CANDIDATES = {
     "models/characters/lin-ruoxi/lin-ruoxi.prefab",
 }
 
-local BACKGROUND_CANDIDATES = {
-    "Textures/backgrounds/la-cafe-4x3.png",
-    "Textures/la-cafe-4x3.png",
-    "models/characters/lin-ruoxi/la-cafe-4x3.png",
-}
-
 local GLB_PATH = "models/characters/lin-ruoxi/lin-ruoxi.glb"
 local MATERIAL_PATH = "Materials/lin-ruoxi_00_tripo_mat_8ae16fc0-7a3a-402e-9a6e-1180f6c269f7.xml"
-local BACKGROUND_CANONICAL = "Textures/backgrounds/la-cafe-4x3.png"
+-- 唯一背景路径：与 .project/resources.json 的 groups.default 白名单一致。
+-- 多候选回退在这里没有意义——不在白名单里的候选在设备上永远取不到，只会误导排查。
+local BACKGROUND_PATH = "Textures/backgrounds/la-cafe-4x3.png"
 -- 角色漫反射贴图：DWP 资源，设备冷启动时材质内引用可能是占位，需异步补载
 local CHARACTER_DIFFUSE_TEXTURE = "Textures/lin-ruoxi_00_D.jpg"
 
@@ -65,6 +61,8 @@ local usingPlaceholderCharacter_ = false
 
 ---@type string
 local modelError_ = ""
+---@type string
+local backgroundError_ = ""
 
 ---@type fun()|nil
 local noticesChanged_ = nil
@@ -293,7 +291,7 @@ local function bindCharacterMaterial(node)
         return
     end
     drawable:SetMaterial(mat)
-    drawable.castShadows = true
+    drawable.castShadows = false
     logInfo("已绑定角色漫反射材质: " .. MATERIAL_PATH)
 
     -- 角色漫反射贴图是 DWP 资源：设备冷启动时材质内引用可能是占位（角色偏黑）。
@@ -343,7 +341,8 @@ local function tryLoadModelFile(mdlPath)
         logInfo("模型无骨骼，使用 StaticModel")
     end
     drawable:SetModel(model)
-    drawable.castShadows = true
+    -- 远景移出 3D 场景后场景里没有任何投影接收面，投影贴图白算一遭；真机要帧率
+    drawable.castShadows = false
     bindCharacterMaterial(characterRoot_)
     return true
 end
@@ -505,33 +504,30 @@ local function loadCharacter()
     end
 end
 
---- 远景静帧路径。由 UI 层作为状态窗 backgroundImage 绘制：
---- 走 3D 平面贴图时 Plane 的 UV 轴向会把静帧镜像，UI 图片路径没有这个问题。
----@return string
-function StatusWindow.GetBackgroundImagePath()
-    -- 本地已存在则用其路径；否则用规范路径，交给 DWP 下载（设备冷启动 Exists 为假）
-    return findFirstExisting(BACKGROUND_CANDIDATES) or BACKGROUND_CANONICAL
-end
-
---- 先把背景静帧拉到手，再让调用方把它交给 UI 绘制。
+--- 远景静帧由 UI 层作为状态窗 backgroundImage 绘制（走 3D 平面贴图时 Plane 的 UV
+--- 轴向会把静帧镜像，UI 图片路径没有这个问题）。必须先把文件弄到手再交给 UI：
 --- UI 的 ImageCache.Get 会把首次失败永久缓存且不再重试
 --- （urhox-libs/UI/Core/ImageCache.lua:64），而 DWP 冷启动时纹理尚未下载；
 --- 若在首帧就设好 backgroundImage，背景会在整个会话里静默缺失。
+--- 失败要打到屏幕上：真机没有 console。
 ---@param onReady fun(path: string)
 function StatusWindow.WarmUpBackground(onReady)
-    local path = StatusWindow.GetBackgroundImagePath()
-    if resourceExists(path) then
-        logInfo("背景静帧已在本地: " .. path)
-        onReady(path)
+    if resourceExists(BACKGROUND_PATH) then
+        logInfo("背景静帧已在本地: " .. BACKGROUND_PATH)
+        onReady(BACKGROUND_PATH)
         return
     end
-    cache:GetResourceAsync("Texture2D", path, function(resource)
+    cache:GetResourceAsync("Texture2D", BACKGROUND_PATH, function(resource)
         if not resource then
-            logError("背景静帧异步下载失败，状态窗将只有角色: " .. path)
+            backgroundError_ = "4:3 咖啡馆背景未下载成功，当前状态窗只有角色。"
+            logError(backgroundError_ .. " path=" .. BACKGROUND_PATH)
+            if noticesChanged_ then
+                noticesChanged_()
+            end
             return
         end
-        logInfo("背景静帧下载就绪: " .. path)
-        onReady(path)
+        logInfo("背景静帧下载就绪: " .. BACKGROUND_PATH)
+        onReady(BACKGROUND_PATH)
     end)
 end
 
@@ -617,6 +613,11 @@ end
 
 function StatusWindow.GetModelError()
     return modelError_
+end
+
+---@return string
+function StatusWindow.GetBackgroundError()
+    return backgroundError_
 end
 
 --- 角色漫反射贴图等异步资源就绪后回调（用于主界面回填资源提示）。
