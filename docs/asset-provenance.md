@@ -17,6 +17,7 @@
 | 运行时贴图 | `assets/Textures/lin-ruoxi_00_D.jpg` / `lin-ruoxi_00_N.png` | `_N.png` 目前**未被材质引用**（见下） |
 | 角色预制体 | `assets/Prefabs/lin-ruoxi.prefab` | 运行时优先加载对象 |
 | 背景静帧 | `assets/Textures/backgrounds/la-cafe-4x3.png` | 代码实际查找路径，见 `scripts/StatusWindow.lua`；Marble 世界视口原生导出，详见下方「背景静帧溯源」 |
+| 应用图标 | `game_material/la-cafe-icon.png`（**仅本地**，见「应用图标溯源」） | `.project/project.json` 的 `assets.icon` 指向此路径；该目录被 Maker 远端 pre-receive 硬拒，不入 git 也不进运行包 |
 
 ### 本次清理掉的重复副本
 
@@ -103,10 +104,23 @@ Maker 云端在 2026-09-19 自动回填了 `raw-assets/` 下的源 GLB、解包�
 | 文件大小 | 2,407,171 字节 |
 | md5 | `ee5e1430f5bfc44b42ed90463af29c4c` |
 | 原始文件名 | `screenshot-2026-09-20T11_46_36.028Z.png`（UTC） |
-| 用途 | M0-0 洛杉矶咖啡馆状态窗背景；命中 `scripts/StatusWindow.lua` 的 `BACKGROUND_CANDIDATES[1]`，贴到 960×720 RenderTarget |
+| 用途 | M0-0 洛杉矶咖啡馆状态窗背景；命中 `scripts/StatusWindow.lua` 的 `BACKGROUND_CANDIDATES[1]`，由 `main.lua` 作为状态窗 `backgroundImage`（`backgroundFit="cover"`）绘制 |
 
 构图与规格的差异留档：窗外街景与蓝调暮色在左、软木板海报在右（右侧留给角色立位）均符合，
 但**画面内没有出现吊灯**，吊灯需另行调整机位或后期确认。
+
+## 应用图标溯源（2026-09-20）
+
+| 项 | 实测值 |
+| --- | --- |
+| 交付路径 | `game_material/la-cafe-icon.png` |
+| 尺寸 / 体积 | 512×512，536,022 字节 |
+| md5 | `eb323c470eea57da9b07e7488131f6f1` |
+| 生成方式 | Maker MCP `generate_image`，落地在 `assets/image/la-cafe-icon_20260920121307.png` |
+| 与配置的关系 | `.project/project.json` 的 `assets.icon` 由 Maker 侧写为 `./game_material/la-cafe-icon.png`。该目录在本地、git 历史与 `maker/main` 三处都不存在，**不是悬空引用而是设计如此**：Maker 远端 pre-receive 用 `EXCLUDE_PATTERNS` 硬拒 `game_material/*`（实测 push 被 `! [remote rejected]` 退回，见 `apps/agent-server/src/lib/rollback.ts`），所以这个路径从未能进过仓库 |
+| 交付方式 | 本地按配置把生成件复制到位（md5 与 `assets/image/` 的生成件一致）；**该文件不入库、不打包**，云端图标仍需经 Maker 网页侧的发布素材流程确认 |
+| 为何不改配置指向 `assets/image/` | `assets/` 在 `build.asset_dirs` 内，图标会被打进运行包；且 `.project/project.json` 属 Maker 托管元数据，改指过去有被后续构建覆写的风险 |
+| 画面内容 | 洛杉矶咖啡馆傍晚窗景：暖黄吊灯、冰咖啡、窗外棕榈树与暮色街景，与 M0-0 冻结的美术方向一致 |
 
 ## 待办（阻塞项，按优先级）
 

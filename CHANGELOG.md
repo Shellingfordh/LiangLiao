@@ -1,5 +1,57 @@
 # Changelog
 
+## 2026-09-20 — M0-0 状态窗画面修复、图标交付位与云端构建
+
+### Fixed
+
+- **状态窗画面镜像**：4:3 咖啡馆静帧原先贴在 3D 场景里的 `Models/Plane.mdl` 上，Plane 的 UV 轴向把静帧镜像了；
+  为修正角色上下颠倒而加的 `nvgRotate(π)` 又把这个镜像转成了可见的**上下翻转**（画面顶部长出「木质天花板」，
+  实为背景图底部的木桌）。现按 `engine-docs/recipes/scene-to-nanovg.md` 的叠加范式改造：静帧由 UI 层
+  以 `backgroundImage` + `backgroundFit="cover"` 绘制，3D RenderTarget 只出角色并改为透明底
+  （`clearColor = Color(0,0,0,0)`），从根上取消平面贴图的 UV 歧义。
+- **画面下三分之一被棕色方块横切**：远景平面方案为让角色「有着陆地」而加的 `Models/Box.mdl` 地板删除。
+- **林若夕背对镜头**：`Node:LookAt` 把节点局部 **-Z** 对准目标，而 `lin-ruoxi` MDL 正面朝局部 **+Z**，
+  因此 `frameFixedCamera()` 里那句转向实际让她转过去了 180°。补 `Rotate(Quaternion(180, Vector3.UP))`。
+- **`.project/project.json` 的 `assets.icon` 指向 `./game_material/la-cafe-icon.png`，该路径本地不存在**：
+  已按配置把 `generate_image` 生成件（512×512）复制到该路径。但随即实测到 **Maker 远端 pre-receive 用
+  `EXCLUDE_PATTERNS` 硬拒 `game_material/*`**，push 被 `! [remote rejected]` 退回——所以这个路径本就
+  不可能进仓库，图标属**本地暂存素材**，云端生效需走 Maker 网页侧发布素材流程（见「Known issues」）。
+- **`maker_build_current_directory` 把 19 MB 的 `node_modules/` 与 `.qoder/.penguin/.superpowers/`
+  一并提交并推上 Maker 云端**（该工具默认提交全部本地变更，而这些目录此前只是未跟踪）。
+  `.gitignore` 补齐这些目录与 `game_material/`，并把它们移出索引（磁盘文件保留）。
+
+### Removed
+
+- 随远景平面一起消失的死代码：`createPlaceholderBackground` / `buildBackdrop` / `loadBackgroundAsync` /
+  `positionBackdrop` 及 `usingPlaceholderBackground_`、`IsUsingPlaceholderBackground()`、`GetBackgroundNote()`。
+  「背景未导入」提示随之移除——背景不再进 3D 场景，占位窗景这个概念不再存在。
+
+### Built
+
+- `maker_build_current_directory` ✅ 远端构建 100%（48s，commit `f235ecc`），`preview-refresh` 200。
+- `generate_test_qrcode` ✅ → `https://tapcode-sce.spark.xd.com/qrcode/m_c7s3_1789914324484.png`
+  （App ID 940330 / Developer ID 471831，竖屏 `portrait` 沿用既有不可变配置）。
+
+### Known issues
+
+- **图标尚未确认在云端生效**：`game_material/` 被 Maker 远端排除，git 这条路交付不了图标；
+  `.project/project.json` 的 `assets.icon` 已能在本地解析到真实文件，但 TapTap 侧是否已采用该图标
+  需要在 Maker 网页的发布素材界面确认或手动上传。
+- **画面修复尚未取得视觉证据**：Maker 预览页需要 TapTap 登录，本机的 in-app 浏览器与 Playwright
+  都被重定向到 `/intro`，因此透明底 RT 的 alpha 是否被 `nvgCreateVideo` 保留、角色是否真的转向正面，
+  只能等真机扫码或用户已登录的预览页确认。若 alpha 不生效，症状是角色框盖成一块黑。
+- `runtime.log` 仍不出现（watcher 健康、每 5s 轮询、`lastWrittenLogs: 0`）——没有任何客户端加载过运行时，
+  不是装载层故障。判据仍是文件内出现 `[M0-0] 启动 M0-0 原型`。
+- `assets.screenshots` 仍为 `[]`：三张截图必须是**真机**截图，`screenshots/` 里现有的三份是浏览器预览
+  抓取，不能充当 M0-0 交付物。
+- 状态窗 `SURFACE_UPDATEALWAYS` 每帧重渲、`renderer.hdrRendering` 在 `Shutdown()` 不复原，
+  以及骨骼/RM 贴图/面数预算，均属规格明确划给 **M0-1 前置**的条目，本次未动。
+
+### Next
+
+- 用户用 TapTap App 扫码，在真机确认：林若夕正面全身清楚、4:3 窗景方向正确无镜像、无黑/白屏与崩溃；
+- 通过后从真机取三张截图填入 `.project/project.json` 的 `assets.screenshots`。
+
 ## 2026-09-19 — Maker 工程落地、历史合并与文档对账
 
 ### Added

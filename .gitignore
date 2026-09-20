@@ -35,6 +35,10 @@ ossutil_output/
 # Local tooling / research deps (never project source)
 node_modules/
 
+# Maker 远端 pre-receive 用 EXCLUDE_PATTERNS 硬拒 "game_material/*"，推不上去；
+# 这里是本地发布素材暂存位（.project/project.json 的 assets.icon 指向它）
+game_material/
+
 # Maker engine assets & agent files (provided by ai-dev-kit, not user source)
 engine-docs/
 examples/
