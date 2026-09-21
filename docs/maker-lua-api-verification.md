@@ -508,8 +508,81 @@ M0-0 状态窗把独立 3D 场景渲到 `Texture2D` RenderTarget，再用 `nvgCr
 | 状态窗整块变黑、只剩窗景 | 透明底 RT 的 alpha 未被保留 | 退回「远景也进 3D 场景」方案，改为预先把静帧按实测轴向翻转后再生成贴图 |
 | 窗景缺失、只有角色 | 背景未下载成功，或 `preload_groups` 未生效 | 屏上会显示 `GetBackgroundError()` 文案；按文案而非猜 |
 
+### 12.1 WebGL 侧已定论：判读表第 1 行成立（2026-09-20 23:23 实测）
+
+上面「四条本地验证路全死」的结论**被推翻了一条**：用户的真实 Chrome 带有 TapTap 登录态，
+但 `mcp__user-browser-use__list_pages` 在浏览器未开窗口时报 `No current window`——
+先 `cmd //c start "" "<maker_url>"` 把默认浏览器拉起来，连接器就能接管标签页并截图。
+这条路以前没走通只是因为**没有浏览器窗口**，不是因为拿不到登录态。
+
+`build 5ac225f` 在 390×867（9:20，DPR≈1.02）移动视口下的预览，**五项全部符合判读表第 1 行**：
+
+| 检查项 | 结果 |
+| --- | --- |
+| 4:3 窗景方向 | ✅ 与源图一致：窗与暮色街景在左、海报板在右、木桌在下。无镜像、无上下翻 |
+| 透明底 RT 的 alpha | ✅ **保留**。角色四周透出的正是窗景，没有出现「整块变黑」 |
+| 角色朝向 | ✅ 正立且**面向镜头**（可见面部与米白内搭），180° yaw 修正生效 |
+| 角色横向位置 | ✅ 落在右侧约 70%，符合「角色预留区在右」，未因多余旋转跑到左侧 |
+| 状态文案 | ✅ 「若夕 · 洛杉矶 18:20 · 还在外面」正常渲染（旧截图里完全没有文字的问题一并消失） |
+
+留档：`screenshots/preview-m00-after-fix.png`（整页）与
+`screenshots/preview-m00-after-fix-statuswindow-crop.png`（状态窗放大裁切）。
+
+**仍未决**：原生 Android/iOS 是否与 WebGL 同行为。`nvgCreateVideo` 的类型注释自己写了
+「or 0 on failure/**unsupported platform**」，方向归一化与 alpha 都可能分平台，
+所以 WebGL 的正结果**不能**外推成真机结论；判读表其余四行对真机依然有效。
+
+**两条二维码通道不一致，扫码前须知**（同日实测）：
+
+| 通道 | 状态 |
+| --- | --- |
+| MCP `generate_test_qrcode` | ✅ 成功，返回 `https://tapcode-sce.spark.xd.com/qrcode/m_c7s3_1789916661057.png`，HTTP 200、300×300 有效 PNG，且已确认云端包含其对应构建 `5ac225f` |
+| Maker 网页「真机自测」面板 | ❌ 自报「**项目配置暂不可读**，测试版本待确认」「暂时无法读取测试二维码，发布状态不受影响」，只提供「重新读取」 |
+
+留档：`screenshots/preview-m00-realdevice-panel-qr-unreadable.png`。
+以 MCP 那条为准去扫码；**若扫码后打不开**，先怀疑这个面板暴露的配置读取问题，
+不要先怀疑构建本身——构建与资源装载已由 §12.1 的 `runtime.log` 证明可用。
+
+
+**顺带记一条引擎告警**（非阻塞，角色仍带贴图正常渲染）：
+
+```
+WARNING: DownloadManager: cannot resolve 'uuid://-73mcwx1QB6NyLrwJxv8Kg', skipping
+WARNING: DownloadManager: cannot resolve 'uuid://u05oYbz5RtecsyHB9-bmKQ', skipping
+WARNING: DownloadManager: no resources resolved for batch download
+```
+
+两个悬空 `uuid://` 引用（材质引用由 uuid 改为路径后遗留），与 §「云端二次同步后的状态」
+记录的引用方式变更同源；`asset-provenance.md` 已警告过「按 uuid 判定无人引用」的结论只对当时那一版成立，
+反过来**残留的 uuid 引用**同样要清。属 M0-1 资产对账项，不影响 M0-0 通过条件。
+
+
 
 窗景本身的方向已与本冲突解耦：静帧不再贴 3D `Plane`（Plane 的 UV 轴向会镜像静帧，
 且为修正角色而加的 `nvgRotate(π)` 会把该镜像变成可见的上下翻转），改由 UI 层
 `backgroundImage` + `backgroundFit="cover"` 绘制，走的是普通 UI 图片路径。
+
+**为什么这个冲突只能等真机，不能自己验**（2026-09-20 把路全部走了一遍，四条全断，别再重试）：
+
+| 想走的路 | 结果 |
+| --- | --- |
+| 本地 headless 跑引擎出图对方向 | 仓库无引擎可执行文件，`.cli/` 只有 `install-urhox-runtime.py`；AGENTS.md 已定「没有本地运行时」为硬边界，不为此现装引擎 |
+| 从 Lua 里回读 RT 像素的 alpha 直接判定 | **API 不存在**：`GetPixel` / `GetPixelInt` 只在 CPU 侧 `Image`（`.emmylua/Image.d.lua:141-169`），`Texture2D` 侧只有 `GetDataSize`。RenderTarget 是 GPU 纹理，读不回来 |
+| 解码测试二维码拿到可公开访问的 play 链接，用浏览器自己截图 | 失败：`cv2.QRCodeDetector` 对 2/3/4/6 倍放大 + 灰度 + Otsu 全部解不出（Maker 二维码是带样式的非标准模块图），`pyzbar`/`zxingcpp` 本机没有 |
+| 用浏览器打开 Maker 预览页截图 | **部分可行，见下方 §12.1**。`mcp__browser-use`（Qoder 内置浏览器）与 `playwright` 两条都被 302 到 `/intro`，它们没有 TapTap 会话；但 `mcp__user-browser-use`（接管用户真实 Chrome）**有登录态**，只是要求浏览器当前有窗口，否则报 `No current window`。先 `cmd //c start "" "<url>"` 拉起浏览器即可 |
+
+结论：方向与 alpha 两个未知数**只有真机（或用户已登录的预览页）能判定**，
+一次扫码按上面的判读表即可同时给出两个答案。
+
+**扫码之后的两条取证通道（2026-09-20 从 `@taptap/maker` 0.0.33 包内 skill 核实）**：
+
+| 通道 | 拿什么 | 注意 |
+| --- | --- | --- |
+| `runtime.log`（本地 watcher，`.maker/logs/runtime/`） | **当前本地构建/运行会话**的运行时日志，含 `[M0-0]` 启动行与资源加载结果 | 包内 skill 明令：本地运行日志**不能**代替远端玩家反馈 |
+| Maker MCP `get_debug_feedbacks` | 本游戏**线上玩家提交的反馈，含真机游戏日志与真机截图**、指定会话的服务端/Lua 日志 | 现在 `total: 0` 只因为还没有任何客户端加载过构建；扫码后应复查此工具，**真机截图可能可以直接从这里取回**，不必让用户手动拍照 |
+
+这条改变了 M0-0 收尾的取物方式：用户扫码并试玩一次之后，先查 `get_debug_feedbacks`，
+再决定是否需要人工补拍截图。
+
+
 

@@ -37,19 +37,69 @@
 ### Built
 
 - `maker_build_current_directory` ✅ 远端构建 100%（48s，commit `f235ecc`），`preview-refresh` 200。
-- `generate_test_qrcode` ✅ → `https://tapcode-sce.spark.xd.com/qrcode/m_c7s3_1789914324484.png`
-  （App ID 940330 / Developer ID 471831，竖屏 `portrait` 沿用既有不可变配置）。
+- 之后同一里程碑内又连续四次 ✅100%：`099bab0`（git 卫生）、`a49e7ad`（背景显式入包 + §12 判读表）、
+  `4cd0dbd`（背景就绪后再挂载）、`5ac225f`（评审修正，见下）。
+- 两轴评审（Standards / Spec 并行子代理）在 `5ac225f` 落地的修正：
+  ① `preload_groups: ["default"]`——背景原先只靠 DWP 按需下载，冷启动失败即整会话无背景且无重试；
+  ② 背景下载失败改为经 `GetBackgroundError()` 打到屏上（真机没有 console），此前被我误删的
+     「背景未导入」提示以更正的范围恢复；
+  ③ 角色 `castShadows = false`——地板删除后场景内已无任何投影接收面，每帧投影白算；
+  ④ 状态窗画框改为宽度驱动 + 高度由 4:3 推出，此前 `maxWidth="100%"` 会在高竖屏上把画框压成
+     非 4:3，`cover` 因此裁掉静帧两侧；
+  ⑤ 背景路径收敛为单一 `BACKGROUND_PATH`，与 `resources.json` 白名单一致——原先三个候选路径里
+     有两个不在白名单内，在设备上永远取不到，只会误导冷启动排查。
+  评审确认**无硬性规范违规**；`urhox-libs/` 等引擎目录未被改动。
+  Middle-Man 一条（把 `WarmUpBackground` 挪去 `main.lua`）判定不采纳：资产就绪属状态窗自身职责。
+- `generate_test_qrcode` ✅ 多次；当前有效二维码指向 `5ac225f`：
+  `https://tapcode-sce.spark.xd.com/qrcode/m_c7s3_1789916661057.png`（App ID 940330 / Developer ID 471831，
+  竖屏 `portrait` 沿用既有不可变配置）。
 
 ### Known issues
 
 - **图标尚未确认在云端生效**：`game_material/` 被 Maker 远端排除，git 这条路交付不了图标；
   `.project/project.json` 的 `assets.icon` 已能在本地解析到真实文件，但 TapTap 侧是否已采用该图标
   需要在 Maker 网页的发布素材界面确认或手动上传。
-- **画面修复尚未取得视觉证据**：Maker 预览页需要 TapTap 登录，本机的 in-app 浏览器与 Playwright
-  都被重定向到 `/intro`，因此透明底 RT 的 alpha 是否被 `nvgCreateVideo` 保留、角色是否真的转向正面，
-  只能等真机扫码或用户已登录的预览页确认。若 alpha 不生效，症状是角色框盖成一块黑。
-- `runtime.log` 仍不出现（watcher 健康、每 5s 轮询、`lastWrittenLogs: 0`）——没有任何客户端加载过运行时，
-  不是装载层故障。判据仍是文件内出现 `[M0-0] 启动 M0-0 原型`。
+  **同日查源码定论（不再是推测）**：本地 Maker MCP 全文 `game_material` 命中 0 次，`"icon"` 仅 1 处
+  且属应用列表字段，既不读 `assets.icon` 也不上传图标；排除发生在服务端 pre-receive。
+  ⇒ 图标**既走不了 git 也走不了 MCP**，只能网页侧交付；「放进仓库路径 + `asset_ignores` 排除包体」
+  这个替代方案因无消费方而否决。
+  **23:26 网页通道实测（走到卡片、被本机工具堵住）**：用已登录的 Chrome 进入
+  工作台 → 项目配置文件 → 发布面板 →「应用图标」卡片（要求 64×64 以上、png/jpg ≤ 4MB，
+  我们的 512×512 符合）。但 Qoder Browser Connector 的 `upload_file` 在
+  `user-browser-use` 与 `browser-use` 两个 server 上**一律**返回
+  `Invalid arguments for file_upload: name is not supported`（换 uid、换路径写法均无效），
+  无法代传。另核实：`.project/project.json` 与原件 `assets/image/la-cafe-icon_20260920121307.png`
+  **都在 git 跟踪内**，改 `assets.icon` 指针不会让云端采用（该字段由 Maker 侧书写），原结论不变。
+  ⇒ 剩下唯一动作是**用户手动把图标拖进该卡片**；全程未点任何发布/提交按钮，TapTap 对外信息零改动。
+  **09-21 二次穷尽确认（不再有需要重开的口子）**：① 换第三个控件（素材库「上传素材」按钮，完全在视口内）
+  仍是同一句 `name is not supported` ⇒ 与元素可见性无关，是工具本身坏。② 用 DOM 注入让隐藏
+  `input[type=file]` 显形被权限分类器硬拦（理由：改写外部服务 UI 行为），不换措辞重试。
+  ③ Computer Use 曾在本轮整批消失后又回归（14 工具），但对 Chrome 抓屏直接被
+  `browser_url_policy / insufficient_url_confidence` 停掉且 `retry:false`，人工确认 URL 也不改判。
+  ④ `maker.js` 全文无 `game_material`、无图标上传 API ⇒ MCP 侧也无入口。四条路都堵，图标只能人工。
+- **真机视觉证据已取得，§12 两个未知数定案（2026-09-21 12:53）**：用户用 TapTap 扫码在原生手机上
+  跑通了 `5ac225f`，系统截图存于 `screenshots/device/m00-realdevice-01-fullframe.jpg`。
+  三条判读全部落定：**角色正立**、**位于画面右侧约 65%**、**角色框无黑底**（透明 RT 的 alpha 在原生生效）。
+  ⇒ 代码里那枚 `nvgRotate(math.pi)` **保留、不能删**；`engine-docs/recipes/scene-to-nanovg.md:13`
+  「已处理预览纹理的上下方向，不需要额外翻转 Y」在**原生 Android 上不成立**，与 WebGL 结论一致。
+  真 4:3 亦在设备上成立：截图量得状态窗 860×645 ≈ 1.333。
+  日志侧互证：`runtime.log` 该会话完整启动序列**零 ERROR/WARN**，
+  `屏幕物理分辨率: 462.0x1029.0 DPR=0.94866532087326`（证明是手机原生，不是 712×906 WebGL 仿真），
+  `资源检查 GLB=false` → 走 `Prefabs/lin-ruoxi.prefab` + `Meshes/lin-ruoxi.mdl`，
+  包围盒 0.979 m 放大到 1.68 m，RT 960×720，背景已在本地并挂载，`nvgCreateVideo 成功 句柄=2.0`。
+  **M0-0 验收句「无黑/白屏或崩溃、人物与场景均清楚可读」就此满足。**
+- **真机上暴露的构图缺陷（不阻塞验收，划给 M0-1）**：角色**悬空**——脚落在画面中部而非咖啡馆地面线上。
+  根因是分层设计本身：RT 只出角色、背景是 UI 静帧，两者无共享地面，所以"站得住"只能靠构图对齐。
+  修法是把固定相机/角色纵向偏移调到她脚底贴近画框下沿并与静帧地面线对齐，**需重新构建 + 重新扫码**，
+  因此本次不动（当前 QR 钉在 `5ac225f`，是唯一的真机基准）。
+- `runtime.log` **已于 23:24 出现**：一个客户端加载过本构建，完整 M0-0 启动序列且**零报错**——
+  模型加载成功（包围盒 0.509×0.979×0.199，等比放大到 1.68 m）、固定相机
+  `pos=(-0.23,0.94,4.83)`、RT 960×720 创建、`背景静帧已在本地` → `状态窗背景已挂载`、
+  `nvgCreateVideo 成功，句柄=2.0`。
+  ⇒ 此前只能等的两件事已被证实：背景**确实随包交付**（`resources.json` 白名单 + `preload_groups` 生效），
+  以及 `WarmUpBackground`「先确认文件到手再交给 UI」的顺序在冷启动走的是本地分支，绕开了
+  `ImageCache` 的永久失败缓存。
+  ⚠️ 该客户端是 Maker 网页预览（**WebGL**），不能替代真机：§12 的方向与 alpha 两个未知数仍未决。
 - `assets.screenshots` 仍为 `[]`：三张截图必须是**真机**截图，`screenshots/` 里现有的三份是浏览器预览
   抓取，不能充当 M0-0 交付物。
 - 状态窗 `SURFACE_UPDATEALWAYS` 每帧重渲、`renderer.hdrRendering` 在 `Shutdown()` 不复原，
@@ -57,8 +107,32 @@
 
 ### Next
 
-- 用户用 TapTap App 扫码，在真机确认：林若夕正面全身清楚、4:3 窗景方向正确无镜像、无黑/白屏与崩溃；
-- 通过后从真机取三张截图填入 `.project/project.json` 的 `assets.screenshots`。
+**扫码时要一并取的画面**（两个消费方要求不同，别当成同一件事）：
+
+- `.project/project.json` 的 `assets.screenshots` 是 **TapTap 上架位**用的，要的是真机运行画面；
+- `docs/demand.md` 第 3 条「视觉资产看板」是**赛事必交物**，原文要求
+  「3 张以上核心场景的高清截图 / 动图，包括关键静帧、多视角展示图（multi-view）、环境画面等」
+  ——它要的是**三类不同画面**，三张同机位照片不满足它。
+
+按 M0-0 现有能力（固定单镜头、无动画、无聊天 UI）一次扫码可覆盖：
+
+| # | 取什么 | 满足谁 | 备注 |
+| --- | --- | --- | --- |
+| 1 | 状态窗整体首屏，人物全身入画 + 4:3 窗景同时清楚 | 上架位 + 看板「关键静帧」+ §12 判读 | 这张同时就是验收证据，优先保证 |
+| 2 | 同屏的系统级裁剪近景，看脸与服装可读性 | 看板「关键静帧」细化 | 镜头固定，只能裁不能推近 |
+| 3 | 冷启动后第二个时刻的同一画面（隔一会儿再截） | 上架位 + 「稳定」二字 | 证明不是一次性渲染 |
+
+**看板缺口，M0-0 补不了**：「多视角展示图（multi-view）」需要换机位或角色转身，
+而 M0-0 是固定镜头且明确不做动画；「环境画面」需要咖啡馆远景独立成片。
+这两项属 M0-1 之后的资产，不要指望 M0-0 收尾时一并交掉。
+
+其余待办：用户用 TapTap App 扫码并按 §12 判读表回报（**角色正立与否 + 在左还是右侧**）；
+图标需在 Maker 网页发布素材界面确认生效（`game_material/*` 走不了 git）。
+
+**取物方式更新（同日核实）**：Maker MCP `get_debug_feedbacks` 的官方定义覆盖「本游戏的
+真机游戏日志与**真机截图**」，现在 `total: 0` 只是因为还没有客户端加载过构建。
+所以扫码试玩之后应**先查这个工具**，能取到真机截图就不必人工补拍上表第 2、3 项。
+详见 `docs/maker-lua-api-verification.md` §12 的「扫码之后的两条取证通道」。
 
 ## 2026-09-19 — Maker 工程落地、历史合并与文档对账
 

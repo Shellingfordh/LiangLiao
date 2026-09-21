@@ -53,9 +53,20 @@
 
 1. M0-0（林若夕 A-pose + 洛杉矶咖啡馆状态窗）已在 Maker 云端工程实现，代码与资产均已取回到本地并
    与云端同步：`scripts/main.lua`、`scripts/StatusWindow.lua`、`assets/`（MDL + 材质 + 贴图 + prefab）。
-2. M0-0 尚缺：图标与 3 张实机截图（真机二维码依赖项）。背景图 `assets/Textures/backgrounds/la-cafe-4x3.png`
-   已于 2026-09-20 从 Marble 世界视口原生导出并落地（溯源见 `docs/asset-provenance.md`），但尚未回传 Maker 云端工程。
-3. 通过 M0-0 真机验收后，才实现时区表、消息排队与关系记忆。
+2. M0-0 状态窗画面已于 2026-09-20 重构并连续五次通过 Maker 云端构建（最新 `5ac225f`）：远景改由 UI 层
+   `backgroundImage` 绘制、角色走透明底 RenderTarget、角色朝向与画框真 4:3 均已修。背景图
+   `assets/Textures/backgrounds/la-cafe-4x3.png` 已入 git 并随构建推到云端，且在
+   `.project/resources.json` 里显式列入 `groups.default` 与 `preload_groups`（该项目无独立 `**`，
+   属增强引用模式，不可达资源会被裁出包）。测试二维码已能生成，**不再被下列三项阻塞**。
+3. M0-0 **真机视觉确认已于 2026-09-21 完成**：扫码跑通 `5ac225f`，角色正立、位于画面右侧约 65%、
+   角色框无黑底（透明 RT 的 alpha 在原生生效）——`nvgRotate(math.pi)` 定案保留，
+   `engine-docs/recipes/scene-to-nanovg.md` 的「不需要额外翻转 Y」在原生 Android 不成立（判读表见
+   `docs/maker-lua-api-verification.md` §12）。仍缺两件，都需要人操作：
+   **再补两张真机截图**（同屏裁剪近景 + 隔一会儿再截一张以证「稳定」；
+   `.project/project.json` 的 `assets.screenshots` 仍为 `[]`，浏览器预览抓取不算）；
+   **图标在 Maker 网页「发布到 TapTap → 游戏基本信息 → 游戏 icon」生效**
+   （`game_material/*` 被远端 pre-receive 排除，git 交付不了；连接器上传与 Computer Use 四条路均已证伪）。
+4. 通过 M0-0 真机验收后，才实现时区表、消息排队与关系记忆。
 
 不要恢复或引用已移除的旧"三位 NPC 小镇"方案、旧角色名或旧 PoC 模板。
 

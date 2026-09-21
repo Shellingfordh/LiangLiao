@@ -1,15 +1,16 @@
 -- ============================================================================
--- 《送给你这个回来的人》M0-0
--- 竖屏手机原型：固定镜头 3D 状态窗展示原创角色「若夕」
--- 本阶段不做聊天、存档、动画、天气或任何在线服务。
+-- 《送给你这个回来的人》M0-1 起步
+-- 竖屏手机原型：固定镜头 3D 状态窗 + 由真实时间驱动的生活状态
+-- 本阶段接时间/可用性；聊天、排队、存档在后续模块。
 -- ============================================================================
 
 local UI = require("urhox-libs/UI")
 local StatusWindow = require("StatusWindow")
+local TimeState = require("TimeState")
 
 local CONFIG = {
     Title = "送给你这个回来的人",
-    StatusLine = "若夕 · 洛杉矶 18:20 · 还在外面",
+    City = "los_angeles",
 }
 
 ---@type Widget|nil
@@ -20,6 +21,10 @@ local statusLabel_ = nil
 local errorLabel_ = nil
 ---@type Label|nil
 local noteLabel_ = nil
+
+-- 上一次上屏的状态文案，用来判断这一分钟要不要重画
+local statusLine_ = ""
+local clockElapsed_ = 0
 
 local function logInfo(msg)
     print("[M0-0] " .. msg)
@@ -35,6 +40,14 @@ function Start()
     logInfo("启动 M0-0 原型")
     logInfo("屏幕物理分辨率: " .. tostring(graphics.width) .. "x" .. tostring(graphics.height)
         .. " DPR=" .. tostring(graphics:GetDPR()))
+
+    -- 时间层先落一条日志：真机上没有 console，状态算错时这条是唯一线索
+    local snap = TimeState.Snapshot(CONFIG.City)
+    statusLine_ = snap.cityLabel .. " · " .. snap.clock .. " · " .. snap.phrase
+    logInfo(string.format("时间状态: %s %s %s UTC%+d DST=%s 季节=%s 天气=%s 可用性=%s 地点=%s",
+        snap.dateKey, snap.clock, snap.cityLabel,
+        math.floor(snap.offsetSeconds / 3600), tostring(snap.isDst),
+        snap.season, snap.weather, snap.availability, snap.place))
 
     InitUI()
     StatusWindow.Init()
@@ -61,7 +74,7 @@ end
 function CreatePage()
     statusLabel_ = UI.Label {
         id = "statusLine",
-        text = CONFIG.StatusLine,
+        text = TimeState.StatusLine(CONFIG.City),
         fontSize = 13,
         fontColor = { 210, 204, 196, 210 },
         textAlign = "left",
@@ -183,8 +196,31 @@ function RefreshResourceNotices()
     end
 end
 
+--- 状态文案一分钟一变；变了才重画，避免每帧 SetText
+function RefreshStatusLine()
+    local line = TimeState.StatusLine(CONFIG.City)
+    if line ~= statusLine_ then
+        statusLine_ = line
+        if statusLabel_ then
+            statusLabel_:SetText(line)
+        end
+    end
+end
+
 function SubscribeToEvents()
     SubscribeToEvent("KeyDown", "HandleKeyDown")
+    SubscribeToEvent("Update", "HandleUpdate")
+end
+
+---@param eventType string
+---@param eventData UpdateEventData
+function HandleUpdate(eventType, eventData)
+    local timeStep = eventData["TimeStep"]:GetFloat()
+    clockElapsed_ = clockElapsed_ + timeStep
+    if clockElapsed_ >= 20 then
+        clockElapsed_ = 0
+        RefreshStatusLine()
+    end
 end
 
 ---@param eventType string

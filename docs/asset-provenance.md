@@ -119,6 +119,8 @@ Maker 云端在 2026-09-19 自动回填了 `raw-assets/` 下的源 GLB、解包�
 | 生成方式 | Maker MCP `generate_image`，落地在 `assets/image/la-cafe-icon_20260920121307.png` |
 | 与配置的关系 | `.project/project.json` 的 `assets.icon` 由 Maker 侧写为 `./game_material/la-cafe-icon.png`。该目录在本地、git 历史与 `maker/main` 三处都不存在，**不是悬空引用而是设计如此**：Maker 远端 pre-receive 用 `EXCLUDE_PATTERNS` 硬拒 `game_material/*`（实测 push 被 `! [remote rejected]` 退回，见 `apps/agent-server/src/lib/rollback.ts`），所以这个路径从未能进过仓库 |
 | 交付方式 | 本地按配置把生成件复制到位（md5 与 `assets/image/` 的生成件一致）；**该文件不入库、不打包**，云端图标仍需经 Maker 网页侧的发布素材流程确认 |
+| 为什么只能走网页（2026-09-20 查源码定论） | 本地 Maker MCP（`@taptap/maker` 0.0.33 `dist/maker.js`）**完全不读也不上传** `assets.icon`：全文 `game_material` 命中 0 次，`"icon"` 仅 1 处且是应用列表的 `icon: numberField(...)` / `iconColor` 字段，与发布图标无关；`game_material/*` 的排除发生在**服务端** pre-receive（`agent-server/src/lib/rollback.ts`）。结论：图标既走不了 git 也走不了任何 MCP 工具，只能网页侧交付 |
+| 被否掉的替代方案 | 把图标放进「已跟踪但被 `build.asset_ignores` 排除」的仓库路径，让 `assets.icon` 在云端可解析。**不做**：上条已证明没有任何消费方读这个字段，改了也不会让图标生效，只是徒增一个包体排除规则 |
 | 为何不改配置指向 `assets/image/` | `assets/` 在 `build.asset_dirs` 内，图标会被打进运行包；且 `.project/project.json` 属 Maker 托管元数据，改指过去有被后续构建覆写的风险 |
 | 画面内容 | 洛杉矶咖啡馆傍晚窗景：暖黄吊灯、冰咖啡、窗外棕榈树与暮色街景，与 M0-0 冻结的美术方向一致 |
 
