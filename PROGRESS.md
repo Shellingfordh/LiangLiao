@@ -251,6 +251,17 @@ CLI `taptap-maker build --target-dir …`：一次返回「🎉 项目构建成�
 
 LSP 门禁复核（21:51:05 那一轮 `--mode watch`）：**Lua Errors: 0**，非 `StatusWindow.lua` 的 WARN 为零。
 
+## 构建 #3 `76823fb` / #4 `49f2cae`（把只能靠真机证明的判据改成可断言）：成功
+- `76823fb`：把「离开期间摘要」的判定从 `BootChat` 抽成 `MemoryService.AwayGap(utcNow, dueCount, minGap)`，
+  自检加场景 H（H0 新存档不补 / H1 不足阈值不补 / H2 够久且有到点消息才补 / H3 无到点消息不补 /
+  **H4 补完再重进不再补第二条**）；同时补了 `GetDueCount`。共 34 项断言。
+- `49f2cae`：`DevSelfTest.Run` 外面包 `pcall` —— 兜的是「自检自身出异常也不许把正式会话带崩」，
+  因为 M0-1 已验收的启动链路不能因为一个开发工具而死；自检的断言失败本来就走 `logError`，
+  所以这层保护不吞任何检查（异常同样打 ERROR，只是不再连带炸掉 UI 初始化）。
+- 两轮 LSP：`Lua Errors: 0`（22:15:01 / 22:18:53），非 `StatusWindow.lua` 的 WARN 为 0。
+- 边界自查（`f70bf4b..HEAD`）：`git diff --stat -- assets/ .project/` **为空**（没生成、没改任何资产与工程配置）；
+  `scripts/` 内无 http/fetch/WebSocket/LLM 调用，云侧只有 M0-1 就存在且默认关闭的 `clientCloud` 异步适配器。
+
 ## 留给预览判读的一条视觉取舍
 用户气泡的宽度按「最长可能状态文案」（`已送达 · 对方在忙，已排队 · 第 9 位`）预留，因为状态是行不重建、
 只 `SetText` 换上去的（`Widget:ClearChildren` 会漏 Yoga 节点，M0-1 已定死增量刷新）。
