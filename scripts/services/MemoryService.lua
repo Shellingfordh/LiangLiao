@@ -447,6 +447,27 @@ function MemoryService.ClearSavedData()
     return true
 end
 
+--- 重进时要不要给一条「离开期间」摘要。规则放在这里是为了能被自检断言（场景 H）：
+--- 只有「确实离开过 + 有到点待补发的排队消息 + 离开时长够久」三者同时成立才给一条，
+--- 补发完再重进时 lastServerTime 已被推到交付时刻，于是第二次返回 false —— 这就是
+--- 「每次回来只有一条摘要、不刷成生活流水账」的实际闸门。
+---@param utcNow number
+---@param dueCount integer 计划时刻已过、等着补发的条数
+---@param minGapSeconds integer 离开多久才算「离开期间」
+---@return integer gapSeconds
+---@return boolean shouldSummarize
+---@return integer thenUtc 上次落盘的时刻（摘要要说「那会儿」她在哪一档）
+function MemoryService.AwayGap(utcNow, dueCount, minGapSeconds)
+    if mem_.lastServerTime <= 0 or (dueCount or 0) <= 0 then
+        return 0, false, 0
+    end
+    local gap = math.floor(utcNow - mem_.lastServerTime)
+    if gap < (minGapSeconds or 60) then
+        return math.max(0, gap), false, mem_.lastServerTime
+    end
+    return gap, true, mem_.lastServerTime
+end
+
 --- 异步云接口。没有适配器就什么都不做，返回值不代表成功与否。
 ---@param onDone? fun(ok: boolean, data: table|nil)
 function MemoryService.CloudLoadAsync(onDone)

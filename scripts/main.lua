@@ -258,7 +258,6 @@ function BootChat()
         return
     end
 
-    local mem = MemoryService.Get()
     local pendingCount = MessageService.Restore(MemoryService.GetRestoredMessages())
     ChatPanel.SetMemoryLine(MemoryService.GetSummaryLine())
 
@@ -273,17 +272,18 @@ function BootChat()
             #MessageService.GetMessages(), pendingCount))
     end
 
-    -- 离开期间到点的排队消息不丢：由状态机按 FIFO 逐条补发，这里只补一句摘要
+    -- 离开期间到点的排队消息不丢：由状态机按 FIFO 逐条补发，这里只补一句摘要。
+    -- 「要不要补」的判定在 MemoryService.AwayGap（自检场景 H 直接断言它，包括
+    -- 补发完再重进时不再补第二次），BootChat 只负责把它写成一条系统消息。
     local dueCount = MessageService.GetDueCount(snap.utcSec)
-    if dueCount > 0 and mem.lastServerTime > 0 then
-        local gap = math.floor(snap.utcSec - mem.lastServerTime)
-        if gap >= CONFIG.AwaySummaryMinSeconds then
-            local thenSnap = TimeState.Snapshot(CONFIG.City, mem.lastServerTime)
-            MessageService.AddSystem(
-                ContentService.AwaySummary(gap, thenSnap.phrase, snap.phrase, dueCount),
-                snap.utcSec, snap.clock)
-            MemoryService.Persist(MessageService.GetMessages())
-        end
+    local gap, shouldSummarize, thenUtc =
+        MemoryService.AwayGap(snap.utcSec, dueCount, CONFIG.AwaySummaryMinSeconds)
+    if shouldSummarize then
+        local thenSnap = TimeState.Snapshot(CONFIG.City, thenUtc)
+        MessageService.AddSystem(
+            ContentService.AwaySummary(gap, thenSnap.phrase, snap.phrase, dueCount),
+            snap.utcSec, snap.clock)
+        MemoryService.Persist(MessageService.GetMessages())
     end
     PushChatPhase()
 end

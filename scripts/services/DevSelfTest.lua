@@ -418,6 +418,55 @@ local function ScenarioFuturePlan(dateKey)
 end
 
 -- ---------------------------------------------------------------------------
+-- 场景 H：「离开期间」摘要的判定闸门（BootChat 用的就是这一个函数）
+-- ---------------------------------------------------------------------------
+local function ScenarioAwaySummaryRule(dateKey)
+    logInfo("场景 H 重进摘要判定")
+    beginScenario()
+
+    local gapNew, wantNew = MemoryService.AwayGap(TimeState.NowUtc(), 2, 60)
+    check("H0 全新存档没有「上次」可言 → 不补摘要", wantNew == false and gapNew == 0,
+        string.format("gap=%d want=%s", gapNew, tostring(wantNew)))
+
+    -- 造一次真实的离开：凌晨发两条（都排队）→ 落盘 → 把时钟推到醒来之后
+    goLocalHour(4, dateKey)
+    sendNow("离开前想跟你说一句。")
+    sendNow("还有这句。")
+    MemoryService.Persist(MessageService.GetMessages())
+
+    -- H1 单独验时长阈值：这里显式传 dueCount=2，免得「没到点」替时长规则蒙混过关
+    local gapShort, wantShort = MemoryService.AwayGap(TimeState.NowUtc() + 20, 2, 60)
+    check("H1 离开不到阈值 → 不补摘要", wantShort == false and gapShort < 60,
+        string.format("gap=%d want=%s", gapShort, tostring(wantShort)))
+
+    -- 计划回复时刻是 06:00:10 / 06:00:14，所以要拨到窗口之后再判「有没有到点」
+    goLocalHour(7, dateKey)
+    local nowLate = TimeState.NowUtc()
+    local due = MessageService.GetDueCount(nowLate)
+    local gapLong, wantLong, thenUtc = MemoryService.AwayGap(nowLate, due, 60)
+    check("H2 离开够久且有到点待补发 → 补一条", wantLong == true and due == 2 and gapLong >= 10700,
+        string.format("gap=%d due=%d want=%s", gapLong, due, tostring(wantLong)))
+    local gapNoDue, wantNoDue = MemoryService.AwayGap(nowLate, 0, 60)
+    check("H3 没有到点消息 → 不补摘要", wantNoDue == false and gapNoDue == 0,
+        string.format("gap=%d want=%s", gapNoDue, tostring(wantNoDue)))
+
+    -- 真的把这条摘要写进消息流（和 BootChat 同一组调用），再补发完、重进一次
+    local thenSnap = TimeState.Snapshot(cityId_, thenUtc)
+    local nowSnap = TimeState.Snapshot(cityId_, nowLate)
+    MessageService.AddSystem(
+        ContentService.AwaySummary(gapLong, thenSnap.phrase, nowSnap.phrase, due),
+        math.floor(nowLate), nowSnap.clock)
+    advance(45)
+    reinit_(SELFTEST_SAVE)
+    MessageService.Restore(MemoryService.GetRestoredMessages())
+    local nowReopen = TimeState.NowUtc()
+    local gapAgain, wantAgain = MemoryService.AwayGap(nowReopen,
+        MessageService.GetDueCount(nowReopen), 60)
+    check("H4 补发完再重进 → 不再补第二条（防流水账）", wantAgain == false,
+        string.format("gap=%d want=%s 队列=%d", gapAgain, tostring(wantAgain), MessageService.GetQueueLength()))
+end
+
+-- ---------------------------------------------------------------------------
 -- 场景 G：离线摘要契约 —— 只给一条，且不许出现流水账
 -- ---------------------------------------------------------------------------
 local function ScenarioAwaySummary()
@@ -452,6 +501,7 @@ function DevSelfTest.Run(options)
     ScenarioOfflineFifo(dateKey)
     ScenarioReentry(dateKey)
     ScenarioFuturePlan(dateKey)
+    ScenarioAwaySummaryRule(dateKey)
     ScenarioAwaySummary()
 
     MemoryService.ClearSavedData()

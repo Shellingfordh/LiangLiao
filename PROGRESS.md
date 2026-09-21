@@ -218,15 +218,41 @@ EntryStatusText/StatusLine`。
   CLI `taptap-maker build` 返回「🎉 项目构建成功」+ `preview_refresh {ok:true,status:200}` +
   watcher pid 5124 起（`--reset`）。MCP 侧两次 `-32603 invocation did not complete` 与
   CLI 顺带提交用户文档脏改动两件事记在 `BLOCKED.md` B-3。
-- **自检覆盖矩阵**（`scripts/services/DevSelfTest.lua`，29 项断言）：
+- **自检覆盖矩阵**（`scripts/services/DevSelfTest.lua`，34 项断言）：
   A 空闲 10 秒链路（A0-A7，含「不早于计划时刻」）；B 碎片档更慢更短（B0-B3）；
   C 忙碌不立即回→17:00 窗口后带「在赶项目」经历回（C0-C7，含已送达无已读）；
   D 睡眠两条 FIFO 计划有序 + 醒来按序回完 + 不重复回（D0-D7，按回复原文回显判序）；
   E 落盘→重进恢复完整历史与两条队列顺序→到期按序补发→二次重进不重复（E0-E5）；
   F 反向验证：同一条时钟只把 `planReplyAtUtc` 推到 +300s → 60s 内不回（RED），
-  换回存档里的真实计划 → 立刻按序交付（GREEN）；G 摘要只一行且无流水账（G1-G3）。
+  换回存档里的真实计划 → 立刻按序交付（GREEN）；G 摘要只一行且无流水账（G1-G3）；
+  H 摘要闸门（H0-H4）：新存档不补 / 离开不足阈值不补 / 够久且有到点消息才补 /
+  没有到点消息不补 / **补完再重进不再补第二条**（防流水账的那道闸）。
+  H 组能把「最多一条离开摘要」从「只能靠真机重进看」变成可断言：判定从 `BootChat`
+  抽成了 `MemoryService.AwayGap(utcNow, dueCount, minGap)`，BootChat 只负责把 true 写成一条系统消息。
   FAIL 走 `logError`，所以「runtime.log ERROR=0」与「自检全绿」是同一件事。
 
 ## 还差的一步（不在代码侧）
 完成条件 1 要的那一次真实会话日志需要人开预览（见 BLOCKED.md B-2）；
 开一次预览就能同时拿到：自检 29 项 PASS/FAIL、真实发送、重进恢复、场景降级说明。
+
+## 构建 #2 `e5bfb49`（修自检与两处收尾）：成功
+构建 #1 的 commit 是 `fe739ec`，MCP 工具两次 `-32603 invocation did not complete`（commit+push 成功、
+远端构建没跑到，判据：本地 runtime.log 未被 `--reset` 删、watcher 未重启），于是改走同一工具链的
+CLI `taptap-maker build --target-dir …`：一次返回「🎉 项目构建成功」+ `preview_refresh {ok:true,status:200}`。
+第二次构建（承载自检修复）同样成功：远端 HEAD == 本地 == `e5bfb49`，watcher pid 50380，
+`state.json.updatedAt` 每 5s 推进、`lastWrittenLogs: 0`（还没有会话跑起来）。
+
+构建 #2 带上去的三处修正：
+1. **自检跨场景状态泄漏**（会让云端误红）：场景会把时钟往回拨（同一天先测 20:00 再测 12:00），
+   而「后发不得越过先发」的水位是绝对 UTC，不清就把后一个场景的计划顶到前一个场景之后。
+   现在每个场景开头 `beginScenario()`（清独立存档 + 重连真实服务）。
+2. `HandleSend` 里空白草稿被拒不再打 ERROR（那是正常操作，不该污染「ERROR=0」这条判据）。
+3. `ApplyScene` 去掉永不出现的 `"applied"` 分支。
+
+LSP 门禁复核（21:51:05 那一轮 `--mode watch`）：**Lua Errors: 0**，非 `StatusWindow.lua` 的 WARN 为零。
+
+## 留给预览判读的一条视觉取舍
+用户气泡的宽度按「最长可能状态文案」（`已送达 · 对方在忙，已排队 · 第 9 位`）预留，因为状态是行不重建、
+只 `SetText` 换上去的（`Widget:ClearChildren` 会漏 Yoga 节点，M0-1 已定死增量刷新）。
+后果：极短的用户消息气泡会比 M0-1 略宽。不改的原因是另一条路（按当前文案算宽）要求引擎在 `SetText`
+后重算高度，而这条我没有证据——宁可宽一点，也不要状态文字被钉死宽度的气泡裁掉。开预览时请顺带判读一眼。
