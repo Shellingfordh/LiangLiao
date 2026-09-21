@@ -218,7 +218,8 @@ EntryStatusText/StatusLine`。
   CLI `taptap-maker build` 返回「🎉 项目构建成功」+ `preview_refresh {ok:true,status:200}` +
   watcher pid 5124 起（`--reset`）。MCP 侧两次 `-32603 invocation did not complete` 与
   CLI 顺带提交用户文档脏改动两件事记在 `BLOCKED.md` B-3。
-- **自检覆盖矩阵**（`scripts/services/DevSelfTest.lua`，34 项断言）：
+- **自检覆盖矩阵**（`scripts/services/DevSelfTest.lua`，**45 项断言**；23:36 按 `check(` 调用点逐场景数得：
+  A 8 + B 4 + C 8 + D 8 + E 6 + F 3 + H 5 + G 3 = 45。此前本文写的「34 项」是错的，已全篇订正）：
   A 空闲 10 秒链路（A0-A7，含「不早于计划时刻」）；B 碎片档更慢更短（B0-B3）；
   C 忙碌不立即回→17:00 窗口后带「在赶项目」经历回（C0-C7，含已送达无已读）；
   D 睡眠两条 FIFO 计划有序 + 醒来按序回完 + 不重复回（D0-D7，按回复原文回显判序）；
@@ -254,7 +255,7 @@ LSP 门禁复核（21:51:05 那一轮 `--mode watch`）：**Lua Errors: 0**，�
 ## 构建 #3 `76823fb` / #4 `49f2cae`（把只能靠真机证明的判据改成可断言）：成功
 - `76823fb`：把「离开期间摘要」的判定从 `BootChat` 抽成 `MemoryService.AwayGap(utcNow, dueCount, minGap)`，
   自检加场景 H（H0 新存档不补 / H1 不足阈值不补 / H2 够久且有到点消息才补 / H3 无到点消息不补 /
-  **H4 补完再重进不再补第二条**）；同时补了 `GetDueCount`。共 34 项断言。
+  **H4 补完再重进不再补第二条**）；同时补了 `GetDueCount`。断言总数因此是 45 项。
 - `49f2cae`：`DevSelfTest.Run` 外面包 `pcall` —— 兜的是「自检自身出异常也不许把正式会话带崩」，
   因为 M0-1 已验收的启动链路不能因为一个开发工具而死；自检的断言失败本来就走 `logError`，
   所以这层保护不吞任何检查（异常同样打 ERROR，只是不再连带炸掉 UI 初始化）。
@@ -292,8 +293,173 @@ D6 依赖 `ContentService.Reply` 的「回显用户原文」（原文被 `clip` 
 
 LSP 门禁复核（22:46:43，补丁后）：**Lua Errors: 0**。
 
-## 留给预览判读的一条视觉取舍
-用户气泡的宽度按「最长可能状态文案」（`已送达 · 对方在忙，已排队 · 第 9 位`）预留，因为状态是行不重建、
-只 `SetText` 换上去的（`Widget:ClearChildren` 会漏 Yoga 节点，M0-1 已定死增量刷新）。
-后果：极短的用户消息气泡会比 M0-1 略宽。不改的原因是另一条路（按当前文案算宽）要求引擎在 `SetText`
-后重算高度，而这条我没有证据——宁可宽一点，也不要状态文字被钉死宽度的气泡裁掉。开预览时请顺带判读一眼。
+同一次推演顺手核掉的四条（都没问题，记录判据以免下轮重复怀疑）：
+- 作息表 0–24 连续无缝（`slotAt` 还有兜底返回最后一档），`PolicyFor` 未知档位兜成 `busy`（不可回复）——
+  不会因为「查不到档」而变成永久不回。
+- 洛杉矶 DST 表算法正确：3 月第二个周日 10:00 UTC 起（2 月 PST）、11 月第一个周日 **09:00** UTC 止
+  （2 点 PDT 就是 09:00 UTC，这个边界最常写错成 10:00）。2026 年 3 月 1 日与 11 月 1 日都是周日，
+  故当下（9-21）在 DST 内、偏移 -7，洛杉矶 07:5x。
+- 存档读写两侧字段对称（`toSaved` 白名单 ↔ `sanitizeMessage`），`state` 缺失按 `replied` 兜底，
+  运行时字段 `effReplyAtUtc` 不落盘，用的还是 M0-1 已在真机上跑通的 `cjson` + `File` 通路。
+- 消息流刷新没有静默失效：`version_` 在 `Push`/`SetState`/`Restore` 三处都自增，
+  `ChatPanel.Tick` 按版本号差异决定 `AppendNewRows` + `RefreshStatuses`。
+
+**留了一条没改**（避免为不可达路径再触发一次构建、把取证窗口连同 `--reset` 一起烧掉）：
+`ResolveReplyAtUtc` 在 `plan.replyAtUtc == nil` 时兜底成 `sentAt + MIN_REPLY_LEAD`（5 秒）。
+这个 nil 只在「不可回复且 24 小时内找不到任何可回复窗口」时出现，按现在的作息表不可能；
+但 `SCHEDULE` 头上的注释明写「改这里就能改她的日程」，真有人把一整天改成忙碌/睡眠时，
+后果是**气泡写着已排队、5 秒后却回了** —— 时机判据静默反向。下次动 `MessageService` 时一并把它
+改成「无窗口就不交付并打 ERROR」。
+
+## 构建 #6 `623cc5a`（把不回复的缺陷修掉并部署到云端）：成功
+
+云端必须带这个补丁，否则等来的那次真实会话演示的是修之前的行为。CLI 构建输出（逐字）：
+
+```
+# 🎉 项目构建成功
+| 入口脚本 | main.lua | 脚本目录 | scripts |
+submit_result:  branch: main  status: pushed  committed: yes  commit_hash: 623cc5a
+preview_refresh: ok  preview_refresh_status: 200
+elapsed: 29s
+runtime_logs: watch_started: yes  watch_pid: 60276  local_file: .maker\logs\runtime\runtime.log
+```
+
+构建后 `state.json`：`updatedAt / lastPollAt = 2026-09-21T14:48:51Z`、`lastWrittenLogs: 0`、
+`runtime.log` 尚未出现 ——  watcher 活着但还没有客户端加载过这个构建（判据见仓库根 `AGENTS.md`「没有本地运行时」）。
+
+## 第二遍静态扫描（22:56–23:02，把「静默失效」那一类扫干净）
+
+死锁修完之后，用同样的办法把其余四条从没执行过的 M1 通路各推一遍。结论都是干净的，
+但值得写下来，因为完成验收时要靠这几条判断「断言是不是真的在断言」：
+
+- **事件事实层**（`EventService.FromSnapshot`）：`gapSeconds = 交付 UTC - 送达 UTC` 两边都是权威时间，
+  `thenPhrase/thenClock` 取送达那一刻的快照，`queued = not sentSnap.replyable`。
+  也就是说回复里的「那会儿在赶项目，隔了 3 小时 0 分才回你」每个字都来自既定事实，没有一处是回复时反推的。
+- **模板变量层**：`QUEUED_PREFIX` 用 `{before}`，`varsOf` 供的也是 `before`（键名当年避开 `then` 是语法原因，
+  两边一起改过，没有单侧漏改）。这条必须核，因为 `fill` 对**未知键是静默删掉**的 ——
+  漏改不会报错，只会让句子中间空一块（「那会儿，隔了…」），而 C7 断言依赖的就是那个位置的字。
+  另外 `{token}` / `{}` 两处出现在注释和表字面量里，不是模板。
+- **UTF-8 截断**（`clip`）：按首字节 0xC0/0xE0/0xF0 走 2/3/4 字节，裁完 `sub(1, bytePos-1)` 落在边界上，
+  不会切出半个汉字。只影响「回显用户原文」。
+- **重进恢复的方法论**：`reinit → MemoryService.Init`（内含 `ResetInMemory`）→ `Load` 从 `File` 读、
+  `cjson.decode`、`readMessages` 重建，`GetRestoredMessages()` 交的是**磁盘解析结果**。
+  所以场景 E 是真的文件往返，不是内存里抄一遍自己断言自己；`ClearSavedData` 若删档失败会 `logWarn`
+  并返回 false，自检开始那行会打 `清空=false`，污染不会静默。
+
+## 「M0-1 不得退化」的函数级证据（替换掉之前只有行数的说法）
+
+```
+$ git diff --numstat f70bf4b..HEAD -- scripts/main.lua scripts/StatusWindow.lua
+166   41   scripts/main.lua
+77    12   scripts/StatusWindow.lua
+```
+
+`StatusWindow.lua` 的 6 个 hunk 全落在 513–598 行之间，逐个函数看：
+
+| 函数 | 行 | 是否被 M1 改到 |
+| --- | --- | --- |
+| `loadCharacter` | 460 | 未改（角色装载） |
+| `PrepareBackground` | 516 | 新增（从 `WarmUpBackground` 抽出的共用体） |
+| `WarmUpBackground` | 532 | 改为调用上面那个（同一段预热逻辑） |
+| `GetSceneNotice` / `GetCurrentSceneId` / `RequestScene` | 555/560/568 | 新增 |
+| `createRenderTarget` | 599 | 未改（透明 RT，真机定案的那条） |
+| `StatusWindow.Init` | 647 起 | 未改 |
+
+即 M0-0 已验收的角色朝向 / `nvgRotate(math.pi)` / RT / 画框那几处**一行没动**。
+`main.lua` 41 行删除逐条读过，全部是 M1 明确替换掉的 M0-1 实现：
+`Update(timeStep)` → `Update(NowUtc())`、`StatusText(phase)` → `StatusLine(utcNow)`、
+「等待期间忽略二次发送」→ 允许排队、无条件开场白 → 仅无历史时开场、`InitServices()` 加存档参数。
+其中**没有一行**属于预览画框的属性（`CreatePreviewWidget` / `aspectRatio` / `backgroundFit` / `boxShadow`
+在删除侧一条都不出现），3D 展示那条通路是纯增量。
+
+唯一需要点名复核的删除是「空草稿保护」，它没有消失而是下沉到了服务层：
+`MessageService.Send` 开头 `trimmed == ""` → 保留 `draft_` 并 `return nil`，
+`HandleSend` 用 `if not msg then` 接住、把原文留在框里、不打 ERROR（避免把正常操作记成故障）。
+
+## 验收判据 ↔ 日志字面量对照表（拿到 runtime.log 后按此逐条打勾，不临场解释）
+
+写在这里的目的：判完成只认下面这些**从代码里抄出来的**字面量，避免日志到手后靠印象放宽标准。
+
+| 验收项 | 必须在日志里出现的行 | 出处 |
+| --- | --- | --- |
+| 会话真进了 Lua（不是卡在装载层） | `启动 M0-1 竖切片 · M1 时间状态闭环`（含 AGENTS 的子串 `启动 M0-1 竖切片`） | main.lua |
+| 时间层当下算对了 | `时间状态: <dateKey> <clock> 洛杉矶 UTC-7 DST=true …` | main.lua |
+| 三档差异化时机 | `PASS A0`（idle 即时）·`PASS B0/B1`（碎片更慢更短）·`PASS C0..C7`（忙碌不回、17:00 窗口、引用送达事实、已送达无已读）·`PASS D0..D4`（睡眠不回） | DevSelfTest |
+| FIFO 不越序 | `PASS D2`（后发计划时刻晚于先发）+ `PASS D6`（回复顺序=发送顺序，靠回显原文比对） | DevSelfTest |
+| 排队在真实链路上的显示 | `用户消息 #N 已发出 serverTime=… 计划回复=…（排队到下一个窗口 · 队列 2 条）` 与 `消息 #N 排在队首之后，标记排队（第 2 位）` | MessageService |
+| 相位机走全（真实时间，非投影） | `状态迁移 sent` → `状态迁移 waiting` → `状态迁移 typing` → `回复 #N → replied 事实=… 状态=… 正文=…` → `状态迁移 replied → idle` | MessageService |
+| 重进不丢不重复 | `本地存档已写入 N 字节` →（新会话）`记忆装载来源: file` + `存档恢复：M 条记录，其中 K 条待回复` + `已恢复 M 条历史记录（其中 K 条待回复），不再重复开场白`，且 K 条后续各自 `回复 #…` | MemoryService / main |
+| 反向验证红→绿 | `PASS F1 计划时刻在未来 → 不提前交付（RED）` 与 `PASS F2 恢复真实计划后按序交付（GREEN）` | DevSelfTest |
+| 「离开期间」至多一条、非流水账 | `PASS G1..G3` + `PASS H0..H4`（H4 专防补发完再重进时补第二条） | DevSelfTest |
+| 自检总账 | `自检结束：全部通过（45 项）`；任何 FAIL 同时就是一条 ERROR（`PASS` 行也应为 45 条） | DevSelfTest |
+| 场景降级如实显示 | `场景未切换（缺资产）: <sceneId>` + `场景降级: <sceneId>（缺原创静帧，沿用当前画面）` | StatusWindow / main |
+| 无错误 | 整份 `grep -c '"level":"ERROR"'` = 0 | — |
+
+## 部署一致性与三条旁证（23:15–23:17）
+
+```
+$ git ls-remote maker main
+623cc5a214dcb46df9f6e231e01d592bb3027a4d  refs/heads/main
+$ git ls-remote origin main        →  同一 hash
+$ git rev-parse HEAD               →  同一 hash
+```
+
+云端要构建的就是带交付死锁补丁的这一版，这条不再靠我自己的 `git log` 说话。
+`maker_status_lite` 另给两条旁证：`lua_lsp: ready`（即 22:46:43 那个 `Lua Errors: 0` 不是
+「`check` 模式假绿灯」那条已知坑的产物）、`project_health: ready`。
+
+还排掉一个我自己怀疑过的 UI 风险：`ChatPanel.AppendNewRows` 是按 `rowsById_[msg.id]` 记账而不是按下标游标，
+所以 `Restore` 重排后追加顺序不会错；而 `content_:InsertChild(row, #content_.children)`（打字气泡前插行）
+这段在 `f70bf4b`（已真机验收那一版）就存在，本轮 diff 对 `InsertChild`/`typingRow_`/`rowsById_`
+**零增删行** —— 属于已证通路，不需要再赌一次。
+
+## 自检自身的可执行性预检（23:29–23:31）
+
+等日志的这段时间最坏的情况不是断言失败，而是**自检自己一开头就抛异常**，把你那一次真实会话白白用掉。
+按接口对了一遍：
+
+- `DevSelfTest` 引用的 20 个跨模块符号（`TimeState.DevClockOffset/NowUtc/Snapshot/UtcAtLocal`、
+  `MessageService.Send/Update/Restore/GetHead/GetMessages/GetQueueLength/GetDueCount/AddSystem/PHASE/ROLE`、
+  `MemoryService.Init 入口用的 ClearSavedData/Persist/GetRestoredMessages/GetSaveFile/AwayGap`、
+  `ContentService.AwaySummary`）逐个查到定义位置，无一处拼错或已删。
+- 日志通路用的 `print(...) + log:Write(LOG_INFO/LOG_ERROR, ...)` 与 main.lua:53-61、
+  MessageService.lua:80-88、MemoryService / EventService **完全同一形状**（都是不带 nil 护栏的写法）。
+  也就是说：若 `log` 在这台设备上不可用，工程会在第一行 `启动 M0-1 竖切片…` 就死，轮不到自检 ——
+  自检没有引入新的启动风险。
+- 兜底方向也确认过：`DevSelfTest.Run` 外层的 `pcall` 只在自检自身出异常时打 ERROR 并让正式会话继续，
+  不会吞断言（断言失败本来就是 `logError`）。
+
+## 留给预览判读的一条视觉取舍（已算成数字，不用靠眼睛估）
+
+> 订正：上一轮一次误删空行把这一节的标题和正文粘到了一行，这里连排版一起重排。
+
+用户气泡宽度按「最坏情况状态文案」预留（状态是事后 `SetText` 换上去的，按创建那一刻的文案算宽会在
+「已送达」→「已排队」时撑出气泡边界）。把 `estTextWidth` 的字宽规则（CJK 全角 = fontSize，
+半角与空格 = 0.55×fontSize，`·` 是 2 字节按全角算）套到 `STATUS_WIDTH_RESERVE`：
+
+- 预留基准 `已送达 · 对方只有碎片时间，已排队 · 第 9 位` @10px = **228.5 px**
+- **订正（23:39 用 Node 按同一套字宽规则实测，替掉我此前的心算）**：最长的真实文案不是预留基准，
+  而是碎片档 + 多位位次：`…已排队 · 第 100 位` = **239.5 px**、`第 99 位` = 234 px，
+  比预留基准多 5.5~11 px。我早前写的「最长串 218.5 px，预留量确实盖住最坏情况」是**错的**
+  （心算把 `第 100 位` 少算了）。忙碌/睡眠档不受影响：`…对方在忙，已排队 · 第 99 位` = 178.5 px；
+  `已送达` / `已回复` 都是 30 px。
+  超出预留的后果被 label 自己的 `width = bodyW` + `maxWidth` + `whiteSpace = "normal"` 吸收成
+  **折行**（多一格行高），不是裁字；且 239.5 px 仍小于最窄机型（320）下的文本上限 244 px，
+  所以连切字都不会发生。要把这一格折行也消掉只需把 `STATUS_WIDTH_RESERVE` 换成 `第 100 位` 那版
+  （单常量改动），与 nil 窗口兜底一并排到下一次真实构建，本轮不为一个常量触发构建。
+
+代入 `outerWidth = 屏幕逻辑宽/DPR - 32 - 2`、`SCROLL_PAD = 10`、`BUBBLE_PAD_X = 11`：
+
+| 屏幕逻辑宽 | 行宽 inner | 文本上限 | 最坏真实串 239.5 放得下？ | 短消息气泡实宽 |
+| --- | --- | --- | --- | --- |
+| 393（常见安卓） | 339 | 317 | 放得下（余 77.5） | 250.5 px ≈ 行的 74% |
+| 320（iPhone SE） | 266 | 244 | 放得下（余 4.5） | 250.5 px ≈ 行的 94% |
+| <305 | <251 | <229 | 放不下 → 状态行折行 | 不再变宽 |
+
+结论：**不会裁字**。极窄设备上的退化路径是状态文案折行（`whiteSpace="normal"` +
+`maxWidth=bubbleTextMaxW_`），代价只是行高多一格。真实取舍只有一条 —— **短消息气泡偏宽**
+（393 上约占行宽 74%），这是"宁可不裁字也要让排队状态可读"的有意结果。
+开预览时只需判读这一条能否接受；是否裁字/是否溢出上面已推完，不必肉眼赌。
+
+不改回「按当前文案算宽」的原因保留：那条路要求引擎在 `SetText` 之后重算高度，而我没有这条证据；
+且 `Widget:ClearChildren` 会漏 Yoga 节点（M0-1 已定死增量刷新），重建行不是可选项。

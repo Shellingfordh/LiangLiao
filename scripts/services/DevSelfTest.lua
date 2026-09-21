@@ -364,14 +364,19 @@ local function ScenarioReentry(dateKey)
         and herReplyCount() == opens + 2,
         string.format("回复 %d 条，队列剩 %d 条", herReplyCount() - opens, MessageService.GetQueueLength()))
 
-    -- 再重进一次：已经回完的历史不应再生成任何回复
+    -- 再重进一次：已经回完的历史不应再生成任何回复。
+    -- 必须同时盯「记录条数」：只看 reopened==0 + 回复不增的话，「恢复直接把历史弄丢」
+    -- 也会满足这两条（没东西可回当然不重复回），那就成了空过。
     MemoryService.Persist(MessageService.GetMessages())
+    local totalSettled = #MessageService.GetMessages()
     reinit_(SELFTEST_SAVE)
     local reopened = MessageService.Restore(MemoryService.GetRestoredMessages())
     local afterReopen = herReplyCount()
     advance(30)
-    check("E5 二次重进不重复回复", reopened == 0 and herReplyCount() == afterReopen,
-        string.format("待回复 %d 条 回复增量 %d", reopened, herReplyCount() - afterReopen))
+    check("E5 二次重进不重复回复、也没丢记录", reopened == 0 and herReplyCount() == afterReopen
+        and #MessageService.GetMessages() == totalSettled,
+        string.format("待回复 %d 条 回复增量 %d 记录 %d/%d", reopened, herReplyCount() - afterReopen,
+            #MessageService.GetMessages(), totalSettled))
 end
 
 -- ---------------------------------------------------------------------------
