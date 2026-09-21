@@ -170,11 +170,20 @@ local function queuedIds()
     return out
 end
 
+--- 每个场景开头都重置一次服务与自检存档。
+--- 必须做：场景会把时钟往回拨（同一天先测 20:00 再测 12:00），而 MessageService 的
+--- 「后发不得越过先发」水位是绝对 UTC，不清就会把后一个场景的计划时刻顶到前一个场景之后。
+local function beginScenario()
+    MemoryService.ClearSavedData()
+    reinit_(SELFTEST_SAVE)
+end
+
 -- ---------------------------------------------------------------------------
 -- 场景 A：洛杉矶傍晚（idle）—— M0-1 的固定 10 秒链路不得退化
 -- ---------------------------------------------------------------------------
 local function ScenarioIdleChain(dateKey)
     logInfo("场景 A 空闲档（洛杉矶傍晚）")
+    beginScenario()
     local snap = goLocalHour(20, dateKey)
     check("A0 空闲档可即时回复", snap.availability == "idle" and snap.replyable == true,
         string.format("availability=%s replyable=%s", tostring(snap.availability), tostring(snap.replyable)))
@@ -209,6 +218,7 @@ end
 -- ---------------------------------------------------------------------------
 local function ScenarioFragments(dateKey)
     logInfo("场景 B 碎片时间档（洛杉矶中午）")
+    beginScenario()
     local snap = goLocalHour(12, dateKey)
     check("B0 碎片时间档可即时回复且标记要短", snap.availability == "fragments"
         and snap.replyable == true and snap.brief == true,
@@ -234,6 +244,7 @@ end
 -- ---------------------------------------------------------------------------
 local function ScenarioBusy(dateKey)
     logInfo("场景 C 忙碌档（洛杉矶下午）")
+    beginScenario()
     local snap = goLocalHour(14, dateKey)
     check("C0 忙碌档不可即时回复", snap.availability == "busy" and snap.replyable == false,
         string.format("availability=%s replyable=%s", tostring(snap.availability), tostring(snap.replyable)))
@@ -276,6 +287,7 @@ end
 -- ---------------------------------------------------------------------------
 local function ScenarioOfflineFifo(dateKey)
     logInfo("场景 D 睡眠档两条消息 FIFO（洛杉矶凌晨）")
+    beginScenario()
     local snap = goLocalHour(3, dateKey)
     check("D0 睡眠档不可即时回复", snap.availability == "offline" and snap.replyable == false,
         string.format("availability=%s", tostring(snap.availability)))
@@ -322,6 +334,7 @@ end
 -- ---------------------------------------------------------------------------
 local function ScenarioReentry(dateKey)
     logInfo("场景 E 落盘与重进恢复")
+    beginScenario()
     goLocalHour(4, dateKey)
     local first = sendNow("还在睡吗？")
     sendNow("明早想听你说说书店的事。")
@@ -366,6 +379,7 @@ end
 -- ---------------------------------------------------------------------------
 local function ScenarioFuturePlan(dateKey)
     logInfo("场景 F 反向验证：计划时刻在未来的排队消息不许提前回复")
+    beginScenario()
     goLocalHour(4, dateKey)
     local msg = sendNow("这条用来做反向验证。")
     local planAt = msg and msg.planReplyAtUtc or 0

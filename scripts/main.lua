@@ -471,7 +471,7 @@ function ApplyScene()
     if result == "missing-asset" then
         logInfo("场景降级: " .. sceneId .. "（缺原创静帧，沿用当前画面）")
         RefreshNoteLine()
-    elseif result == "pending" or result == "applied" then
+    elseif result == "pending" then
         RefreshNoteLine()
     end
 end

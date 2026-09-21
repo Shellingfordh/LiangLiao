@@ -168,3 +168,65 @@ runtime.log 只在**有真实会话跑起来**时才产生，而会话只能由�
 `assets/` 里唯一可作的场景静帧是 `Textures/backgrounds/la-cafe-4x3.png`（咖啡馆）；作息表另需 apartment /
 campus / studio / commute 四类场景，**全部无资产**。本阶段不生成新资产：`scene_id` 只做尝试性切换，
 无资产即显式沿用咖啡馆静帧降级并打日志，缺失资产与所阻塞的验收项记在 BLOCKED.md。
+
+## 实施记录（2026-09-21 晚，按任务书顺序）
+
+① **数据契约**（`scripts/TimeState.lua`）：作息表加回复策略
+`REPLY_POLICY = { idle 可回/10s, fragments 可回/16s 且 brief, busy 排队, offline 排队 }`；
+`Snapshot` 新增 `replyable / brief / availabilityLabel / sceneId`；新增
+`NextReplyableUtc`（按当地整小时往后试 + 按分钟回退，DST 由 Snapshot 自身复核，24h 上限）、
+`ReplyPlanFor`（→ `windowStartUtc` / `replyAtUtc`）、`UtcAtLocal`（反查当地整点的 UTC，自检用）、
+`NowUtc() = common.get_server_time() + DevClockOffset`（全工程唯一取时刻处，偏移只由自检改写，正式会话恒为 0）。
+② **FIFO**（`scripts/services/MessageService.lua`）：单 `pending_` 改 `queue_`；每条用户消息带
+`planReplyAtUtc / planWindowStartUtc / replyableAtSend / brief / availabilityAtSend / placeAtSend / factId`；
+相位改由**权威 UTC 绝对时刻**判定（`Update(utcNow)` 由外部注入，不再自己累帧）；
+`ResolveReplyAtUtc` 用 `lastPlannedAtUtc_ + RESPONSE_GAP_SECONDS(4s)` 挡越序；过期队首只重排
+`effReplyAtUtc`（不落盘），保证「短暂正在输入后交付」；新增 `Restore/GetHead/GetQueueLength/GetDueCount/
+EntryStatusText/StatusLine`。
+③ **存档**（`scripts/services/MemoryService.lua`）：v1→v2，落 `messages`（字段白名单 `toSaved`，
+`effReplyAtUtc` 这类运行时字段不写盘）；只裁已回复的旧记录，**排队一条不丢**；`saveFile` 可注入
+（自检用独立文件）；`ClearSavedData`；v1 的 `transcript` 摘要走同一条解析路径迁移为「已回复」记录，
+`looksLikeMemory` 检查保留未放宽。
+④ **事实与文案**（`EventService` / `ContentService`）：`FromSnapshot(snap, sentSnap)` 在补回复时带上
+送达侧事实（`queued / thenPhrase / thenClock / gapSeconds`），前缀模板 `那会儿{before}，隔了{gap}才回你。`
+三个变量全部来自确定时间快照，不新增地点/活动/时间；碎片时间走 `BRIEF_LINES` 短句池且不加话题后缀；
+`AwaySummary` 一句（客观间隔 + 两头作息原话 + 待回条数），不做逐小时流水。
+⑤ **UI**（`scripts/ui/ChatPanel.lua`）：用户气泡多一行状态 Label（已送达 / 已送达·对方在忙，已排队·第 N 位 /
+若夕正在输入 / 已回复），行不重建、只 `SetText`，宽度按最长状态预留并允许换行；状态条给倒计时与
+「她 06:00 之后能回」；`SetPhase` 加变化守卫（主循环每帧推，倒计时按秒才更新一次）。
+⑥ **状态窗**（`scripts/StatusWindow.lua`）：`SCENE_BACKGROUNDS` 清单只有 `la_cafe`；
+`RequestScene` 缺资产即留在当前静帧 + `logWarn` + `GetSceneNotice()` 上屏。
+
+## 有意的行为变更（相对已验收的 M0-1，不是退化）
+- 等待期间**再次发送不再被拒**，改为排队（M1 要求多条 FIFO）；因此「发送」按钮等待中不再禁用，
+  文案变「继续发送」。空/纯空白草稿仍被拒且原文留在输入框（不打 ERROR）。
+- 10 秒固定链路保留：空闲档 `planReplyAtUtc = 送达 + CONFIG.ReplyWaitSeconds`，
+  sent 1.5s → waiting → typing 3.0s → replied 的相位与日志字面量（`状态迁移 sent/waiting/typing`、
+  `跳过等待：从 … 直接推进到 replied`、`回复 #N → replied 事实=…`）与 M0-1 一致。
+- 开场白/系统行只在**没有历史**时发；有历史时改为恢复并打「已恢复 N 条记录（其中 M 条待回复）」，
+  避免每次重进多一条重复开场白。
+- `MessageService.Init` 不再收 `waitSeconds`（唯一真源改为 `CONFIG.ReplyWaitSeconds` →
+  `TimeState.SetReplyDelay("idle", …)`）。
+
+## 门禁与构建证据（截至本行）
+- Lua LSP `maker-lua-lsp --mode watch`（**非 check**）21:29:35 那一轮：`Lua Errors: 0`；
+  我改的文件零 WARN（`StatusWindow.lua` 的 11 条 unnecessary-if 是既有 WARN，未新增）。
+  迭代中真修掉的 ERROR/WARN：`then` 是 Lua 关键字不能当表键（语法错 9 条）、
+  `SEASONS` 该写 `table<number,string>`、`lastPlannedAtUtc_` integer 源、
+  `SyncQueueStates` 前向声明被推成可空、`head()` 二次调用不继承收窄、`Preview_` 冗余 nil 判断。
+- M1 构建 #1：`fe739ec`（只含 9 个白名单脚本文件，`git show --stat` 核对）推到 Maker 后，
+  CLI `taptap-maker build` 返回「🎉 项目构建成功」+ `preview_refresh {ok:true,status:200}` +
+  watcher pid 5124 起（`--reset`）。MCP 侧两次 `-32603 invocation did not complete` 与
+  CLI 顺带提交用户文档脏改动两件事记在 `BLOCKED.md` B-3。
+- **自检覆盖矩阵**（`scripts/services/DevSelfTest.lua`，29 项断言）：
+  A 空闲 10 秒链路（A0-A7，含「不早于计划时刻」）；B 碎片档更慢更短（B0-B3）；
+  C 忙碌不立即回→17:00 窗口后带「在赶项目」经历回（C0-C7，含已送达无已读）；
+  D 睡眠两条 FIFO 计划有序 + 醒来按序回完 + 不重复回（D0-D7，按回复原文回显判序）；
+  E 落盘→重进恢复完整历史与两条队列顺序→到期按序补发→二次重进不重复（E0-E5）；
+  F 反向验证：同一条时钟只把 `planReplyAtUtc` 推到 +300s → 60s 内不回（RED），
+  换回存档里的真实计划 → 立刻按序交付（GREEN）；G 摘要只一行且无流水账（G1-G3）。
+  FAIL 走 `logError`，所以「runtime.log ERROR=0」与「自检全绿」是同一件事。
+
+## 还差的一步（不在代码侧）
+完成条件 1 要的那一次真实会话日志需要人开预览（见 BLOCKED.md B-2）；
+开一次预览就能同时拿到：自检 29 项 PASS/FAIL、真实发送、重进恢复、场景降级说明。

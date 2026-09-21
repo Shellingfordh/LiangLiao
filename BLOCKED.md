@@ -36,3 +36,48 @@ Maker 项目状态本身**不是阻塞**：`maker_status_lite` 返回 project bo
 与本文件、`PROGRESS.md`（`git diff --name-only` 就这 8 个，`scripts/` 与 `assets/` 零改动）。
 按边界「不提交/推送」我没有为文档单独跑第六次构建，下次真实构建会自动带上。
 无「连续 3 次构建失败」情形；未生成测试二维码、未扫码、未动 Git 配置、未装依赖、未接外部后端、无 LLM 调用。
+
+---
+
+# BLOCKED — M1 首个可玩闭环（2026-09-21 追加）
+
+## B-1 缺原创场景资产（阻塞「场景随时段变化」这一条验收）
+`assets/` 里唯一的原创场景静帧是 `Textures/backgrounds/la-cafe-4x3.png`（对应 `scene_id = la_cafe`）。
+作息表另外要 `la_apartment` / `la_campus` / `la_studio` / `la_commute` 四类静帧，**全部没有资产**。
+
+代码侧已经做的：`TimeState.Snapshot` 产出 `sceneId`；`StatusWindow.RequestScene(sceneId, onApplied)`
+只在清单里有路径时才换背景，缺资产就保留当前静帧、`logWarn` 一次，并把
+「场景 la_xxx 暂无原创静帧，状态窗沿用咖啡馆画面」写上页面注释行（`noteLabel_`）——不伪称已切换。
+本轮按任务书要求**没有生成任何新资产**。
+
+被阻塞的验收项：M1 的视觉切换只能以降级形态交付（时段文案、地点、回复事实都会变，画面不变）。
+需要谁：资产决策（补静帧 = 生成新资产，本任务书明令禁止，所以挂在这里而不是自己做）。
+
+## B-2 一次真实会话的 runtime.log 仍然要人开预览
+M1 构建 #1 已成功（代码 commit `fe739ec`，远端 HEAD 一致，`preview_refresh` 200），
+日志抓取器由构建自动带 `--reset` 起在 pid 5124，`state.json.updatedAt` 每 5 秒推进、`consecutiveFailures: 0`。
+但 `runtime.log` 只在**有游戏会话真的跑起来**时才产生；浏览器（browser-use / playwright）与
+Computer Use 驱动用户 Chrome 的路径在本项目历史上各被宿主权限层拦过（见本文 §1），所以我不把它当可自动化步骤。
+
+已经为此准备好的是 `scripts/services/DevSelfTest.lua`：会话一启动就会用真实服务 + 可控 UTC 跑完
+busy / offline / idle 三档、两条 FIFO、落盘重进、以及「计划时刻被改到未来就不许提前回复」的红→绿反向验证，
+每项打 `PASS` / `FAIL`（FAIL 走 `logError`，所以整份日志 `ERROR` 计数为 0 就等价于自检全绿）。
+
+**需要用户做的一个动作**：打开 Maker 预览 → 发两条消息 → 刷新页面重进一次。
+（LA 当下 06:4x，正是从睡眠档翻空闲档的窗口，重进会同时看到补发与恢复。）
+
+## B-3 工具链把会话前就存在的文档脏改动一起提交了（内容无损，但是偏差）
+MCP `maker_build_current_directory` 连续两次以 `-32603 MCP tool invocation did not complete` 结束：
+第一次已经把 commit `fe739ec` + push 做完（远端 HEAD 已核对一致），但远端构建阶段没跑到
+（本地 `runtime.log` 没被 `--reset` 删、watcher 没重启即为证据）。第二次同样未跑完。
+于是改用**同一工具链的 CLI** `taptap-maker build --target-dir …`，一次跑完并返回「🎉 项目构建成功」。
+
+代价是：CLI 没有文件范围参数，默认 stage 全部本地改动，因此 `8ae1973 docs: update maker project documents`
+把本会话开始前就脏着的 8 个文档（`AGENTS.md`、`README.md`、`CHANGELOG.md`、`docs/*` 与本文件、`PROGRESS.md`）
+一并提交并推到 Maker。逐文件核对：那 8 个文件的改动**全部是用户既有内容**（我只对 `PROGRESS.md`/`BLOCKED.md`
+做过追加式编辑），没有一个字被我改写或删除，也没有回滚。但任务书写明「不得暂存/提交用户文档脏改动」，
+这一条是我选 CLI 时没预判到的后果，如实记为偏差，需要用户裁决是否保留这个 commit。
+
+## B-4 构建失败次数：0（M1 一次成功）
+`fe739ec`（M1 代码）→ `8ae1973`（工具链文档 commit，同一批推送），远端 `[remote_build] 100% 构建流程全部完成`，
+`preview_refresh_status: 200`。构建前 Lua LSP `--mode watch`（21:29:35 那一轮）**Errors: 0**。
