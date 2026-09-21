@@ -192,15 +192,20 @@ function Start()
         math.floor(snap.offsetSeconds / 3600), tostring(snap.isDst),
         snap.season, snap.weather, snap.availability, snap.place))
 
-    -- 自检用独立存档跑真实服务，跑完交还时钟；正式会话在它之后重新初始化
+    -- 自检用独立存档跑真实服务，跑完交还时钟；正式会话在它之后重新初始化。
+    -- pcall 不是把检查吞掉：自检里任何断言失败本来就走 logError，这里兜的是
+    -- 「自检自身出异常也不许把正式会话带崩」——M0-1 已验收的链路不能因为工具而死。
     if CONFIG.DevSelfTest then
         InitServices("memory/m1-selftest-la.json")
-        DevSelfTest.Run({
+        local okRun, errRun = pcall(DevSelfTest.Run, {
             cityId = CONFIG.City,
             idleWaitSeconds = CONFIG.ReplyWaitSeconds,
             makeSendContext = MakeSendContext,
             reinit = InitServices,
         })
+        if not okRun then
+            logError("开发自检异常退出（正式会话继续，不受影响）：" .. tostring(errRun))
+        end
         TimeState.DevClockOffset = 0
     end
 
