@@ -93,5 +93,25 @@ watcher 在 09:30:50Z 又静默死掉（用户会话正好落在死亡窗口内�
 容器撑开，于是正文被按 ~50px 换行。改法：不再依赖引擎文本测量，按字数估出确定宽度后同时钉死
 正文 Label 与气泡 Panel 的 `width`。
 
+## 构建 #4 `a539dda`（气泡宽度钉成确定值）：成功
+elapsed 39s，`[remote_build] 100% 构建流程全部完成`，`preview_refresh_status: 200`，本地 HEAD == `git ls-remote maker HEAD`。
+构建前 LSP `--mode watch` 两次（18:11:22 / 18:13:51）**Errors: 0**，且我改的五个文件零 ERROR 零 WARN（唯一 WARN 是 `estTextWidth` 里 `w` 被推成 integer，已标注）。
+改法：`ChatPanel` 新增 `estTextWidth`（中日韩 1em / ASCII 0.55em），每条消息先估出正文宽、与角标宽取大、再夹到 `bubbleTextMaxW_`，
+把正文 Label 的 `width` 和气泡 Panel 的 `width` 一起钉成确定像素，不再让引擎文本测量决定容器宽度。
+构建前已把 `4bde79c` 那份 runtime.log 备份到 `/tmp/m0-1-runtime-4bde79c.log`（构建带 `--reset` 会删本地日志）。
+
+## 构建 #4 `a539dda` 的运行时证据（18:23–18:24 两次会话，`grep -c ERROR` = 0）
+- **10 秒正式链路按毫秒对上**：`18:24:36.120 用户消息 #3 → sent` → `37.620 waiting`(+1.50s) → `43.116 typing`(+7.0s) → `46.113 回复 #4`(+9.99s) → `46.131 replied → idle`。
+- **跳过等待这条也跑到了**：`18:23:20.380 sent` → `21.876 waiting` → **`24.462 跳过等待：从 waiting 直接推进到 replied`** → `typing` → `24.463 若夕回复 #4`（与正式链路同一句生成路径）→ `replied`。4.1 秒完成，不是伪造气泡。
+- **跨会话记忆真读回来了**：`18:23:14.836 [Memory] 本地存档已读回 turns=1 记录=2 条` → `记忆装载来源: file`；上一轮写入的 686 字节在本次启动时被 Load 解析成功。
+- **气泡宽度修正确认生效**（用户截图）：正文按屏宽正常排版；日志 `气泡宽度定为确定值：行 434 / 文本 412（屏幕逻辑宽 454）`。
+- 新暴露两条，已在构建 #5 修：
+  1. **点「发送」不发送，回车能发**（用户实测）。根因在引擎的点击判定：`UI.HandlePointerUp` 要求「按下与抬起命中同一控件」（`UI.lua:2379`），而点按钮会先让 TextField 失焦 → `SetScreenKeyboardVisible(false)` 收起软键盘 → 画布高度变化 → 整棵布局位移 → 抬起时命中的已经不是按钮。旁证：同一份包里「跳过等待」点击是好的（18:23:24 那条日志），因为那时键盘已经因为回车收起来了，不再产生位移。修法：给两个按钮设 `focusable = false`（引擎自己的 `EditMenu` 就用这个开关避免抢走输入框焦点，见 `UI.lua:2341`）。
+  2. **回复里出现「刚坐下。，你那边…」叠标点**：正文以句号结尾时又硬接了话题半句的逗号。`ContentService` 加 `endsWithSentencePunct`，句末已有标点就不再补逗号。
+
+## 构建 #5 待用户一次交互验收
+上面两条修法（`focusable = false` + 标点拼接）都只在本地，需要一次「硬刷新加载构建 #5 → 打字 → 点发送」才能确认。
+watcher 由构建工具链带 `--reset` 重启，每次构建后我都回量过心跳是否贴着当前时间。
+
 ## 待用户裁决（文档漂移，不在我的白名单）
 `AGENTS.md`「没有本地运行时」一节把进入 Lua 的判据写成 `[M0-0] 启动 M0-0 原型`。本次入口日志改为 `[M0-1] 启动 M0-1 竖切片`，链路日志前缀分别是 `[MsgService] / [EventService] / [Memory] / [ChatPanel]`，回复落点为 `[M0-1] 回复 #N → replied 事实=la_cafe_open_mic`。`StatusWindow.lua` 仍打 `[M0-0]`，所以那一段老判据里只有这一句需要更新，等用户改 AGENTS.md（我不改）。

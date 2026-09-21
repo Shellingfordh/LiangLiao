@@ -389,6 +389,13 @@ function ChatPanel.Build(opts)
 
     logInfo(string.format("聊天区已构建 devTools=%s 草稿 %d 字",
         tostring(devTools_), #(opts.initialDraft or "")))
+
+    -- 按钮不能抢焦点：点了「发送」会先让 TextField 失焦 → 软键盘收起 → 画布高度变化 →
+    -- 整棵布局位移，而引擎的 Click 要求「按下与抬起命中同一个控件」（UI.lua:2379），
+    -- 于是手机上点发送永远不触发（回车走 onSubmit 反而正常）。EditMenu 用的是同一个开关。
+    sendButton_.focusable = false
+    skipButton_.focusable = false
+
     return root_
 end
 

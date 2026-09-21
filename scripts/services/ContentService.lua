@@ -67,6 +67,22 @@ local function fill(tpl, vars)
     return out
 end
 
+---@type string[]
+local SENTENCE_ENDINGS = { "。", "？", "！", "…", ";", "；", ".", "!", "?" }
+
+--- 半句接在后面时该不该再补一个逗号：预览实测出现过「刚坐下。，你那边…」的叠标点
+---@param s string
+---@return boolean
+local function endsWithSentencePunct(s)
+    for i = 1, #SENTENCE_ENDINGS do
+        local e = SENTENCE_ENDINGS[i]
+        if s:sub(-#e) == e then
+            return true
+        end
+    end
+    return false
+end
+
 --- UTF-8 安全截断，只用于回显用户原文，按字符数裁
 ---@param s string
 ---@param maxRunes integer
@@ -148,7 +164,10 @@ function ContentService.Reply(fact, userText, turnIndex)
     local topics = ContentService.DetectTopics(userText)
     local suffixTpl = topics[1] and TOPIC_SUFFIX[topics[1]]
     if suffixTpl and suffixTpl ~= "" then
-        body = body .. "，" .. fill(suffixTpl, vars)
+        local suffix = fill(suffixTpl, vars)
+        if suffix ~= "" then
+            body = body .. (endsWithSentencePunct(body) and "" or "，") .. suffix
+        end
     end
 
     return body
