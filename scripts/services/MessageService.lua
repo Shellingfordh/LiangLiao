@@ -52,6 +52,7 @@ local RESPONSE_GAP_SECONDS = 4
 ---@field sceneIdAtSend? string 送达时的场景 id
 ---@field phraseAtSend? string 送达时作息表里的那句原话
 ---@field effReplyAtUtc? number 本轮实际交付时刻（补发时重排，不落盘）
+---@field backfillArmed? boolean 补发的输入窗已抬起（运行时字段，不落盘）
 
 ---@type MsgEntry[]
 local messages_ = {}
@@ -404,16 +405,21 @@ end
 
 --- 过期未交付的队首（离开期后重进、或排在别人后面）重排为「短暂正在输入后交付」，
 --- 但不改写权威的 planReplyAtUtc —— 落盘的始终是当初算好的计划。
+--- 补发窗只抬一次：Update 是每帧调用的，若每次都把目标顶到 now + typing，目标就永远
+--- 跑在时钟前面，`now >= effReplyAtUtc` 永不成立，队首会卡在「正在输入」里出不来。
 ---@param head MsgEntry
 ---@param now number
 ---@return number
 local function EffectiveReplyAt(head, now)
+    if head.backfillArmed then
+        return head.effReplyAtUtc or head.planReplyAtUtc or now
+    end
     local planned = head.effReplyAtUtc or head.planReplyAtUtc
     if not planned then
         planned = now + TYPING_SECONDS
-    end
-    if planned < now + TYPING_SECONDS then
+    elseif planned < now then
         planned = now + TYPING_SECONDS
+        head.backfillArmed = true
     end
     return planned
 end

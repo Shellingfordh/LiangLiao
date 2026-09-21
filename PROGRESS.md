@@ -262,6 +262,36 @@ LSP 门禁复核（21:51:05 那一轮 `--mode watch`）：**Lua Errors: 0**，�
 - 边界自查（`f70bf4b..HEAD`）：`git diff --stat -- assets/ .project/` **为空**（没生成、没改任何资产与工程配置）；
   `scripts/` 内无 http/fetch/WebSocket/LLM 调用，云侧只有 M0-1 就存在且默认关闭的 `clientCloud` 异步适配器。
 
+## 构建 #5 `fcb6ac4` 之前的静态复核：抓到一个会让 M1 完全不回复的缺陷（已修）
+
+自检从未在真机/云端跑过（`runtime.log` 还等一次真实会话），所以在等日志的这段时间把 `DevSelfTest`
+的每条断言按服务常量手推了一遍（`SENT_SECONDS=1.5`、`TYPING_SECONDS=3.0`、`MIN_REPLY_LEAD=5`、
+`RESPONSE_GAP_SECONDS=4`、idle 10 s / fragments 16 s）。推到场景 C 就发现交付条件永远不成立：
+
+```lua
+-- 修前：每次 Update 都把目标顶到 now + 3 秒，然后拿它和 now 比
+head.effReplyAtUtc = EffectiveReplyAt(head, now)   -- planned < now + TYPING_SECONDS → 抬到 now+3
+...
+elseif now >= head.effReplyAtUtc then Deliver()    -- now >= now+3 永远为假
+```
+
+`Update` 是每帧调用的，所以队首一旦进入计划时刻前 3 秒（或在重进时本来就已过期），目标就每帧往前跑 3 秒，
+`now >= effReplyAtUtc` 永远不成立 —— **她会永久停在「正在输入」，一条都不回**。空闲档（场景 A）、忙碌档（C）、
+睡眠补发（D/E）、反向验证的 GREEN（F2）全部会挂，而且表现形式是「界面看着正常、就是不回」，日志里不会有任何报错。
+
+修法是把「抬起补发窗」变成一次性动作（`backfillArmed` 运行时标记，不落盘），目标钉住后才会被 `now` 追上：
+未来目标原样返回；已过期且从未重排的，只抬一次 `now + TYPING_SECONDS`；抬过之后即使步进比 3 秒粗（自检按 5 秒步进）
+也照样到期交付。权威 `planReplyAtUtc` 不变，落盘仍是当初算好的计划。
+
+顺带复核掉的三条「靠字符串说话」的断言，均有真源：`在赶项目` = `TimeState.lua:67` 忙碌档 13–17 的 phrase；
+`手边是一杯冰的` = `ContentService.lua:58` 的 food 话题后缀（碎片档走短句池，跳过它才成立）；
+D6 依赖 `ContentService.Reply` 的「回显用户原文」（原文被 `clip` 到 12 字，两句都在范围内）。
+另确认自检不会污染玩家记录：`MessageService.Init` 连 `lastPlannedAtUtc_` 一起清，
+`HandleDeliver` 里对 UI 的三处调用（`SetMemoryLine` / `SetPhase`）都有 `if widget_` 护栏，
+所以自检在 `InitUI()` 之前交付不会炸；正式会话在自检之后重新 `InitServices()`。
+
+LSP 门禁复核（22:46:43，补丁后）：**Lua Errors: 0**。
+
 ## 留给预览判读的一条视觉取舍
 用户气泡的宽度按「最长可能状态文案」（`已送达 · 对方在忙，已排队 · 第 9 位`）预留，因为状态是行不重建、
 只 `SetText` 换上去的（`Widget:ClearChildren` 会漏 Yoga 节点，M0-1 已定死增量刷新）。

@@ -81,6 +81,41 @@ MCP `maker_build_current_directory` 连续两次以 `-32603 MCP tool invocation 
 做过追加式编辑），没有一个字被我改写或删除，也没有回滚。但任务书写明「不得暂存/提交用户文档脏改动」，
 这一条是我选 CLI 时没预判到的后果，如实记为偏差，需要用户裁决是否保留这个 commit。
 
-## B-4 构建失败次数：0（M1 一次成功）
-`fe739ec`（M1 代码）→ `8ae1973`（工具链文档 commit，同一批推送），远端 `[remote_build] 100% 构建流程全部完成`，
-`preview_refresh_status: 200`。构建前 Lua LSP `--mode watch`（21:29:35 那一轮）**Errors: 0**。
+## B-4 具名构建工具 `maker_build_current_directory` 连续 3 次未跑完（已按三次规则停用）
+任务书点名的验收工具是 MCP 的 `maker_build_current_directory`。三次调用**同一种死法**：
+`MCP error -32603: MCP tool invocation did not complete`，而且每次都停在同一阶段——
+commit + push 成功，远端构建阶段没跑到。逐次证据：
+
+| # | 时间(本地) | 结果 | commit | 远端 HEAD | 构建是否跑到 |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 21:31 | -32603 | `fe739ec`（9 个脚本文件） | 一致 | 否（runtime.log 未被 `--reset` 删、watcher 未重启） |
+| 2 | 21:33 | -32603 | 无新内容 | 一致 | 否 |
+| 3 | 22:25 | -32603 | `fcb6ac4`（仅 PROGRESS.md） | 一致 | 否（`nextStartTime` 停在 1789999860 未推进） |
+
+判据不是猜的：正常构建结束时 `runtimeLogWatch.started=true` 且带 `--reset` 重启抓取器并删本地
+`runtime.log`；三次都没有这些痕迹，而 `state.json.nextStartTime` 一直是我 22:08 手动续拉时留下的游标值。
+`maker_status_lite` 三次都报 project bound / git ready / pat found / **status ready**，
+`mcp-crash.log` 里也没有新的崩溃记录（只有 11:26 那次 watcher 的 EPERM 与 12:52 一个旧 server 实例的 stdin-end）。
+所以这不是项目或业务错误，也不是 MCP 连不上，而是**这个工具在本客户端的响应通路上完不成**
+（同工具链的 CLI `taptap-maker build` 三次全绿即为对照）。
+
+已改用的替代路径（同一个工具链、同一个远端构建，只是不走 stdio 响应通路）：
+
+```
+$ node .../@taptap/maker/dist/maker.js build --target-dir D:/Develop/ShanTianLiang --json
+{"progress":100,"phase":"remote_build","message":"构建流程全部完成"}   # 🎉 项目构建成功
+#3 commitHash 76823fb / #4 commitHash 49f2cae，均 previewRefresh ok:true status:200
+```
+
+远端最后成功构建的是 `49f2cae`（M1 最终代码）；`fcb6ac4` 只动 `PROGRESS.md`，脚本层与 `49f2cae` 完全一致，
+所以云端预览现在跑的就是最终代码。**建议**：这一条要补进 `docs/maker-lua-api-verification.md`
+（MCP 具名构建工具在本机 Qoder 客户端 stdio 通路上完不成，CLI 等价命令可完成），
+但那是 `docs/` 下的文件，本任务书白名单不含它，需要用户另行授权再补。
+
+## B-5 构建失败次数：0（四次云端构建全绿，M1 三次成功 + 一次未跑到）
+`415cb4c`→`fd87d29`→`4bde79c`→`a539dda`→`f70bf4b`（M0-1 五次）→ M1：`fe739ec`(代码，经 CLI 构建成功)
+→ `76823fb` → `49f2cae` 三次都返回「🎉 项目构建成功」+ `preview_refresh_status: 200`，
+本地 HEAD 与 `git ls-remote maker HEAD` 一致。
+无「连续 3 次构建失败」情形（连续 3 次的是**工具响应通路**，见 B-4，不是构建本身失败）。
+未生成测试二维码、未扫码、未动 Git 配置、未装依赖（含被权限层挡下的一次本地 Lua 运行时安装尝试）、
+未接外部后端、无 LLM 调用、未新增任何资产。
