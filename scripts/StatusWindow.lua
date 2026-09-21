@@ -510,25 +510,90 @@ end
 --- （urhox-libs/UI/Core/ImageCache.lua:64），而 DWP 冷启动时纹理尚未下载；
 --- 若在首帧就设好 backgroundImage，背景会在整个会话里静默缺失。
 --- 失败要打到屏幕上：真机没有 console。
+---@param path string
 ---@param onReady fun(path: string)
-function StatusWindow.WarmUpBackground(onReady)
-    if resourceExists(BACKGROUND_PATH) then
-        logInfo("背景静帧已在本地: " .. BACKGROUND_PATH)
-        onReady(BACKGROUND_PATH)
+---@param onFail fun(path: string)
+local function PrepareBackground(path, onReady, onFail)
+    if resourceExists(path) then
+        logInfo("场景静帧已在本地: " .. path)
+        onReady(path)
         return
     end
-    cache:GetResourceAsync("Texture2D", BACKGROUND_PATH, function(resource)
+    cache:GetResourceAsync("Texture2D", path, function(resource)
         if not resource then
-            backgroundError_ = "4:3 咖啡馆背景未下载成功，当前状态窗只有角色。"
-            logError(backgroundError_ .. " path=" .. BACKGROUND_PATH)
-            if noticesChanged_ then
-                noticesChanged_()
-            end
+            onFail(path)
             return
         end
-        logInfo("背景静帧下载就绪: " .. BACKGROUND_PATH)
-        onReady(BACKGROUND_PATH)
+        logInfo("场景静帧下载就绪: " .. path)
+        onReady(path)
     end)
+end
+
+function StatusWindow.WarmUpBackground(onReady)
+    PrepareBackground(BACKGROUND_PATH, onReady, function(path)
+        backgroundError_ = "4:3 咖啡馆背景未下载成功，当前状态窗只有角色。"
+        logError(backgroundError_ .. " path=" .. path)
+        if noticesChanged_ then
+            noticesChanged_()
+        end
+    end)
+end
+
+-- 场景资产清单：scene_id → 远景静帧。作息表里的 apartment / campus / studio / commute
+-- 目前没有原创静帧（见 BLOCKED.md），缺资产就显式留在咖啡馆，不伪称已经切换。
+---@type table<string, string>
+local SCENE_BACKGROUNDS = {
+    la_cafe = BACKGROUND_PATH,
+}
+
+---@type string
+local currentSceneId_ = ""
+---@type string
+local sceneNotice_ = ""
+
+---@return string
+function StatusWindow.GetSceneNotice()
+    return sceneNotice_
+end
+
+---@return string
+function StatusWindow.GetCurrentSceneId()
+    return currentSceneId_
+end
+
+--- 按 scene_id 尝试切换远景。无资产时保留当前静帧并留下可上屏的说明。
+---@param sceneId string
+---@param onApplied fun(path: string)
+---@return string result unchanged | pending | missing-asset
+function StatusWindow.RequestScene(sceneId, onApplied)
+    if sceneId == "" or sceneId == currentSceneId_ then
+        return "unchanged"
+    end
+    local path = SCENE_BACKGROUNDS[sceneId]
+    currentSceneId_ = sceneId
+    if not path then
+        sceneNotice_ = "场景 " .. sceneId .. " 暂无原创静帧，状态窗沿用咖啡馆画面"
+        logWarn("场景未切换（缺资产）: " .. sceneId)
+        if noticesChanged_ then
+            noticesChanged_()
+        end
+        return "missing-asset"
+    end
+    sceneNotice_ = ""
+    logInfo("切换状态窗场景: " .. sceneId .. " → " .. path)
+    PrepareBackground(path, function(ready)
+        onApplied(ready)
+        if noticesChanged_ then
+            noticesChanged_()
+        end
+    end, function(failed)
+        backgroundError_ = "场景 " .. sceneId .. " 的静帧未下载成功，状态窗沿用上一帧画面。"
+        logError(backgroundError_ .. " path=" .. failed)
+        if noticesChanged_ then
+            noticesChanged_()
+        end
+    end)
+    return "pending"
 end
 
 local function createRenderTarget()

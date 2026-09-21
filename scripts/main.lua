@@ -1,7 +1,10 @@
 -- ============================================================================
--- 《送给你这个回来的人》M0-1 竖切片
--- 竖屏手机：固定镜头 4:3 状态窗 + 真实时间驱动的生活状态 + 一条完整聊天闭环
--- 后端 = 同工程内的四个 Lua 服务（消息/事件/内容/记忆），无外部服务、无 LLM。
+-- 《送给你这个回来的人》M1 首个可玩闭环（建在已验收的 M0-1 竖切片之上）
+-- 竖屏手机：固定镜头 4:3 状态窗 + 真实时间驱动的生活状态 + 会排队的聊天闭环。
+-- 后端 = 同工程内的 Lua 服务（消息/事件/内容/记忆/开发自检），无外部服务、无 LLM。
+-- M1 新增：忙碌与睡眠时消息按 FIFO 排队到下一个可回复窗口；重进恢复完整记录与队列；
+-- 回复只引用「送达时刻」与「交付时刻」两个确定时间快照里的事实。
+-- 日志前缀仍留 [M0-1]：AGENTS.md 把它当作「已进入 Lua」的判据字符串。
 -- ============================================================================
 
 local UI = require("urhox-libs/UI")
@@ -11,19 +14,24 @@ local MessageService = require("services.MessageService")
 local EventService = require("services.EventService")
 local ContentService = require("services.ContentService")
 local MemoryService = require("services.MemoryService")
+local DevSelfTest = require("services.DevSelfTest")
 local ChatPanel = require("ui.ChatPanel")
 
----@type {Title: string, City: string, ReplyWaitSeconds: integer, DevTools: boolean, UseCloudMemory: boolean}
+---@type {Title: string, City: string, ReplyWaitSeconds: integer, DevTools: boolean, UseCloudMemory: boolean, DevSelfTest: boolean, AwaySummaryMinSeconds: integer}
 local CONFIG = {
     Title = "送给你这个回来的人",
     City = "los_angeles",
-    ReplyWaitSeconds = 10,   -- 正式发送链路的固定等待
+    ReplyWaitSeconds = 10,   -- 空闲档的固定等待（M0-1 验收过的那条链路）
     DevTools = true,         -- 开发预览：显示「跳过等待」
     UseCloudMemory = false,  -- 预览不绑定云存储，只保留异步接口
+    DevSelfTest = true,      -- 启动时跑一次真实服务自检（busy/offline/idle + FIFO + 重进）
+    AwaySummaryMinSeconds = 60, -- 离开超过这个时长才给一条「离开期间」摘要
 }
 
 ---@type Widget|nil
 local uiRoot_ = nil
+---@type Widget|nil
+local preview_ = nil
 ---@type Label|nil
 local statusLabel_ = nil
 ---@type Label|nil
@@ -52,20 +60,62 @@ local function logError(msg)
     log:Write(LOG_ERROR, "[M0-1] " .. msg)
 end
 
+--- 全工程唯一取时刻的地方：权威 UTC 秒 + 开发自检投影（普通运行路径偏移恒为 0）
+---@return number
+local function NowUtc()
+    return TimeState.NowUtc()
+end
+
 --- 刷新时间快照，并保证 lastFact_ 与它同源
 local function RefreshSnapshot()
-    local snap = TimeState.Snapshot(CONFIG.City)
+    local snap = TimeState.Snapshot(CONFIG.City, NowUtc())
     lastSnap_ = snap
     lastFact_ = EventService.FromSnapshot(snap)
     return snap
+end
+
+-- UTC 秒 → 当地钟点的单格缓存：同一条排队消息的计划窗口是固定的，
+-- 但状态条每帧都要问一次，不缓存就会每帧都跑一遍时区换算。
+---@type integer|nil
+local clockCacheKey_ = nil
+---@type string
+local clockCacheVal_ = ""
+
+--- UTC 秒 → 当地钟点，排队提示要说「她什么时候能回」而不是假倒计时
+---@param utcSec number
+---@return string
+local function FormatClock(utcSec)
+    local key = math.floor(utcSec / 60)
+    if key == clockCacheKey_ then
+        return clockCacheVal_
+    end
+    local clock = TimeState.Snapshot(CONFIG.City, key * 60).clock
+    clockCacheKey_ = key
+    clockCacheVal_ = clock
+    return clock
+end
+
+--- 发送瞬间确定的那批事实：可用性、地点、场景、事件事实 id 与回复计划。
+--- 主循环与开发自检共用这一份构造，避免两条路径各说一套。
+---@param snap TimeSnapshot
+---@return SendContext
+local function MakeSendContext(snap)
+    return {
+        plan = TimeState.ReplyPlanFor(CONFIG.City, snap.utcSec),
+        availability = snap.availability,
+        availabilityLabel = snap.availabilityLabel,
+        place = snap.place,
+        sceneId = snap.sceneId,
+        phrase = snap.phrase,
+        factId = (lastFact_ and lastFact_.id) or EventService.GetEventId(),
+    }
 end
 
 --- 把 MessageService 的当前相位推给聊天面板
 local function PushChatPhase()
     local phase = MessageService.GetPhase()
     local awaiting = MessageService.IsAwaiting()
-    local statusText = awaiting and MessageService.StatusText(phase, nil) or ""
-    ChatPanel.SetPhase(phase, statusText, awaiting)
+    ChatPanel.SetPhase(phase, MessageService.StatusLine(NowUtc()), awaiting)
 end
 
 --- 用户点发送 / 回车
@@ -74,27 +124,22 @@ function HandleSend(rawText)
     local snap = RefreshSnapshot()
     local text = (rawText or ""):gsub("^%s+", ""):gsub("%s+$", "")
 
-    if MessageService.IsAwaiting() then
-        -- 等待期间不许重复触发，但原文必须留在输入框里
-        MessageService.SetDraft(text)
-        ChatPanel.SetDraft(text)
-        logInfo("等待回复中，本次发送已忽略并保留草稿")
+    local msg = MessageService.Send(text, snap.utcSec, snap.clock, MakeSendContext(snap))
+    if not msg then
+        -- 只有空白草稿会被拒；这条不打 ERROR，免得把正常操作记成故障（服务内部已有自己的错误日志）
+        logInfo("发送未生效，草稿留在输入框")
         PushChatPhase()
         return
     end
-
-    if text == "" then
-        logInfo("空草稿，忽略发送")
-        return
-    end
-
-    local msg = MessageService.Send(text, snap.utcSec, snap.clock)
-    if not msg then
-        logError("Send 被拒绝但相位是 idle，状态机不一致")
-        return
-    end
     ChatPanel.ClearDraft()
-    logInfo(string.format("发送 #%d → sent（%.0f 秒后回复）", msg.id, CONFIG.ReplyWaitSeconds))
+    if msg.planWindowStartUtc then
+        logInfo(string.format("发送 #%d → 排队（她 %s 之后能回，计划 %d）",
+            msg.id, FormatClock(msg.planWindowStartUtc), msg.planReplyAtUtc or 0))
+    else
+        logInfo(string.format("发送 #%d → sent（%.0f 秒后回复）",
+            msg.id, (msg.planReplyAtUtc or snap.utcSec) - snap.utcSec))
+    end
+    MemoryService.Persist(MessageService.GetMessages())
     PushChatPhase()
 end
 
@@ -108,18 +153,19 @@ function HandleSkip()
     PushChatPhase()
 end
 
---- 状态机到点后的回复生成：事件事实 + 用户原文 → 模板
+--- 状态机到点后的回复生成：送达时刻与交付时刻两个快照 + 用户原文 → 模板
 ---@param pending MsgEntry
 function HandleDeliver(pending)
     local snap = RefreshSnapshot()
-    local fact = EventService.FromSnapshot(snap)
+    local sentSnap = TimeState.Snapshot(CONFIG.City, pending.serverTime)
+    local fact = EventService.FromSnapshot(snap, sentSnap)
     lastFact_ = fact
     turnIndex_ = turnIndex_ + 1
 
     local replyText = ContentService.Reply(fact, pending.text, turnIndex_)
     local reply = MessageService.AppendReply(replyText, snap.utcSec, fact.id, snap.clock)
     local topics = ContentService.DetectTopics(pending.text)
-    MemoryService.RecordTurn(pending, reply, fact, topics)
+    MemoryService.RecordTurn(pending, reply, fact, topics, MessageService.GetMessages())
     ChatPanel.SetMemoryLine(MemoryService.GetSummaryLine())
 
     logInfo(string.format("回复 #%d → replied 事实=%s 状态=%s 话题=%s 正文=%s",
@@ -134,7 +180,7 @@ function Start()
     input.mouseMode = MM_ABSOLUTE
     input.mouseVisible = true
 
-    logInfo("启动 M0-1 竖切片")
+    logInfo("启动 M0-1 竖切片 · M1 时间状态闭环")
     logInfo("屏幕物理分辨率: " .. tostring(graphics.width) .. "x" .. tostring(graphics.height)
         .. " DPR=" .. tostring(graphics:GetDPR()))
 
@@ -146,6 +192,18 @@ function Start()
         math.floor(snap.offsetSeconds / 3600), tostring(snap.isDst),
         snap.season, snap.weather, snap.availability, snap.place))
 
+    -- 自检用独立存档跑真实服务，跑完交还时钟；正式会话在它之后重新初始化
+    if CONFIG.DevSelfTest then
+        InitServices("memory/m1-selftest-la.json")
+        DevSelfTest.Run({
+            cityId = CONFIG.City,
+            idleWaitSeconds = CONFIG.ReplyWaitSeconds,
+            makeSendContext = MakeSendContext,
+            reinit = InitServices,
+        })
+        TimeState.DevClockOffset = 0
+    end
+
     InitServices()
     InitUI()
     StatusWindow.Init()
@@ -156,7 +214,7 @@ function Start()
     BootChat()
 
     logInfo(string.format(
-        "M0-1 已就绪：状态窗 + 聊天闭环（等待 %.0f 秒，跳过按钮=%s，云记忆=%s）",
+        "M1 已就绪：状态窗 + 排队聊天（空闲等待 %.0f 秒，跳过按钮=%s，云记忆=%s）",
         CONFIG.ReplyWaitSeconds, tostring(CONFIG.DevTools), tostring(CONFIG.UseCloudMemory)))
 end
 
@@ -167,14 +225,16 @@ function Stop()
     UI.Shutdown()
 end
 
-function InitServices()
+---@param saveFile? string 独立存档路径（开发自检用），省略则用玩家的历史
+function InitServices(saveFile)
+    TimeState.SetReplyDelay("idle", CONFIG.ReplyWaitSeconds)
     MessageService.Init({
-        waitSeconds = CONFIG.ReplyWaitSeconds,
         hooks = {
             onPhaseChange = function()
                 PushChatPhase()
             end,
             onDeliver = HandleDeliver,
+            formatClock = FormatClock,
         },
     })
 
@@ -182,13 +242,14 @@ function InitServices()
     if CONFIG.UseCloudMemory then
         adapter = MemoryService.DefaultClientCloudAdapter()
     end
-    MemoryService.Init({ cityId = CONFIG.City, cloud = adapter })
+    MemoryService.Init({ cityId = CONFIG.City, cloud = adapter, saveFile = saveFile })
     local _, source = MemoryService.Load()
     logInfo("记忆装载来源: " .. source)
+    turnIndex_ = MemoryService.Get().turns
     MemoryService.CloudLoadAsync()
 end
 
---- 会话开场：一条系统说明 + 一条不属于回复链路的开场白
+--- 会话开场：恢复历史与队列，必要时补一条「离开期间」摘要，再决定是否发开场白
 function BootChat()
     local fact = lastFact_
     local snap = lastSnap_
@@ -196,11 +257,34 @@ function BootChat()
         logError("开场时事件事实或时间快照为空，跳过开场")
         return
     end
-    MessageService.AddSystem("M0-1 竖切片 · 现在只有「陌生网友 × 洛杉矶」这一条线",
-        snap.utcSec, snap.clock)
+
+    local mem = MemoryService.Get()
+    local pendingCount = MessageService.Restore(MemoryService.GetRestoredMessages())
     ChatPanel.SetMemoryLine(MemoryService.GetSummaryLine())
-    logInfo("开场白（非回复链路）: " .. ContentService.OpeningLine(fact))
-    MessageService.AppendReply(ContentService.OpeningLine(fact), snap.utcSec, fact.id, snap.clock)
+
+    if #MessageService.GetMessages() == 0 then
+        MessageService.AddSystem(
+            "陌生网友 × 洛杉矶 · 她按当地时间生活，在忙或在睡时你的消息会排队",
+            snap.utcSec, snap.clock)
+        logInfo("开场白（非回复链路）: " .. ContentService.OpeningLine(fact))
+        MessageService.AppendReply(ContentService.OpeningLine(fact), snap.utcSec, fact.id, snap.clock)
+    else
+        logInfo(string.format("已恢复 %d 条历史记录（其中 %d 条待回复），不再重复开场白",
+            #MessageService.GetMessages(), pendingCount))
+    end
+
+    -- 离开期间到点的排队消息不丢：由状态机按 FIFO 逐条补发，这里只补一句摘要
+    local dueCount = MessageService.GetDueCount(snap.utcSec)
+    if dueCount > 0 and mem.lastServerTime > 0 then
+        local gap = math.floor(snap.utcSec - mem.lastServerTime)
+        if gap >= CONFIG.AwaySummaryMinSeconds then
+            local thenSnap = TimeState.Snapshot(CONFIG.City, mem.lastServerTime)
+            MessageService.AddSystem(
+                ContentService.AwaySummary(gap, thenSnap.phrase, snap.phrase, dueCount),
+                snap.utcSec, snap.clock)
+            MemoryService.Persist(MessageService.GetMessages())
+        end
+    end
     PushChatPhase()
 end
 
@@ -236,10 +320,11 @@ function CreatePage()
 
     noteLabel_ = UI.Label {
         id = "pageNote",
-        text = "M0-1 聊天竖切片 · 镜头仍锁定，回复走固定事件事实 + 模板",
+        text = "",
         fontSize = 11,
         fontColor = { 150, 146, 140, 160 },
         textAlign = "left",
+        whiteSpace = "normal",
         pointerEvents = "none",
     }
 
@@ -259,6 +344,7 @@ function CreatePage()
             { x = 0, y = 8, blur = 24, color = { 0, 0, 0, 90 } },
         },
     })
+    preview_ = preview
 
     -- 气泡宽度必须是确定像素：ScrollView 子树里的百分比宽度在首轮测量拿不到确定父宽，
     -- 预览实测会塌成「一行两个字」。逻辑宽 = 物理宽 / DPR（AGENTS 规则 #0.8）。
@@ -332,6 +418,7 @@ function CreatePage()
         preview:SetBackgroundImage(path)
         logInfo("状态窗背景已挂载: " .. path)
     end)
+    ApplyScene()
 end
 
 function RefreshResourceNotices()
@@ -355,6 +442,38 @@ function RefreshResourceNotices()
         errorLabel_:SetText("")
         errorLabel_:SetVisible(false)
     end
+    RefreshNoteLine()
+end
+
+--- 缺资产不是报错，是一句要说清楚的降级说明；挂在同一条注释行上
+function RefreshNoteLine()
+    if not noteLabel_ then
+        return
+    end
+    local note = "M1 · 镜头仍锁定，回复只用送达与交付两个时刻的事件事实"
+    local sceneNote = StatusWindow.GetSceneNotice()
+    if sceneNote ~= "" then
+        note = note .. " · " .. sceneNote
+    end
+    noteLabel_:SetText(note)
+end
+
+--- 状态窗按 scene_id 尝试换远景；没有资产时 RequestScene 会留在当前静帧
+function ApplyScene()
+    local widget = preview_
+    if not lastSnap_ or not widget then
+        return
+    end
+    local sceneId = lastSnap_.sceneId or ""
+    local result = StatusWindow.RequestScene(sceneId, function(path)
+        widget:SetBackgroundImage(path)
+    end)
+    if result == "missing-asset" then
+        logInfo("场景降级: " .. sceneId .. "（缺原创静帧，沿用当前画面）")
+        RefreshNoteLine()
+    elseif result == "pending" or result == "applied" then
+        RefreshNoteLine()
+    end
 end
 
 --- 状态文案一分钟一变；变了才重画，避免每帧 SetText
@@ -366,6 +485,7 @@ function RefreshStatusLine()
         if statusLabel_ then
             statusLabel_:SetText(line)
         end
+        ApplyScene()
     end
 end
 
@@ -379,8 +499,8 @@ end
 function HandleUpdate(eventType, eventData)
     local timeStep = eventData["TimeStep"]:GetFloat()
 
-    -- 消息状态机用真实秒推进；这就是 10 秒等待的唯一计时处
-    MessageService.Update(timeStep)
+    -- 消息队列用权威 UTC 绝对时刻推进；这就是「她什么时候能回」的唯一计时处
+    MessageService.Update(NowUtc())
     ChatPanel.Tick(timeStep)
 
     clockElapsed_ = clockElapsed_ + timeStep

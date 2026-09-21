@@ -39,6 +39,16 @@ local EVENT_LINES = {
     },
 }
 
+-- 碎片时间档：规格 §5.2 要求「回复较短」，所以另开一组短句且不带话题后缀
+---@type string[]
+local BRIEF_LINES = {
+    "这会儿{avail}，{event}。",
+    "{event}。{avail}，先说到这儿。",
+}
+
+-- 排队补回时的前缀：三个变量全部来自确定时间快照（作息表原话、送达钟点、两条 UTC 之差）
+local QUEUED_PREFIX = "那会儿{before}，隔了{gap}才回你。"
+
 -- 用户原文里出现了某个话题时追加的半句
 ---@type table<string, string>
 local TOPIC_SUFFIX = {
@@ -121,7 +131,26 @@ local function varsOf(fact)
         clock = fact.clock,
         weather = fact.weather,
         city = fact.cityLabel,
+        avail = fact.availabilityLabel,
+        -- 注意别用 then/if 这类 Lua 关键字做键名：表构造器里会直接语法错
+        before = fact.thenPhrase or "",
+        gap = ContentService.FormatGap(fact.gapSeconds),
     }
+end
+
+--- 两条权威 UTC 之差 → 人话时长。不解释「她这段时间干了什么」，只报客观间隔。
+---@param seconds integer?
+---@return string
+function ContentService.FormatGap(seconds)
+    local s = math.max(0, math.floor(seconds or 0))
+    local h = math.floor(s / 3600)
+    local m = math.floor((s % 3600) / 60)
+    if h > 0 then
+        return tostring(h) .. " 小时 " .. tostring(m) .. " 分"
+    elseif m > 0 then
+        return tostring(m) .. " 分"
+    end
+    return tostring(s) .. " 秒"
 end
 
 ---@param text string
@@ -142,18 +171,28 @@ function ContentService.DetectTopics(text)
     return found
 end
 
---- 生成回复正文
+--- 生成回复正文。同一组事实 + 同一句原文必须得到同一句（可复现，不引入随机）。
 ---@param fact EventFact
 ---@param userText string 用户原文（参与选模板与回显）
 ---@param turnIndex integer 第几轮，用于稳定地换措辞
 ---@return string
 function ContentService.Reply(fact, userText, turnIndex)
-    local pool = EVENT_LINES[fact.eventState] or EVENT_LINES.ongoing
+    local briefReply = fact.brief == true
+    local pool
+    if briefReply then
+        pool = BRIEF_LINES
+    else
+        pool = EVENT_LINES[fact.eventState] or EVENT_LINES.ongoing
+    end
     local seed = (userText or "") .. "|" .. fact.id .. "|" .. tostring(turnIndex)
     local pick = (hash(seed) % #pool) + 1
     local vars = varsOf(fact)
 
     local body = fill(pool[pick] or pool[1] or "", vars)
+
+    if fact.queued and fact.thenPhrase then
+        body = fill(QUEUED_PREFIX, vars) .. body
+    end
 
     -- 回显用户原文：证明回复是对这句话的回应，而不是自说自话
     local quoted = clip(userText or "", 12)
@@ -161,16 +200,34 @@ function ContentService.Reply(fact, userText, turnIndex)
         body = "「" .. quoted .. "」" .. body
     end
 
-    local topics = ContentService.DetectTopics(userText)
-    local suffixTpl = topics[1] and TOPIC_SUFFIX[topics[1]]
-    if suffixTpl and suffixTpl ~= "" then
-        local suffix = fill(suffixTpl, vars)
-        if suffix ~= "" then
-            body = body .. (endsWithSentencePunct(body) and "" or "，") .. suffix
+    if not briefReply then
+        local topics = ContentService.DetectTopics(userText)
+        local suffixTpl = topics[1] and TOPIC_SUFFIX[topics[1]]
+        if suffixTpl and suffixTpl ~= "" then
+            local suffix = fill(suffixTpl, vars)
+            if suffix ~= "" then
+                body = body .. (endsWithSentencePunct(body) and "" or "，") .. suffix
+            end
         end
     end
 
     return body
+end
+
+--- 重进时唯一一条「离开期间」摘要。只报客观间隔与两头的作息原话，
+--- 不按小时铺开她做了什么（规格 §5.3：每次离线重入只交付一条最有意义的摘要）。
+---@param gapSeconds integer 上次落盘时刻 → 现在
+---@param thenPhrase string 上次离开时她那档的原话
+---@param nowPhrase string 现在她那档的原话
+---@param pendingCount integer 还有几条排队待回
+---@return string
+function ContentService.AwaySummary(gapSeconds, thenPhrase, nowPhrase, pendingCount)
+    local line = string.format("离开期间 · 洛杉矶过了 %s · 那会儿她%s，现在她%s",
+        ContentService.FormatGap(gapSeconds), thenPhrase, nowPhrase)
+    if pendingCount and pendingCount > 0 then
+        line = line .. string.format(" · 还有 %d 条在等她回", pendingCount)
+    end
+    return line
 end
 
 --- 开场白（不属于回复链路，仅用于让会话看起来是活的）

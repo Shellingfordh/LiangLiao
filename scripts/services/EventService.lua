@@ -37,7 +37,10 @@ end
 ---@field eventEndsAt string
 ---@field place string
 ---@field placeLabel string
+---@field sceneId string
 ---@field availability string
+---@field availabilityLabel string
+---@field brief boolean 碎片时间档：回复要短
 ---@field cityLabel string
 ---@field clock string
 ---@field dateKey string
@@ -45,6 +48,10 @@ end
 ---@field season string
 ---@field phrase string
 ---@field serverTime integer
+---@field queued boolean? 只有当下不可回复、事后补回时才为 true
+---@field thenPhrase string? 消息送达时她所处档的原话（作息表事实）
+---@field thenClock string? 消息送达时的当地钟点
+---@field gapSeconds integer? 从送达到交付经过了多少秒
 
 ---@return string # ongoing | upcoming | ended
 local function eventStateAt(hour)
@@ -73,10 +80,13 @@ local function phraseFor(state, snap)
     return "咖啡馆那场已经收了，我在" .. place
 end
 
---- 选择当前时刻的事件事实快照
----@param snap table TimeState.Snapshot 的返回值
+--- 选择当前时刻的事件事实快照。
+--- 传 sentSnap（该条消息送达时刻的快照）即表示「这是排队之后的补回复」：那时的原话与
+--- 钟点同样来自作息表，是既定事实，可以写进回复；这里不新增任何猜测或补全。
+---@param snap table TimeState.Snapshot 的返回值（交付/当前时刻）
+---@param sentSnap? table 同一条消息送达时刻的 TimeState 快照
 ---@return EventFact
-function EventService.FromSnapshot(snap)
+function EventService.FromSnapshot(snap, sentSnap)
     local state = eventStateAt(snap.hour)
     ---@type EventFact
     local fact = {
@@ -87,7 +97,10 @@ function EventService.FromSnapshot(snap)
         eventEndsAt = string.format("%02d:00", CAFE_EVENT.endHour),
         place = snap.place,
         placeLabel = PLACE_LABEL[snap.place] or "外面",
+        sceneId = snap.sceneId or "",
         availability = snap.availability,
+        availabilityLabel = snap.availabilityLabel or "",
+        brief = snap.brief == true,
         cityLabel = snap.cityLabel,
         clock = snap.clock,
         dateKey = snap.dateKey,
@@ -96,7 +109,19 @@ function EventService.FromSnapshot(snap)
         phrase = snap.phrase,
         serverTime = snap.utcSec,
     }
-    logInfo(string.format("事件事实 state=%s place=%s clock=%s", state, fact.place, fact.clock))
+    if sentSnap and sentSnap.utcSec and sentSnap.utcSec < snap.utcSec then
+        fact.queued = not sentSnap.replyable
+        fact.thenPhrase = sentSnap.phrase
+        fact.thenClock = sentSnap.clock
+        fact.gapSeconds = math.max(0, math.floor(snap.utcSec - sentSnap.utcSec))
+    end
+    if fact.queued then
+        logInfo(string.format("事件事实 state=%s place=%s clock=%s 排队补回 送达=%s(%s) 隔 %d 秒",
+            state, fact.place, fact.clock, tostring(fact.thenClock),
+            tostring(fact.thenPhrase), fact.gapSeconds or 0))
+    else
+        logInfo(string.format("事件事实 state=%s place=%s clock=%s", state, fact.place, fact.clock))
+    end
     return fact
 end
 

@@ -51,10 +51,10 @@ local function europeLondonDst(y)
 end
 
 TimeState.CITIES = {
-    los_angeles = { label = "洛杉矶", stdOffset = -8 * 3600, dstOffset = -7 * 3600, dstRange = usPacificDst, hemisphere = "N" },
-    london      = { label = "伦敦",   stdOffset = 0,         dstOffset = 1 * 3600,  dstRange = europeLondonDst, hemisphere = "N" },
-    shanghai    = { label = "上海",   stdOffset = 8 * 3600,  dstOffset = 8 * 3600,  dstRange = nil, hemisphere = "N" },
-    chengdu     = { label = "成都",   stdOffset = 8 * 3600,  dstOffset = 8 * 3600,  dstRange = nil, hemisphere = "N" },
+    los_angeles = { label = "洛杉矶", scenePrefix = "la", stdOffset = -8 * 3600, dstOffset = -7 * 3600, dstRange = usPacificDst, hemisphere = "N" },
+    london      = { label = "伦敦",   scenePrefix = "lon", stdOffset = 0,         dstOffset = 1 * 3600,  dstRange = europeLondonDst, hemisphere = "N" },
+    shanghai    = { label = "上海",   scenePrefix = "sha", stdOffset = 8 * 3600,  dstOffset = 8 * 3600,  dstRange = nil, hemisphere = "N" },
+    chengdu     = { label = "成都",   scenePrefix = "cdu", stdOffset = 8 * 3600,  dstOffset = 8 * 3600,  dstRange = nil, hemisphere = "N" },
 }
 
 -- 作息表：规格 §5.2 只给了「内部状态 / 可能地点 / 聊天行为」，没给钟点。
@@ -70,7 +70,50 @@ local SCHEDULE = {
     { from = 22, to = 24, availability = "idle",       place = "apartment", phrase = "回到公寓了" },
 }
 
----@type string[]
+-- 可回复性策略 = 规格 §5.2「聊天行为」那一列的可实现层落地：
+-- 空闲 / 碎片时间能回（碎片时间更慢、更短），忙碌与睡眠一律排队到下一个可回复窗口。
+-- delaySeconds 是「进入窗口之后」再给她的反应时间，idle 那条由 main.lua 用演示时长覆盖，
+-- 保证 M0-1 的固定 10 秒链路仍然只有一个真源。
+---@type table<string, { replyable: boolean, delaySeconds?: integer, brief?: boolean }>
+local REPLY_POLICY = {
+    idle      = { replyable = true,  delaySeconds = 10,   brief = false },
+    fragments = { replyable = true,  delaySeconds = 16,   brief = true },
+    busy      = { replyable = false },
+    offline   = { replyable = false },
+}
+
+---@type table<string, string>
+local AVAILABILITY_LABEL = {
+    idle = "有空",
+    fragments = "只有碎片时间",
+    busy = "在忙",
+    offline = "睡了",
+}
+
+--- 取某档可用性的回复策略（返回表本身，勿在外部改写）
+---@param availability string
+---@return { replyable: boolean, delaySeconds?: integer, brief?: boolean }
+function TimeState.PolicyFor(availability)
+    return REPLY_POLICY[availability] or REPLY_POLICY.busy
+end
+
+--- 演示/自检唯一的时长覆盖点：把某档的反应时间改掉
+---@param availability string
+---@param seconds number
+function TimeState.SetReplyDelay(availability, seconds)
+    local policy = REPLY_POLICY[availability]
+    if policy and seconds and seconds > 0 then
+        policy.delaySeconds = math.floor(seconds)
+    end
+end
+
+---@param availability string
+---@return string
+function TimeState.AvailabilityLabel(availability)
+    return AVAILABILITY_LABEL[availability] or availability
+end
+
+---@type table<number, string>
 local SEASONS = { "冬", "春", "春", "春", "夏", "夏", "夏", "秋", "秋", "冬", "冬", "冬" }
 
 -- 天气只走低风险状态，且由 city_id + 当地日期定种，全天一致（§5.1）
@@ -113,12 +156,145 @@ local function slotAt(hour)
     return SCHEDULE[#SCHEDULE]
 end
 
+local function civilDaySeconds(dateKey)
+    local y, m, d = dateKey:match("^(%d+)-(%d+)-(%d+)$")
+    if not y then
+        return nil
+    end
+    return daysFromCivil(tonumber(y), tonumber(m), tonumber(d)) * 86400
+end
+
+--- 开发自检的时钟投影（秒）。0 = 完全交还权威时间源；只由 DevSelfTest 改写。
+---@type number
+TimeState.DevClockOffset = 0
+
+--- 权威 UTC 秒 + 开发自检投影。普通运行路径只有这一处取时间。
+---@return number
+function TimeState.NowUtc()
+    return common.get_server_time() + TimeState.DevClockOffset
+end
+
+---@class ReplyPlan
+---@field replyable boolean 送达时她是否处于可回复档
+---@field brief boolean 碎片时间：回复要短
+---@field availability string 送达时当地处于哪一档
+---@field delaySeconds integer 进入可回复窗口后还要多久才回
+---@field windowStartUtc integer? 可回复窗口的起始 UTC 秒（当下即可回复时为 nil）
+---@field replyAtUtc integer? 计划回复 UTC 秒；nil 表示 24 小时内找不到可回复窗口
+
+--- 给定 UTC 时刻的回复计划：现在能回就延时，在忙/在睡就推到下一个可回复窗口之后
 ---@param cityId string
----@param utcSec integer? 省略则取权威服务器时间
----@return table
+---@param utcSec number
+---@return ReplyPlan
+function TimeState.ReplyPlanFor(cityId, utcSec)
+    local snap = TimeState.Snapshot(cityId, utcSec)
+    local policy = TimeState.PolicyFor(snap.availability)
+    if policy.replyable then
+        return {
+            replyable = true,
+            brief = policy.brief == true,
+            availability = snap.availability,
+            delaySeconds = policy.delaySeconds or 10,
+            windowStartUtc = nil,
+            replyAtUtc = math.floor(utcSec) + (policy.delaySeconds or 10),
+        }
+    end
+    local windowStart = TimeState.NextReplyableUtc(cityId, utcSec)
+    if not windowStart then
+        return {
+            replyable = false,
+            brief = false,
+            availability = snap.availability,
+            delaySeconds = 0,
+            windowStartUtc = nil,
+            replyAtUtc = nil,
+        }
+    end
+    local target = TimeState.PolicyFor(TimeState.Snapshot(cityId, windowStart).availability)
+    return {
+        replyable = false,
+        brief = target.brief == true,
+        availability = snap.availability,
+        delaySeconds = target.delaySeconds or 10,
+        windowStartUtc = windowStart,
+        replyAtUtc = windowStart + (target.delaySeconds or 10),
+    }
+end
+
+--- 下一个「可回复」档的起始 UTC 秒。按整小时往后试（作息表按小时分段），
+--- 命中后再按分钟回退找最早的可回复那一分钟；DST 由 Snapshot 复核，不做假设。
+---@param cityId string
+---@param utcSec number
+---@return integer|nil # 当下已可回复或 24 小时内无可回复窗口时返回 nil
+function TimeState.NextReplyableUtc(cityId, utcSec)
+    local base = TimeState.Snapshot(cityId, utcSec)
+    if TimeState.PolicyFor(base.availability).replyable then
+        return nil
+    end
+    local utc = math.floor(utcSec)
+    -- 当前当地小时的起点：当地秒与 UTC 秒在同一固定偏移段内同步前进。
+    -- minute 来自 tonumber(os.date) 是 number，这里夹回 integer，下游 %d 才安全。
+    local hourStartUtc = utc - math.floor(base.minute) * 60 - math.floor(utc % 60)
+    for delta = 1, 24 do
+        local candidate = hourStartUtc + delta * 3600
+        if TimeState.PolicyFor(TimeState.Snapshot(cityId, candidate).availability).replyable then
+            -- 往前回退找这一档最早的那一分钟（作息表整小时切换，回退一圈即返回整点）
+            for back = 59, 1, -1 do
+                local earlier = candidate - back * 60
+                if TimeState.PolicyFor(TimeState.Snapshot(cityId, earlier).availability).replyable then
+                    return earlier
+                end
+            end
+            return candidate
+        end
+    end
+    return nil
+end
+
+--- 反查「当地的某个整点」对应的 UTC 秒（开发自检用）。偏移按目标时刻自身迭代三次收敛。
+---@param cityId string
+---@param dateKey string "YYYY-MM-DD"（当地日期）
+---@param hour integer 0-23
+---@return integer
+function TimeState.UtcAtLocal(cityId, dateKey, hour)
+    local city = TimeState.CITIES[cityId] or TimeState.CITIES.los_angeles
+    local daySec = civilDaySeconds(dateKey) or 0
+    local localSec = daySec + hour * 3600
+    local guess = localSec - city.stdOffset
+    for _ = 1, 3 do
+        local snap = TimeState.Snapshot(cityId, guess)
+        guess = localSec - snap.offsetSeconds
+    end
+    return guess
+end
+
+---@class TimeSnapshot
+---@field cityId string
+---@field cityLabel string
+---@field utcSec integer
+---@field localSec integer
+---@field offsetSeconds integer
+---@field isDst boolean
+---@field dateKey string
+---@field hour number
+---@field minute number
+---@field clock string
+---@field season string
+---@field weather string
+---@field availability string
+---@field availabilityLabel string
+---@field replyable boolean
+---@field brief boolean
+---@field place string
+---@field sceneId string
+---@field phrase string
+
+---@param cityId string
+---@param utcSec number? 省略则取权威服务器时间（含开发自检投影）
+---@return TimeSnapshot
 function TimeState.Snapshot(cityId, utcSec)
     local city = TimeState.CITIES[cityId] or TimeState.CITIES.los_angeles
-    local utc = utcSec or common.get_server_time()
+    local utc = utcSec or TimeState.NowUtc()
     utc = math.floor(utc)
 
     local year = tonumber(os.date("!%Y", utc)) or 1970
@@ -137,6 +313,7 @@ function TimeState.Snapshot(cityId, utcSec)
     local month = tonumber(os.date("!%m", localSec)) or 1
 
     local slot = slotAt(hour)
+    local policy = TimeState.PolicyFor(slot.availability)
 
     return {
         cityId = cityId,
@@ -152,7 +329,11 @@ function TimeState.Snapshot(cityId, utcSec)
         season = SEASONS[month],
         weather = pickWeather(cityId, dateKey, month),
         availability = slot.availability,
+        availabilityLabel = TimeState.AvailabilityLabel(slot.availability),
+        replyable = policy.replyable == true,
+        brief = policy.brief == true,
         place = slot.place,
+        sceneId = (city.scenePrefix or cityId) .. "_" .. slot.place,
         phrase = slot.phrase,
     }
 end

@@ -27,6 +27,9 @@ local TYPING_STEP_SECONDS = 0.45
 local SCROLL_SETTLE_FRAMES = 3
 local SCROLL_PAD = 10
 local BUBBLE_PAD_X = 11
+-- 气泡宽度按「最坏情况的状态文案」预留：状态是事后 SetText 换上去的，
+-- 如果按创建那一刻的文案算宽度，消息从「已送达」变「已排队」时会溢出气泡边界。
+local STATUS_WIDTH_RESERVE = "已送达 · 对方只有碎片时间，已排队 · 第 9 位"
 
 -- 气泡宽度：ScrollView 内子树的百分比宽度在首轮测量时拿不到确定父宽，
 -- "78%" 会塌成最小内容宽（预览实测：一行两个字）。所以由 main 传入屏幕逻辑宽，
@@ -70,6 +73,10 @@ local typingTimer_ = 0
 local typingFrame_ = 1
 ---@type table<integer, Widget>
 local rowsById_ = {}
+---@type table<integer, Label?>
+local statusByMsgId_ = {}
+---@type table<integer, string>
+local renderedStatus_ = {}
 
 ---@type fun(text: string): nil
 local onSend_ = function() end
@@ -156,15 +163,60 @@ local function MakeBubbleRow(msg)
     end
 
     local metaText = (msg.clockText or "") .. (isUser and " · 洛杉矶 · 你" or " · 若夕")
+    local statusText = isUser and (msg.statusText or "") or ""
     local bodyW = estTextWidth(msg.text, 13)
     local metaW = estTextWidth(metaText, 9)
+    -- 状态文案是事后换上去的，宽度必须当场预留，否则「已送达」变「已排队」时会撑出气泡
+    local statusW = isUser and estTextWidth(STATUS_WIDTH_RESERVE, 10) or 0
     if bodyW < metaW then
         bodyW = metaW
+    end
+    if bodyW < statusW then
+        bodyW = statusW
     end
     if bubbleTextMaxW_ and bodyW > bubbleTextMaxW_ then
         bodyW = bubbleTextMaxW_
     end
     local bubbleW = bodyW + BUBBLE_PAD_X * 2
+
+    local statusLabel = isUser and (statusText ~= "") and UI.Label {
+        id = "msgStatus" .. tostring(msg.id),
+        text = statusText,
+        width = bodyW,
+        maxWidth = bubbleTextMaxW_,
+        fontSize = 10,
+        fontColor = COLORS.accent,
+        whiteSpace = "normal",
+        wordBreak = "break-word",
+        marginTop = 2,
+    } or nil
+
+    if isUser then
+        statusByMsgId_[msg.id] = statusLabel
+    end
+
+    local children = {
+        UI.Label {
+            text = msg.text,
+            width = bodyW,
+            maxWidth = bubbleTextMaxW_,
+            fontSize = 13,
+            fontColor = isUser and COLORS.userText or COLORS.herText,
+            whiteSpace = "normal",
+            wordBreak = "break-word",
+            lineHeight = 1.35,
+        },
+        UI.Label {
+            text = metaText,
+            fontSize = 9,
+            fontColor = COLORS.dimText,
+            whiteSpace = "nowrap",
+            marginTop = 3,
+        },
+    }
+    if statusLabel then
+        children[#children + 1] = statusLabel
+    end
 
     return UI.Panel {
         width = rowW_ or "100%",
@@ -178,25 +230,7 @@ local function MakeBubbleRow(msg)
                 borderRadius = 12,
                 paddingHorizontal = BUBBLE_PAD_X,
                 paddingVertical = 8,
-                children = {
-                    UI.Label {
-                        text = msg.text,
-                        width = bodyW,
-                        maxWidth = bubbleTextMaxW_,
-                        fontSize = 13,
-                        fontColor = isUser and COLORS.userText or COLORS.herText,
-                        whiteSpace = "normal",
-                        wordBreak = "break-word",
-                        lineHeight = 1.35,
-                    },
-                    UI.Label {
-                        text = metaText,
-                        fontSize = 9,
-                        fontColor = COLORS.dimText,
-                        whiteSpace = "nowrap",
-                        marginTop = 3,
-                    },
-                },
+                children = children,
             },
         },
     }
@@ -217,6 +251,8 @@ function ChatPanel.Build(opts)
     awaiting_ = false
     renderedVersion_ = -1
     rowsById_ = {}
+    statusByMsgId_ = {}
+    renderedStatus_ = {}
 
     memoryLabel_ = UI.Label {
         id = "chatMemoryLine",
@@ -426,6 +462,22 @@ local function AppendNewRows()
     end
 end
 
+--- 刷新已上屏消息的送达状态（行不重建，只换状态那一行文字）
+local function RefreshStatuses()
+    local msgs = messagesProvider_()
+    for i = 1, #msgs do
+        local msg = msgs[i]
+        if msg.role == "user" then
+            local label = statusByMsgId_[msg.id]
+            local text = msg.statusText or ""
+            if label and renderedStatus_[msg.id] ~= text then
+                renderedStatus_[msg.id] = text
+                label:SetText(text)
+            end
+        end
+    end
+end
+
 --- 每帧调用：合并同一帧内的多次变更
 ---@param dt number
 function ChatPanel.Tick(dt)
@@ -437,6 +489,7 @@ function ChatPanel.Tick(dt)
     if version ~= renderedVersion_ then
         renderedVersion_ = version
         AppendNewRows()
+        RefreshStatuses()
     end
 
     if phase_ == "typing" then
@@ -459,11 +512,14 @@ function ChatPanel.Tick(dt)
     end
 end
 
---- 相位与状态文案由 main 驱动
+--- 相位与状态文案由 main 驱动；主循环每帧都会推，所以这里自己挡掉没变化的帧
 ---@param phase string
 ---@param statusText string
 ---@param awaiting boolean
 function ChatPanel.SetPhase(phase, statusText, awaiting)
+    if phase_ == phase and statusText_ == statusText and awaiting_ == awaiting then
+        return
+    end
     phase_ = phase
     statusText_ = statusText
     awaiting_ = awaiting
@@ -475,8 +531,10 @@ function ChatPanel.SetPhase(phase, statusText, awaiting)
         typingRow_:SetVisible(phase == "typing")
     end
     if sendButton_ then
-        sendButton_:SetDisabled(awaiting)
-        sendButton_:SetText(awaiting and "等待中" or "发送")
+        -- M1 起等待期间仍然可以再发：后发的会排在队首之后（队列不越序），所以按钮不禁用。
+        -- 「她在忙/在睡」由状态条与气泡上的排队文案说明，不靠禁用按钮来表达。
+        sendButton_:SetDisabled(false)
+        sendButton_:SetText(awaiting and "继续发送" or "发送")
     end
     if skipButton_ then
         skipButton_:SetDisabled(not awaiting)
@@ -532,6 +590,8 @@ function ChatPanel.Shutdown()
     typingRow_ = nil
     typingLabel_ = nil
     rowsById_ = {}
+    statusByMsgId_ = {}
+    renderedStatus_ = {}
     renderedVersion_ = -1
 end
 
