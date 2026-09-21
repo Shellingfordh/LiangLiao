@@ -1,83 +1,3 @@
-# AGENTS — 项目背景
-
-《送给你这个回来的人》是 Tripothon S1 的原创陪伴体验：用户与一位生活在另一座城市、同一真实时间线上的角色聊天；她有自己的日程与关系网络，3D 状态窗展示她此刻的生活。
-
-## 硬边界
-
-- 只使用原创角色、场景、文本、音乐和视觉资产；不得复刻现有 IP。
-- 聊天优先；3D 窗口是固定镜头状态展示，不做开放大地图。
-- Lua 负责时间、状态、事件事实和存档；生成式文本只能润色既定事实。
-- 不接入真实天气、新闻或运行时 Tripo/Marble 调用；离线状态按时间窗反推。
-- Marble 高质量网格不得直接作为移动端主场景，除非先通过 Maker 真机性能 Spike。
-
-以下四条为 2026-09-18/19 在 Maker AI Dev Kit 中实测确立，违反即返工（证据见
-`docs/maker-lua-api-verification.md`）：
-
-- **运行时没有 LLM 接口。** Maker 的 `text_to_dialogue` 等是构建期 MCP 工具，不是游戏运行时 API。
-  回复一律走 Lua 模板 + 变量替换；不得假设"生成式润色"这条路存在。
-- **引擎没有 IANA 时区库。** 四城各用一张带生效区间的 UTC 偏移表；时间源必须是
-  `common.get_server_time()`（权威 UTC，用户改系统时间无效）；`os.date` 必须带 `"!"` 前缀，
-  否则会叠加运行设备本地时区。
-- **GLB 不是运行时格式。** 必须经 `UrhoXCLI import-gltf` 转成 MDL + 材质 + 纹理 + prefab 后，
-  运行时才 `cache:GetResource("Model", ...)`。
-- **API 依据只有本地 AI Dev Kit。** `engine-docs/`、`.emmylua/`、`examples/`、`templates/`、
-  `urhox-libs/` 为准；`research/taptap-pages/` 是登录墙快照（38 份中 27 份内容相同），无效。
-
-## Git 拓扑（2026-09-19 用户改定：只推 Maker）
-
-- **所有推送只发 `maker`**（Maker 云端工程仓）。GitHub 那条**暂时不管**，不再作为 upstream。
-- `origin` 与 `maker` 现指向同一个 Maker URL（`.git/config` 中该 URL 内嵌临时 token，勿外传）。
-  Maker 工具链（`init` / `build` / 连只读的 `logs watch`）会反复把 `origin` 抢回 Maker URL，
-  **这是预期行为，不要再手工纠正**；跑完 `logs watch` 也不必备份还原。
-- `github` = `git@github.com:melondy101/LiangLiao.git`，仅作为设计文档仓的**只读留档把手**保留，
-  未推之前不要假设它和 main 同步。
-- 两条历史**已合并成一棵树**（`a23e2ba` 以 `--allow-unrelated-histories` 并入），"无共同祖先"已失效。
-  仍然**禁止在 GitHub 与 Maker 之间 force push**。
-- 归属约定不变：`scripts/`、`assets/`、`.project/` 属 Maker 工程；`docs/`、`research/`、`README.md`、
-  `CHANGELOG.md` 属文档。两者现在同在一棵工作树里，推 Maker 时会一起带走。
-
-## 权威文档
-
-| 文件 | 用途 |
-| --- | --- |
-| `docs/2026-09-15-parallel-companion-design.md` | 产品、数据模型、时间状态、场景、PoC 范围与验收 |
-| `docs/platform-capabilities.md` | Tripo、Marble、TapTap Maker 的能力、格式、资产流程与限制 |
-| `docs/maker-lua-api-verification.md` | Maker 平台假设逐项验证（时区 / 运行时 LLM / GLB→MDL / clientCloud / 全景 / 预览 0% 定性与收尾 runbook） |
-| `docs/asset-provenance.md` | 资产唯一真源表、GLB/MDL 实测差异、重导入命令、M0-1 阻塞项 |
-| `docs/demand.md` | Tripothon S1 赛事规则与提交物 |
-| `CHANGELOG.md` | 当前阶段与已完成决策 |
-
-`research/game-design-sources/` 保留非 IP 的通用竞品、叙事、关系系统与生活模拟原始调研；不得恢复其旧的 `bocchi/` 目录或以原作角色为查询目标。
-
-## 实施起点
-
-1. M0-0（林若夕 A-pose + 洛杉矶咖啡馆状态窗）已在 Maker 云端工程实现，代码与资产均已取回到本地并
-   与云端同步：`scripts/main.lua`、`scripts/StatusWindow.lua`、`assets/`（MDL + 材质 + 贴图 + prefab）。
-2. M0-0 状态窗画面已于 2026-09-20 重构并连续五次通过 Maker 云端构建（最新 `5ac225f`）：远景改由 UI 层
-   `backgroundImage` 绘制、角色走透明底 RenderTarget、角色朝向与画框真 4:3 均已修。背景图
-   `assets/Textures/backgrounds/la-cafe-4x3.png` 已入 git 并随构建推到云端，且在
-   `.project/resources.json` 里显式列入 `groups.default` 与 `preload_groups`（该项目无独立 `**`，
-   属增强引用模式，不可达资源会被裁出包）。测试二维码已能生成，**不再被下列三项阻塞**。
-3. M0-0 **真机视觉确认已于 2026-09-21 完成**：扫码跑通 `5ac225f`，角色正立、位于画面右侧约 65%、
-   角色框无黑底（透明 RT 的 alpha 在原生生效）——`nvgRotate(math.pi)` 定案保留，
-   `engine-docs/recipes/scene-to-nanovg.md` 的「不需要额外翻转 Y」在原生 Android 不成立（判读表见
-   `docs/maker-lua-api-verification.md` §12）。仍缺两件，都需要人操作：
-   **再补两张真机截图**（同屏裁剪近景 + 隔一会儿再截一张以证「稳定」；
-   `.project/project.json` 的 `assets.screenshots` 仍为 `[]`，浏览器预览抓取不算）；
-   **图标在 Maker 网页「发布到 TapTap → 游戏基本信息 → 游戏 icon」生效**
-   （`game_material/*` 被远端 pre-receive 排除，git 交付不了；连接器上传与 Computer Use 四条路均已证伪）。
-4. 通过 M0-0 真机验收后，才实现时区表、消息排队与关系记忆。
-
-不要恢复或引用已移除的旧"三位 NPC 小镇"方案、旧角色名或旧 PoC 模板。
-
-## 没有本地运行时
-
-本仓库不含可执行引擎：`scripts/` 与 `assets/` 只是源码，**唯一的运行/预览入口是 Maker 云端**。
-「跑一下 / 预览 / 看结果」的正规路径是 `maker_build_current_directory`，随后读
-`.maker/logs/runtime/runtime.log`（topics 含 `engine`，引擎层报错也会落这里）。
-判据：该文件出现且含 `[M0-0] 启动 M0-0 原型` → 已进入 Lua；文件不出现 → 仍卡在资源装载层。
-不要试图在本地启动游戏，也不要为此找本地端口/进程。
-
 <!-- >>> TapTap Maker managed AGENTS policy version=3 hash=sha256:9c5d550755a0d1a3e40606e2e4b35fd3e7c5232057490debc4c82197ef46ff9e >>> -->
 # TapTap Maker Project Asset Tool Policy
 
@@ -255,6 +175,88 @@ preserved for later edits and builds.
 `create_3d_asset` local runtime `model_files` copy/extract instructions are materialized into
 `assets/model`. Use `local_delivery` for the usable local model path and preserve the remote result.
 <!-- <<< TapTap Maker managed AGENTS policy <<< -->
+
+
+# AGENTS — 项目背景
+
+《送给你这个回来的人》是 Tripothon S1 的原创陪伴体验：用户与一位生活在另一座城市、同一真实时间线上的角色聊天；她有自己的日程与关系网络，3D 状态窗展示她此刻的生活。
+
+## 硬边界
+
+- 只使用原创角色、场景、文本、音乐和视觉资产；不得复刻现有 IP。
+- 聊天优先；3D 窗口是固定镜头状态展示，不做开放大地图。
+- Lua 负责时间、状态、事件事实和存档；生成式文本只能润色既定事实。
+- 不接入真实天气、新闻或运行时 Tripo/Marble 调用；离线状态按时间窗反推。
+- Marble 高质量网格不得直接作为移动端主场景，除非先通过 Maker 真机性能 Spike。
+
+以下四条为 2026-09-18/19 在 Maker AI Dev Kit 中实测确立，违反即返工（证据见
+`docs/maker-lua-api-verification.md`）：
+
+- **运行时没有 LLM 接口。** Maker 的 `text_to_dialogue` 等是构建期 MCP 工具，不是游戏运行时 API。
+  回复一律走 Lua 模板 + 变量替换；不得假设"生成式润色"这条路存在。
+- **引擎没有 IANA 时区库。** 四城各用一张带生效区间的 UTC 偏移表；时间源必须是
+  `common.get_server_time()`（权威 UTC，用户改系统时间无效）；`os.date` 必须带 `"!"` 前缀，
+  否则会叠加运行设备本地时区。
+- **GLB 不是运行时格式。** 必须经 `UrhoXCLI import-gltf` 转成 MDL + 材质 + 纹理 + prefab 后，
+  运行时才 `cache:GetResource("Model", ...)`。
+- **API 依据只有本地 AI Dev Kit。** `engine-docs/`、`.emmylua/`、`examples/`、`templates/`、
+  `urhox-libs/` 为准；`research/taptap-pages/` 是登录墙快照（38 份中 27 份内容相同），无效。
+
+## Git 拓扑（2026-09-19 用户改定：只推 Maker）
+
+- **所有推送只发 `maker`**（Maker 云端工程仓）。GitHub 那条**暂时不管**，不再作为 upstream。
+- `origin` 与 `maker` 现指向同一个 Maker URL（`.git/config` 中该 URL 内嵌临时 token，勿外传）。
+  Maker 工具链（`init` / `build` / 连只读的 `logs watch`）会反复把 `origin` 抢回 Maker URL，
+  **这是预期行为，不要再手工纠正**；跑完 `logs watch` 也不必备份还原。
+- `github` = `git@github.com:melondy101/LiangLiao.git`，仅作为设计文档仓的**只读留档把手**保留，
+  未推之前不要假设它和 main 同步。
+- 两条历史**已合并成一棵树**（`a23e2ba` 以 `--allow-unrelated-histories` 并入），"无共同祖先"已失效。
+  仍然**禁止在 GitHub 与 Maker 之间 force push**。
+- 归属约定不变：`scripts/`、`assets/`、`.project/` 属 Maker 工程；`docs/`、`research/`、`README.md`、
+  `CHANGELOG.md` 属文档。两者现在同在一棵工作树里，推 Maker 时会一起带走。
+
+## 权威文档
+
+| 文件 | 用途 |
+| --- | --- |
+| `docs/2026-09-15-parallel-companion-design.md` | 产品、数据模型、时间状态、场景、PoC 范围与验收 |
+| `docs/platform-capabilities.md` | Tripo、Marble、TapTap Maker 的能力、格式、资产流程与限制 |
+| `docs/maker-lua-api-verification.md` | Maker 平台假设逐项验证（时区 / 运行时 LLM / GLB→MDL / clientCloud / 全景 / 预览 0% 定性与收尾 runbook） |
+| `docs/asset-provenance.md` | 资产唯一真源表、GLB/MDL 实测差异、重导入命令、M0-1 阻塞项 |
+| `docs/demand.md` | Tripothon S1 赛事规则与提交物 |
+| `CHANGELOG.md` | 当前阶段与已完成决策 |
+
+`research/game-design-sources/` 保留非 IP 的通用竞品、叙事、关系系统与生活模拟原始调研；不得恢复其旧的 `bocchi/` 目录或以原作角色为查询目标。
+
+## 实施起点
+
+1. M0-0（林若夕 A-pose + 洛杉矶咖啡馆状态窗）已在 Maker 云端工程实现，代码与资产均已取回到本地并
+   与云端同步：`scripts/main.lua`、`scripts/StatusWindow.lua`、`assets/`（MDL + 材质 + 贴图 + prefab）。
+2. M0-0 状态窗画面已于 2026-09-20 重构并连续五次通过 Maker 云端构建（最新 `5ac225f`）：远景改由 UI 层
+   `backgroundImage` 绘制、角色走透明底 RenderTarget、角色朝向与画框真 4:3 均已修。背景图
+   `assets/Textures/backgrounds/la-cafe-4x3.png` 已入 git 并随构建推到云端，且在
+   `.project/resources.json` 里显式列入 `groups.default` 与 `preload_groups`（该项目无独立 `**`，
+   属增强引用模式，不可达资源会被裁出包）。测试二维码已能生成，**不再被下列三项阻塞**。
+3. M0-0 **真机视觉确认已于 2026-09-21 完成**：扫码跑通 `5ac225f`，角色正立、位于画面右侧约 65%、
+   角色框无黑底（透明 RT 的 alpha 在原生生效）——`nvgRotate(math.pi)` 定案保留，
+   `engine-docs/recipes/scene-to-nanovg.md` 的「不需要额外翻转 Y」在原生 Android 不成立（判读表见
+   `docs/maker-lua-api-verification.md` §12）。仍缺两件，都需要人操作：
+   **再补两张真机截图**（同屏裁剪近景 + 隔一会儿再截一张以证「稳定」；
+   `.project/project.json` 的 `assets.screenshots` 仍为 `[]`，浏览器预览抓取不算）；
+   **图标在 Maker 网页「发布到 TapTap → 游戏基本信息 → 游戏 icon」生效**
+   （`game_material/*` 被远端 pre-receive 排除，git 交付不了；连接器上传与 Computer Use 四条路均已证伪）。
+4. 通过 M0-0 真机验收后，才实现时区表、消息排队与关系记忆。
+
+不要恢复或引用已移除的旧"三位 NPC 小镇"方案、旧角色名或旧 PoC 模板。
+
+## 没有本地运行时
+
+本仓库不含可执行引擎：`scripts/` 与 `assets/` 只是源码，**唯一的运行/预览入口是 Maker 云端**。
+「跑一下 / 预览 / 看结果」的正规路径是 `maker_build_current_directory`，随后读
+`.maker/logs/runtime/runtime.log`（topics 含 `engine`，引擎层报错也会落这里）。
+判据：该文件出现且含 `[M0-0] 启动 M0-0 原型` → 已进入 Lua；文件不出现 → 仍卡在资源装载层。
+不要试图在本地启动游戏，也不要为此找本地端口/进程。
+
 
 
 # UrhoX Lua - AI 开发指南入口
