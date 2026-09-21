@@ -189,7 +189,7 @@ preserved for later edits and builds.
 - 不接入真实天气、新闻或运行时 Tripo/Marble 调用；离线状态按时间窗反推。
 - Marble 高质量网格不得直接作为移动端主场景，除非先通过 Maker 真机性能 Spike。
 
-以下四条为 2026-09-18/19 在 Maker AI Dev Kit 中实测确立，违反即返工（证据见
+以下五条为 2026-09-18/19 与 2026-09-21 在 Maker AI Dev Kit 中实测确立，违反即返工（证据见
 `docs/maker-lua-api-verification.md`）：
 
 - **运行时没有 LLM 接口。** Maker 的 `text_to_dialogue` 等是构建期 MCP 工具，不是游戏运行时 API。
@@ -201,6 +201,9 @@ preserved for later edits and builds.
   运行时才 `cache:GetResource("Model", ...)`。
 - **API 依据只有本地 AI Dev Kit。** `engine-docs/`、`.emmylua/`、`examples/`、`templates/`、
   `urhox-libs/` 为准；`research/taptap-pages/` 是登录墙快照（38 份中 27 份内容相同），无效。
+- **软键盘输入框旁边的按钮必须 `focusable = false`。** 否则点按钮会先让输入框失焦、收起键盘，画布高度变化让
+  整棵布局位移，而 `UI.HandlePointerUp` 只在按下与抬起命中同一控件时才派发 `OnClick`（`UI.lua:2379`）——
+  结果是**点击静默无效、不报任何错**（2026-09-21 实测，见 §13）。日志区分不出点击与回车。
 
 ## Git 拓扑（2026-09-19 用户改定：只推 Maker）
 
@@ -240,12 +243,18 @@ preserved for later edits and builds.
 3. M0-0 **真机视觉确认已于 2026-09-21 完成**：扫码跑通 `5ac225f`，角色正立、位于画面右侧约 65%、
    角色框无黑底（透明 RT 的 alpha 在原生生效）——`nvgRotate(math.pi)` 定案保留，
    `engine-docs/recipes/scene-to-nanovg.md` 的「不需要额外翻转 Y」在原生 Android 不成立（判读表见
-   `docs/maker-lua-api-verification.md` §12）。仍缺两件，都需要人操作：
-   **再补两张真机截图**（同屏裁剪近景 + 隔一会儿再截一张以证「稳定」；
-   `.project/project.json` 的 `assets.screenshots` 仍为 `[]`，浏览器预览抓取不算）；
-   **图标在 Maker 网页「发布到 TapTap → 游戏基本信息 → 游戏 icon」生效**
-   （`game_material/*` 被远端 pre-receive 排除，git 交付不了；连接器上传与 Computer Use 四条路均已证伪）。
-4. 通过 M0-0 真机验收后，才实现时区表、消息排队与关系记忆。
+   `docs/maker-lua-api-verification.md` §12）。
+4. M0-1 聊天竖切片（陌生网友 × 洛杉矶）**已于 2026-09-21 在 Maker 云端跑通**：上半部保留状态窗，下半部为
+   可滚动聊天流 + 可编辑输入 + 发送/跳过等待，正式链路固定 10 秒。后端是同工程内的 Lua 服务
+   （`scripts/services/` 的 MessageService / EventService / ContentService / MemoryService，
+   前端 `scripts/ui/ChatPanel.lua`），**没有外部后端、没有运行时 LLM**；记忆走本地文件，`clientCloud` 只留接口。
+   下一阶段是 M1（多时段状态与消息排队），不是再改视觉层。
+5. 仍缺的交付物（都要人操作，git/MCP 都代不了）：**还差一张真机截图**（冷启动后隔一会儿再截同一画面，以证「稳定」；
+   同屏裁剪近景已于 2026-09-21 13:21 取到 `screenshots/device/m00-realdevice-02-crop.jpg`，但
+   `.project/project.json` 的 `assets.screenshots` 仍为 `[]`，浏览器预览抓取不算）；**图标需在 Maker 网页
+   「发布到 TapTap → 游戏基本信息 → 游戏 icon」生效**（`game_material/*` 被远端 pre-receive 排除，
+   连接器上传与 Computer Use 四条路均已证伪）。另有角色悬空构图缺陷待修（需重新构建 + 重新扫码，
+   会让当前真机基准失效）。
 
 不要恢复或引用已移除的旧"三位 NPC 小镇"方案、旧角色名或旧 PoC 模板。
 
@@ -254,7 +263,12 @@ preserved for later edits and builds.
 本仓库不含可执行引擎：`scripts/` 与 `assets/` 只是源码，**唯一的运行/预览入口是 Maker 云端**。
 「跑一下 / 预览 / 看结果」的正规路径是 `maker_build_current_directory`，随后读
 `.maker/logs/runtime/runtime.log`（topics 含 `engine`，引擎层报错也会落这里）。
-判据：该文件出现且含 `[M0-0] 启动 M0-0 原型` → 已进入 Lua；文件不出现 → 仍卡在资源装载层。
+判据：该文件出现且含 `[M0-1] 启动 M0-1 竖切片`（M0-0 时代是 `[M0-0] 启动 M0-0 原型`）→ 已进入 Lua；
+文件不出现 → 仍卡在资源装载层。
+⚠️ 每次 `maker_build_current_directory` 都会带 `--reset` 重启日志抓取器并**删掉本地 `runtime.log`**，而 CLI 抓取器
+实测只活 4~8 分钟。所以：**日志证据要在下一次构建前转录进文档**；取证的当下先量 `state.json.updatedAt`
+是否还在推进（停了就按 `nextStartTime` 游标重启，**别再带 `--reset`**）；判活性不要用 `watcher.out.log`。
+四条坑的完整口径见 `docs/maker-lua-api-verification.md` §11。
 不要试图在本地启动游戏，也不要为此找本地端口/进程。
 
 

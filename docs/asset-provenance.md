@@ -133,6 +133,12 @@ Maker 云端在 2026-09-19 自动回填了 `raw-assets/` 下的源 GLB、解包�
 5. **贴图预算**：三张 4096² 对 14k 面角色过配；状态窗只占竖屏约 35%，建议 basecolor/normal 降到 2048² 与 1024²。
 6. **清理 `assets/Meshes/lin-ruoxi.mdl.bak`**：753,790 字节的旧模型备份，确认新版可用后删除。
 7. **背景包体预算**：`assets/Textures/backgrounds/la-cafe-4x3.png` 已于 2026-09-20 从 Marble 世界视口导出并落地（见上节），但 2.30 MB 相对当前 1.20 MB 运行包偏大，且 RGBA 的 alpha 通道并未使用；进包前确认是否需要转 RGB 或压缩。
+8. **发布素材（2026-09-21 复核）**：真机截图已有**两张**在库（`screenshots/device/m00-realdevice-01-fullframe.jpg`
+   13:12、`m00-realdevice-02-crop.jpg` 13:21，均为原生设备截图、同一 `5ac225f` 构建），还差第三张以证「稳定」；
+   `.project/project.json` 的 `assets.screenshots` 仍为 `[]`（登记动作需要改 `.project/`，未做），
+   `assets.icon` 指向 `./game_material/la-cafe-icon.png` —— 该目录被远端 pre-receive 排除，图标只能走 Maker 网页侧。
+   ⚠️ 这两张截图上状态文案仍是 `洛杉矶 18:20`，那是被抄成常量的规格举例值（真机时刻应为约 22:21），
+   M0-1 起时间由 `common.get_server_time()` + 偏移表算出，云端日志实测已随真实时刻变化（02:10 / 03:03 / 03:59）。
 
 ## 原始留档（MarkItDown 转换记录，自 `poc/art/source/lin-ruoxi/*.md` 收拢）
 

@@ -109,9 +109,62 @@ elapsed 39s，`[remote_build] 100% 构建流程全部完成`，`preview_refresh_
   1. **点「发送」不发送，回车能发**（用户实测）。根因在引擎的点击判定：`UI.HandlePointerUp` 要求「按下与抬起命中同一控件」（`UI.lua:2379`），而点按钮会先让 TextField 失焦 → `SetScreenKeyboardVisible(false)` 收起软键盘 → 画布高度变化 → 整棵布局位移 → 抬起时命中的已经不是按钮。旁证：同一份包里「跳过等待」点击是好的（18:23:24 那条日志），因为那时键盘已经因为回车收起来了，不再产生位移。修法：给两个按钮设 `focusable = false`（引擎自己的 `EditMenu` 就用这个开关避免抢走输入框焦点，见 `UI.lua:2341`）。
   2. **回复里出现「刚坐下。，你那边…」叠标点**：正文以句号结尾时又硬接了话题半句的逗号。`ContentService` 加 `endsWithSentencePunct`，句末已有标点就不再补逗号。
 
-## 构建 #5 待用户一次交互验收
-上面两条修法（`focusable = false` + 标点拼接）都只在本地，需要一次「硬刷新加载构建 #5 → 打字 → 点发送」才能确认。
-watcher 由构建工具链带 `--reset` 重启，每次构建后我都回量过心跳是否贴着当前时间。
+## 构建 #5 `f70bf4b`（发送按钮点击 + 叠标点）：成功，验收已过
+elapsed 37s，`[remote_build] 100% 构建流程全部完成`，`preview_refresh_status: 200`，本地 HEAD == `git ls-remote maker HEAD`，`git status` 干净。
+构建前 LSP `--mode watch`（18:27:05）**Errors: 0**，我改的文件零 WARN。改动只有两处：`sendButton_.focusable = false` /
+`skipButton_.focusable = false`（`scripts/ui/ChatPanel.lua`），`endsWithSentencePunct` 标点守卫（`scripts/services/ContentService.lua`）。
 
-## 待用户裁决（文档漂移，不在我的白名单）
-`AGENTS.md`「没有本地运行时」一节把进入 Lua 的判据写成 `[M0-0] 启动 M0-0 原型`。本次入口日志改为 `[M0-1] 启动 M0-1 竖切片`，链路日志前缀分别是 `[MsgService] / [EventService] / [Memory] / [ChatPanel]`，回复落点为 `[M0-1] 回复 #N → replied 事实=la_cafe_open_mic`。`StatusWindow.lua` 仍打 `[M0-0]`，所以那一段老判据里只有这一句需要更新，等用户改 AGENTS.md（我不改）。
+### 构建 #5 的运行时证据（18:59 一次会话，整份日志 `grep -c "level":"ERROR"` = 0）
+- **10 秒正式链路再次按毫秒对上**：`18:59:32.275 [MsgService] 用户消息 #3 已发出 serverTime=1789988375` → `sent` →
+  `33.772 waiting`(+1.497s = `SENT_SECONDS 1.5`) → `39.271 typing`(+5.5s 等待) → `42.272 若夕回复 #4`(+3.0s = `TYPING_SECONDS 3.0`)
+  → `42.287 [M0-1] 回复 #3 → replied 事实=la_cafe_open_mic 状态=ended 话题=time,event` → `replied → idle`。sent→replied 共 **9.997 秒**。
+- **叠标点已消失**：同一条回复正文为「…我回公寓了，刚坐下。你那边这个点是白天吧」——句末是「。」且直接接下一句，
+  没有构建 #4 那次的「刚坐下。**，**你那边…」。
+- **跨会话记忆继续读回**：`本地存档已读回 turns=4 记录=8 条` → `记忆装载来源: file` → 本轮 `记录第 5 轮 topics=time,event 落盘=true`（1475 字节）。
+- 状态窗链路未退化：`[M0-0] 若夕 3D 模型加载成功`、`状态窗 RenderTarget 960x720 已创建`、`[M0-1] 状态窗背景已挂载`，
+  LA 03:59 → `可用性=offline 地点=apartment`、事件态 `ended`（夜间裁决 8 点分界生效，回复文案与地点一致）。
+- **点击 vs 回车无法从日志文本区分**：`Button:OnClick` 与 `TextField` 的提交都汇到同一个 `HandleSend`，日志不记触发源。
+  所以点击这条路的直接证据是用户实测「它可以发送」，日志侧的旁证是：这次发送发生在页面重载（`18:59:27.939 启动 M0-1 竖切片`）
+  后 **4.3 秒**、且输入框里是预填草稿没被改动——没有先聚焦再敲回车的余地。若要把这条做成硬证据，需要在 `HandleSend` 加一个来源标签再构建一轮。
+
+### 这一段日志是怎么取回来的（过程记录，别按 `--reset` 补拉）
+构建 #5 于 18:33 把 watcher 带 `--reset` 重启，只回拉到 18:28:49 的旧会话；之后一直打到 18:43:45 心跳停止，
+`watcher.out.log` 里是**连续 117 次** `Maker runtime logs pulled: 0`（10 分钟 ÷ 5s 间隔，自洽），末尾一句
+`Maker runtime log watcher stopped`——又静默死了一次，正好盖住用户 18:59 那次会话。
+我按 `state.json` 的 `nextStartTime=1789986529` 用 `taptap-maker logs watch --target-dir … --interval 5s`（**不带 `--reset`**）
+从游标续拉，`runtime.log` 由 25,550 → 46,895 字节，18:59 那次会话完整回来（游标推进到 1789988387）。
+动手前已把旧版备份为 `/tmp/m0-1-runtime-f70bf4b.log`，续拉后再备份为 `/tmp/m0-1-runtime-f70bf4b-backfilled.log`。
+⚠️ 复核时踩到一条判据坑：我两次都是 `… logs watch | tail -N` 起的，**管道会把 `pulled: N` 这些行憋住不落到
+`watcher.out.log`**，所以那个文件停在旧的 `stopped` 行并不代表 watcher 没在拉。活性只看
+`state.json.updatedAt`（每 5s 推进）与 `runtime.log` 的字节数/mtime，别只看 out.log。
+
+## 文档漂移（已于 2026-09-21 本会话内的知识库同步中修掉）
+`AGENTS.md`「没有本地运行时」一节把进入 Lua 的判据写成 `[M0-0] 启动 M0-0 原型`，而本次入口日志是
+`[M0-1] 启动 M0-1 竖切片`。经用户以 `/neat-freak` 授权做文档同步后已更正：判据改为 M0-1 并保留 M0-0 旧串作历史、
+补上 runtime.log 的三个脾气（构建带 `--reset` 删本地日志、watcher 只活 4~8 分钟、`watcher.out.log` 不能判活性）、
+「实施起点」推到 M0-1 已落地、「实测确立」清单由四条增为五条（新增 `focusable = false` 那条）。
+同一批事实的完整口径落在 `docs/maker-lua-api-verification.md` §6 / §11 / §12.2 / §13、`README.md` 当前交接、
+`CHANGELOG.md` 2026-09-21 条目。`StatusWindow.lua` 仍打 `[M0-0]` 前缀，那是状态窗自身模块，不改。
+
+---
+
+# PROGRESS — M1 首个可玩闭环（2026-09-21 起）
+
+## 目标
+若夕按洛杉矶当地时间真实处于 busy / offline / idle：忙碌与睡眠时消息只标「已送达」并排队（不显示已读），
+进入下一个可回复窗口后短暂「正在输入」再用既定事件事实回复；两条以上按 FIFO 补发，重进不丢记录与队列。
+
+## 执行顺序
+① TimeState 给出可回复性与「下一次可回复 UTC」→ ② MessageService 单 pending 改 FIFO 队列（绝对 UTC 计划）
+→ ③ MemoryService 存档升级为完整消息+队列+计划回复时间并在启动时恢复 → ④ Event/ContentService 按发送与交付两侧
+的确定时间快照选事实（不捏造地点/活动/时间，离开期最多一条摘要）→ ⑤ ChatPanel/StatusWindow 接状态文案与场景降级。
+
+## 最大风险
+runtime.log 只在**有真实会话跑起来**时才产生，而会话只能由用户打开预览/扫码触发，我无法自动跑（历史三次证据都卡在这）；
+缓解：新增 `scripts/services/DevSelfTest.lua` 开发自检，用可控 UTC 在真实 Lua 里跑完 busy/offline/idle、FIFO、
+文件往返恢复与反向验证，任何 FAIL 都以 logError 落盘（ERROR=0 即全绿），用户开一次预览即可取全。
+
+## 场景资产盘点结论
+`assets/` 里唯一可作的场景静帧是 `Textures/backgrounds/la-cafe-4x3.png`（咖啡馆）；作息表另需 apartment /
+campus / studio / commute 四类场景，**全部无资产**。本阶段不生成新资产：`scene_id` 只做尝试性切换，
+无资产即显式沿用咖啡馆静帧降级并打日志，缺失资产与所阻塞的验收项记在 BLOCKED.md。

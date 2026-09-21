@@ -1,5 +1,82 @@
 # Changelog
 
+## 2026-09-21 — M0-1 聊天竖切片（陌生网友 × 洛杉矶）与 M0-0 真机定案
+
+### Added
+
+- **M0-1 竖切片全链路**（规格 §9 定义的「情绪化垂直切片」）：上半部保留 M0-0 状态窗，下半部换成可滚动聊天流。
+  后端全部是同一 Maker 工程内的 Lua 服务，**没有新建 HTTP 服务、数据库、账号或外部 API**：
+  - `scripts/services/MessageService.lua`——消息数组 + 阶段状态机（`sent → waiting → typing → replied`），
+    正式链路固定 10 秒（`SENT_SECONDS 1.5` + 等待 + `TYPING_SECONDS 3.0`），重复发送被拒且保留草稿，
+    开发用「跳过等待」走**同一个** `Deliver()`，不直接写最终回复；
+  - `scripts/services/EventService.lua`——从时间快照派生**既定事件事实**（咖啡馆开放麦克风夜，19–22 进行中 /
+    8–19 未开始 / 其余已收场），只产出事实与短语，不生成文本；
+  - `scripts/services/ContentService.lua`——纯模板 + `{token}` 替换（话题探测 + 哈希选句式 + UTF-8 安全的
+    12 字回引），运行时不调 LLM；
+  - `scripts/services/MemoryService.lua`——本地文件存档 `memory/m0-1-la-stranger.json` 为主，
+    `clientCloud` 只留异步接口（`UseCloudMemory=false`），整段读写 pcall 兜底不吞错；
+  - `scripts/ui/ChatPanel.lua`——只看视图：预填草稿、四种显式状态文案、输入中动画、追加式行缓存
+    （`ClearChildren` 不销毁 Yoga 节点，故不做整树重建）。
+- 阶段状态文件 `PROGRESS.md` / `BLOCKED.md`（本阶段专用，逐条挂实际构建结果与日志摘录）。
+
+### Fixed
+
+- **气泡塌成一两字一行**：`nowrap` 的时间角标把容器撑成约 50px，正文 Label 的测量宽度没参与决定容器宽度。
+  改为 `ChatPanel.estTextWidth()`（中日韩 1em / ASCII 0.55em）估出正文宽、与角标取大、夹到上限后
+  **同时钉死正文 Label 与气泡 Panel 的 `width`**，不再让引擎文本测量决定容器。
+- **凌晨 02:10 / 03:03 的自相矛盾文案**（人在公寓却答"还没开始，我还在咖啡馆占位子"）：`EventService` 补
+  `dayBreakHour = 8` 的夜间分界（收场后一律 `ended`）+ 按地点分支措辞。
+- **回复里「刚坐下。，你那边…」叠标点**：`ContentService.endsWithSentencePunct`，句末已有标点时不再补逗号。
+- **点「发送」不发送、回车能发**：引擎 `UI.HandlePointerUp` 要求按下与抬起命中同一控件（`UI.lua:2379`），
+  而点按钮会先让 `TextField` 失焦 → 软键盘收起 → 画布高度变化 → 布局位移 → 抬起时已命不中按钮。
+  两个按钮加 `focusable = false`（引擎自己的 `EditMenu` 就用这个开关，`UI.lua:2341`）。详见验证报告 §13。
+
+### Built
+
+五次云端构建全绿，无一次失败：`415cb4c`（任务 1+2）→ `fd87d29`（状态文档）→ `4bde79c`（气泡确定宽度 +
+凌晨事实分支）→ `a539dda`（气泡宽度钉成估算值）→ `f70bf4b`（`focusable` + 标点守卫）。每次都
+`[remote_build] 100% 构建流程全部完成` + `preview_refresh_status: 200`，本地 HEAD 与 `git ls-remote maker HEAD` 一致。
+构建前一律用 `maker-lua-lsp --mode watch`（**不用 `check`，它是假绿灯**）压到 Errors: 0。
+
+### Verified（云端 `runtime.log`，全程 `grep -c ERROR` = 0）
+
+- **10 秒闭环按毫秒对上**（`f70bf4b`，LA 03:59 会话）：`18:59:32.275 sent` → `33.772 waiting`(+1.497s)
+  → `39.271 typing`(+5.5s) → `42.272 回复`(+3.0s) → `42.287 replied → idle`，合计 **9.997 秒**。
+- **跳过等待真走状态机**：`18:23:24.462 跳过等待：从 waiting 直接推进到 replied`，4.1 秒完成，与正式链路同一生成路径。
+- **跨会话记忆读回**：`本地存档已读回 turns=4 记录=8 条` → `记忆装载来源: file` → 本轮 `记录第 5 轮 落盘=true`。
+- **重复发送被拒且草稿保留**（用户截图 + 日志双向对上）。
+- M0-0 真机定案同日完成（`5ac225f`，原生 Android `462.0x1029.0 DPR=0.94866532087326`）：角色正立、
+  横向落在右侧约 65%、角色框无黑底 ⇒ `nvgRotate(math.pi)` **保留**，`scene-to-nanovg.md:13` 那句在两个平台都不成立。
+
+### Changed（文档与知识层对账）
+
+- `docs/maker-lua-api-verification.md`：§0 结论表改判第 7 条（`LineEdit` 属废弃原生 UI，实际用 `UI.TextField`）
+  并新增第 10 条；§6 重写为"已跑通 + IME 仍未测"；§11 的"runtime.log 至今不存在"更正为已闭环，runbook 换成
+  实测口径（CLI 路径随版本漂移、判据字符串改 `[M0-1]`、补四条 watcher 运维坑）；§12 由「⚠️ 未定」改为
+  「✅ 已定」并新增 §12.2 真机判读；新增 §13 记录 `focusable` 点击陷阱。
+- `README.md`：「当前交接」重写为 M0-0 + M0-1 现状（背景静帧已在仓库、二维码已能生成），「怎么跑起来」
+  补上 runtime.log 的两个脾气。
+- `AGENTS.md`：「没有本地运行时」的进入 Lua 判据由 `[M0-0] 启动 M0-0 原型` 更新为 `[M0-1] 启动 M0-1 竖切片`，
+  「实施起点」同步到 M0-1 已落地。
+
+### Known issues
+
+- **日志区分不出「点击发送」与「回车发送」**（两条路径汇入同一个 `HandleSend`）。点击可用的直接证据只有用户实测，
+  日志侧仅时序旁证。要成硬证据需在发送入口加来源标签再构建一轮。
+- 我这边**拿不到预览画面**：`browser-use` 与 `playwright` 的导航在用户已口头授权后仍被宿主权限层判
+  `Auto mode: action blocked by classifier`，所以所有视觉判读都来自用户截图。
+- `maker_build_current_directory` 的自动提交仍会重排 `AGENTS.md`（author `taptap-maker`，逐行比对项目内容零丢失）。
+- 角色**悬空**、图标需网页侧人工、真机截图还差第三张（`-01-fullframe` 与 `-02-crop` 已在
+  `screenshots/device/`，但 `.project/project.json` 的 `assets.screenshots` 仍为 `[]`，且我没有改 `.project/` 的授权）、
+  中文 IME 未测、云变量记忆未接、
+  M0-1 前置资产修复项（骨骼 / RM 贴图 / 面数预算 / `SURFACE_UPDATEALWAYS`）本次未动。
+
+### Next
+
+- M1（规格 §9）：多时段状态与消息排队——现在只有"陌生网友 × 洛杉矶"一条线，且回复时机不随可用性档位改变；
+- 修角色悬空（需重新构建，会让当前真机基准失效）；
+- 若要给「点击可发送」留硬证据：`HandleSend` 加来源标签 + 一次构建。
+
 ## 2026-09-20 — M0-0 状态窗画面修复、图标交付位与云端构建
 
 ### Fixed

@@ -116,10 +116,12 @@ Marble 高质量 GLB 不直接作为 Maker 移动端主场景：官方规格约�
 
 ## 5. 最小验证顺序
 
-1. Tripo 导出原创角色 GLB → `import-gltf` 转 MDL → Maker 真机显示；**（M0-0 进行中：GLB 与 MDL 已就位，缺背景与真机验收）**
+1. Tripo 导出原创角色 GLB → `import-gltf` 转 MDL → Maker 真机显示；**（✅ 2026-09-21 真机验收通过：背景静帧已入包，角色正立、位于右侧约 65%、无黑底）**
 2. Marble 导出咖啡馆 4:3 静帧 → Maker 状态窗远景；后续可升 Cubemap 天空球；
 3. Lua 用 `common.get_server_time()` + 城市偏移表算洛杉矶当地时间并切换状态；
 4. `clientCloud` 保存一条消息、一次事件和一条共同记忆（异步回调 + `BatchSet` + 本地文件兜底）；
+   **（⏳ 2026-09-21 M0-1 只做到「本地文件兜底」这一半：`MemoryService` 用
+   `memory/m0-1-la-stranger.json` 实测跨会话读回，`clientCloud` 侧仅留异步接口未启用，预览成功不绑定云存储）**
 5. 之后才扩展城市、动画、音效和视觉资产。
 
 若任一步失败，保留上一步已验收资产，选择低成本回退；不在运行时引入新的外部服务。

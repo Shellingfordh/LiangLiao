@@ -25,9 +25,10 @@
 | 4 | Maker AI 在**运行时**润色文案 | ❌ **不成立** | 必须改：无运行时 LLM |
 | 5 | GLB 放进 `assets/` 即可运行时加载 | ❌ **不成立** | 必须改：GLB→MDL 构建期转换 |
 | 6 | Marble 全景能否接入 Maker「必须实测」 | ✅ 成立且**优于预期** | 官方有专用转换工具 |
-| 7 | 聊天 UI 需要文本输入控件 | ✅ 成立（`LineEdit`） | 无需改设计 |
+| 7 | 聊天 UI 需要文本输入控件 | ✅ 成立，但**只能用 `urhox-libs/UI` 的 `TextField`**（原生 `LineEdit` 已废弃） | 见 §6（2026-09-21 云端实测更新） |
 | 8 | 时间来源可信 | ✅ 成立且**优于预期**（`common.get_server_time()`） | 建议采用 |
 | 9 | `research/taptap-pages/` 作为文档依据 | ❌ **无效** | 38 份中 27 份是登录墙 |
+| 10 | 「输入框旁边的按钮点一下就能发」 | ❌ **不成立**，默认会静默失效 | 必须改：按钮加 `focusable = false`，见 §6.1 |
 
 规格第 203 行写的「不可把历史文档中的推测 API 当作已验收事实」是对的——本次验证发现 **3 条核心假设不成立**，
 其中 2 条会直接影响已冻结的 M0-0 基线。
@@ -283,7 +284,7 @@ poc/maker/assets/
 
 ---
 
-## 6. ✅ 成立：聊天 UI 有文本输入控件
+## 6. ✅ 成立：聊天 UI 有文本输入控件（2026-09-21 云端实测后修正用法）
 
 `.emmylua/LineEdit.d.lua`：
 
@@ -298,14 +299,20 @@ function LineEdit:SetCursorMovable(enable) end
 function LineEdit:SetTextSelectable(enable) end
 ```
 
-规格 §6.1 的「下部：主聊天流与消息输入」可以实现。
+⚠️ **但 `LineEdit` 属于已废弃的原生 UI 系统，不要用。** 本条是 2026-09-18 按「引擎里有没有输入控件」这个
+问题验证的，答案是有；而 AGENTS.md 规则 #10 已把原生 UI 判为废弃，2026-09-21 做 M0-1 时用的是新 UI 系统的
+`urhox-libs/UI` → `UI.TextField`（Yoga + NanoVG），它同时提供 `text` / 占位文案 / 提交回调，规格 §6.1 的
+「下部：主聊天流与消息输入」据此已跑通。
 
-**未验证项（需真机确认）**：`LineEdit` 在 Android / iOS 上的**中文输入法（IME）**行为。
-Dev Kit 中未检索到 IME 相关说明。这是移动端文本输入的经典坑
-（候选词、拼音上屏、软键盘遮挡输入框），建议在 M0-1 做可编辑输入时**第一个验证**。
+**云端实测已确认**（本阶段共五次构建 `415cb4c` → `f70bf4b`，其中 `4bde79c` 起聊天链路可用，
+全程 `runtime.log` 零 ERROR）：
+`UI.TextField` 在 Maker 云端预览里可显示预填草稿、可编辑、回车可提交，且提交后草稿按预期保留/清空。
 
-规格 §9 的 M0-1 已经很聪明地把首版设为「默认可编辑消息」而非任意输入，
-这个设计正好能在 IME 有问题时降级为「预置消息 + 轻度编辑」。**保持这个设计。**
+**仍未验证**：Android / iOS 上**中文输入法（IME）**的候选词与上屏行为——Dev Kit 里没有 IME 相关说明，
+而 M0-1 的实测全程用的是预填草稿，没有真的用拼音输入法打过字。规格 §9 把首版设成「默认可编辑消息」
+正好能在 IME 有问题时降级为「预置消息 + 轻度编辑」，**保持这个设计**。
+
+（同一轮实测还发现「输入框旁边的按钮默认点不动」，独立成条 → §13。）
 
 ---
 
@@ -440,10 +447,9 @@ Uncaught InvalidStateError: An operation that depends on state cached in an inte
   `findFirstExisting()` 命中即返回。缺失的 `la-cafe-4x3.png` 由 `RefreshResourceNotices()` 优雅降级成
   一条 UI 提示，不会形成 404 风暴。
 
-**未闭环**：`runtime.log` 至今不存在，说明还没有一次会话真正加载过。浏览器预览页需 TapTap 开发者会话，
-自动化浏览器会被 302 到 `/intro`，`generate_test_qrcode` 的 schema 禁止在构建/预览流程自动调用，
-故**最后一步只能由人在自己浏览器里做**：关掉多余预览标签页 → `Ctrl+Shift+R`；仍卡 0% 则
-Clear site data for `maker.taptap.cn` 后重开。
+**已闭环（2026-09-21 补）**：`runtime.log` 后来出现了，而且多轮会话完整跑到 Lua 层，零 ERROR——
+「卡 `Initializing… 0%`」不是这几次构建的故障，装载层已通。取日志的实际操作口径见下面的 runbook，
+其中「跑 ~20s 后 Ctrl-C」与判据字符串都已按实测更正。
 
 ### 复现/收尾 runbook（下一次照抄即可，不要重新探索）
 
@@ -451,18 +457,32 @@ Clear site data for `maker.taptap.cn` 后重开。
 # 0) 用户侧：关掉多余预览标签页，硬刷新预览页
 #    https://maker.taptap.cn/app/720b27bf-ca69-44ac-a776-a88ec2ec2b28?localDev=1
 
-# 1) 拉最近一次会话的运行日志（窗口上限 1 小时，切勿带 --reset）
-"C:/nvm4w/nodejs/node.exe" "C:/Users/20145/.taptap-maker/mcp-runtime/0.0.33/dist/maker.js" \
-  logs watch --target-dir "D:/Develop/ShanTianLiang" --interval 5s \
-  --env production --server-url "https://maker.taptap.cn/mcp/v1"
-#    跑 ~20s 后 Ctrl-C；结果看 .maker/logs/runtime/runtime.log
-#    判据：文件出现且含 "[M0-0] 启动 M0-0 原型" → Lua 已跑到，问题在代码层；
-#          文件仍不存在 → 仍在装载层。
-
-# 2) 收尾：logs watch 会把 origin 改指回 Maker URL —— 按 2026-09-19 的决定这已是预期行为，
-#    不需要纠正（见 AGENTS.md「Git 拓扑」：所有推送只发 maker，GitHub 暂不管，github 远端仅留档）。
-#    只有当你确实要动 GitHub 时，才临时 set-url 并重新 fetch（tracking ref 不重 fetch 会残留假值）。
+# 1) 拉运行日志。CLI 位置随 @taptap/maker 版本漂移，先确认哪个存在：
+#    C:/Users/20145/.taptap-maker/mcp-runtime/<ver>/dist/maker.js        （MCP 自运行时）
+#    C:/Users/20145/AppData/Local/npm-cache/_npx/<hash>/node_modules/@taptap/maker/bin/taptap-maker
+node "<上面任一个>" logs watch --target-dir "D:/Develop/ShanTianLiang" --interval 5s
+#    ⚠️ 绝对不要带 --reset：它会连 state.json 与 runtime.log 一起清空（构建工具自己重启时就是带的）。
+#    判据：`.maker/logs/runtime/runtime.log` 出现入口行
+#          "[M0-1] 启动 M0-1 竖切片"（M0-0 时代是 "[M0-0] 启动 M0-0 原型"）→ Lua 已跑到，问题在代码层；
+#          文件仍不存在 → 仍在装载层。链路日志前缀：[MsgService] / [EventService] / [Memory] / [ChatPanel]，
+#          一次发送的闭环落点是 "[M0-1] 回复 #N → replied 事实=la_cafe_open_mic"。
 ```
+
+**四条踩过的 watcher 运维坑（2026-09-21 一天内全部实测，别再重复探索）**：
+
+| 坑 | 实测 | 应对 |
+| --- | --- | --- |
+| 每次构建都会重启 watcher 且带 `--reset` | 构建返回值里 `watch_command: … --reset`、`previous_watch_stopped: yes`，本地 `runtime.log` 当场消失 | **下一次构建之前必须把日志证据转录进文档**；原始文件不跨构建存活 |
+| CLI watcher 只活 **4~8 分钟** | 同日三次：08:57:22Z、09:30:50Z、10:43:45Z 停在 `watcher stopped`；另两次约 4 分钟后崩在 `EPERM: rename state.json.<pid>.<ts>.tmp` | 取证当下**先量** `state.json.updatedAt` 与当前 UTC 的差，超十几秒就重启 |
+| 「人死了日志就取不回来」是错的 | 死时游标停在 18:28:49，19:07 不带 `--reset` 重启，一次拉回 21,345 字节，把 18:59 那次会话完整补回（`runtime.log` 25,550 → 46,895） | 判断标准只有**「`now - nextStartTime` 是否超过 1 小时窗口」** |
+| `watcher.out.log` 会假死 | 用 `logs watch \| tail -N` 起的时候，它自己的 `pulled: N` 行被管道憋住不落盘，文件停在上一实例的 `stopped` 行 | **判活性只看 `state.json.updatedAt` 和 `runtime.log` 的 mtime/字节数**（后者由进程直写） |
+
+顺带一条被证伪的推测：EPERM 崩**不是**「两个 watcher 并存互杀」——第二次重启时前一个实例已退出 4 分钟，
+单实例照样在 4 分钟后崩。真实原因是本机另有进程短期占用 `state.json`（索引/杀软/编辑器一类），与并发无关。
+
+收尾不变：`logs watch` 会把 `origin` 改指回 Maker URL —— 按 2026-09-19 的决定这是预期行为，不需要纠正
+（见 AGENTS.md「Git 拓扑」：所有推送只发 `maker`，GitHub 暂不管，`github` 远端仅留档）。
+只有当确实要动 GitHub 时，才临时 `set-url` 并**重新 fetch**（tracking ref 不重 fetch 会残留假值）。
 
 服务端只读探针（本次全部跑过，均正常，别再重复）：`maker_status_lite`（`project_health: ready`）、
 `get_ad_config`（`app_id 940330` / `developer_id 471831` 均在，广告未开通与预览无关；
@@ -473,7 +493,12 @@ Clear site data for `maker.taptap.cn` 后重开。
 推送时间因果 / 工程健康 / 模块加载期副作用 / 候选路径 404 风暴 / `asset_ignores` 误剔必需资源 /
 headless 引擎验证（本地无此能力）/ 自动化浏览器（无登录态）/ 反馈与历史日志通道（恒空且窗口仅 1 小时）。
 
-## 12. ⚠️ 未定：`nvgCreateVideo` 对 RenderTarget 的方向处理，文档与实测冲突（2026-09-20）
+## 12. ✅ 已定：`nvgCreateVideo` 对 RenderTarget 的方向处理，引擎文档写错了（2026-09-20 提出，2026-09-21 真机定案）
+
+> **结论先说，见 §12.2**：不加 `nvgRotate(math.pi)` 角色上下颠倒，加了才正立——WebGL 与原生 Android 行为一致，
+> `scene-to-nanovg.md:13` 那句「不需要额外翻转 Y」不成立，代码里那枚旋转**必须保留**。
+> 下面 §12 主体保留 2026-09-20 当时「文档与实测矛盾、只能等真机」的完整推演与判读表（方法本身仍可复用），
+> 读的时候把它当过程记录，不要当未决项。
 
 M0-0 状态窗把独立 3D 场景渲到 `Texture2D` RenderTarget，再用 `nvgCreateVideo` + `nvgImagePattern`
 画进 UI。这条路径的**画面方向**目前只有矛盾证据，没有定论：
@@ -528,9 +553,10 @@ M0-0 状态窗把独立 3D 场景渲到 `Texture2D` RenderTarget，再用 `nvgCr
 留档：`screenshots/preview-m00-after-fix.png`（整页）与
 `screenshots/preview-m00-after-fix-statuswindow-crop.png`（状态窗放大裁切）。
 
-**仍未决**：原生 Android/iOS 是否与 WebGL 同行为。`nvgCreateVideo` 的类型注释自己写了
+**当时仍未决**：原生 Android/iOS 是否与 WebGL 同行为。`nvgCreateVideo` 的类型注释自己写了
 「or 0 on failure/**unsupported platform**」，方向归一化与 alpha 都可能分平台，
 所以 WebGL 的正结果**不能**外推成真机结论；判读表其余四行对真机依然有效。
+**（这一条已由 §12.2 在 2026-09-21 真机定案：与 WebGL 同行为。）**
 
 **两条二维码通道不一致，扫码前须知**（同日实测）：
 
@@ -583,6 +609,44 @@ WARNING: DownloadManager: no resources resolved for batch download
 
 这条改变了 M0-0 收尾的取物方式：用户扫码并试玩一次之后，先查 `get_debug_feedbacks`，
 再决定是否需要人工补拍截图。
+
+### 12.2 ✅ 真机侧已定论：判读表第 1 行成立，本节冲突结束（2026-09-21 12:53 实测）
+
+用户用 TapTap 扫码在原生手机上跑通 `5ac225f`，系统截图存于 `screenshots/device/m00-realdevice-01-fullframe.jpg`。
+三项判读全部落在第 1 行，**与 §12.1 的 WebGL 结论一致，不分平台**：
+
+| 判读项 | 真机结果 | 对本节的意义 |
+| --- | --- | --- |
+| 角色上下方向 | 正立 | 「unsupported platform 归一化」这个解释**不需要**，文档那句「不需要额外翻转 Y」才是错的 |
+| 角色横向位置 | 右侧约 65%（WebGL 为约 70%） | 与基准同侧 ⇒ 没有多余的那 180°，`nvgRotate(math.pi)` **必须保留** |
+| 角色框是否黑底 | 无黑底，四周透出窗景 | 透明底 RT 的 alpha 在原生生效 ⇒ 判读表第 4 行排除 |
+
+同时排除了「设备其实是浏览器仿真」的可能：该会话日志打 `屏幕物理分辨率: 462.0x1029.0 DPR=0.94866532087326`，
+而 WebGL 预览是 712×906 一类的桌面/移动仿真尺寸。
+
+⇒ **最终结论：`engine-docs/recipes/scene-to-nanovg.md:13` 与 `.emmylua/NanoVG.d.lua:299-300` 两条文档说法在
+WebGL 与原生 Android 上都不成立**，本项目代码里的 `nvgRotate(math.pi)` 是必须保留的修正，不是待清理的临时补丁。
+上面那张判读表作为方法保留（下次再遇到方向争议仍然适用），四条本地死路（§12 末表）里除
+「用 `mcp__user-browser-use` 接管已登录 Chrome」那一条外依然有效。
+
+## 13. ❌ 不成立：输入框旁边的按钮默认点不动（2026-09-21 云端实测）
+
+同一个 `UI.TextField` + `UI.Button` 组合里，**回车能提交，点「发送」却毫无反应，而且不报任何错**。
+根因在引擎的点击判定与软键盘引起的布局位移，两段源码即可解释：
+
+| 位置 | 事实 |
+| --- | --- |
+| `urhox-libs/UI/Core/UI.lua:2379` | `HandlePointerUp` 只在**按下与抬起命中同一个控件**时才派发 `OnClick` |
+| `urhox-libs/UI/Core/UI.lua:2341` | 焦点继承的判据是 `widget.focusable ~= false`——引擎自己的 `EditMenu` 就用这个开关避免抢走输入框焦点 |
+
+链条：点按钮 → `TextField` 失焦 → 软键盘收起 → **画布高度变化 → 整棵 Yoga 布局位移** → 抬起时命中的已经不是按钮
+→ `OnClick` 静默不触发。**修法就是一行**：按钮设 `focusable = false`（`scripts/ui/ChatPanel.lua` 里「发送」与
+「跳过等待」两个按钮都加了），改完用户复测确认「它可以发送」。
+
+**How to apply:** 界面里只要有软键盘输入框，它旁边的按钮**默认**加 `focusable = false`，不要等复现。
+排查时旁证比报错快——同一份包里「跳过等待」点击是好的，因为那时键盘已经因回车收起、不再产生位移。
+⚠️ 另记一条取证限制：**日志区分不出「点击发出」和「回车发出」**（两条路径汇入同一个发送函数）。
+要做成硬证据必须在发送入口带一个来源标签再构建一轮，别拿时序旁证当结论写进验收材料。
 
 
 
