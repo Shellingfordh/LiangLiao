@@ -91,6 +91,36 @@ local function logInfo(msg)
     log:Write(LOG_INFO, "[ChatPanel] " .. msg)
 end
 
+--- 估算文本宽度：中日韩按 1em、ASCII 按 0.55em。
+--- 气泡宽度必须由这里算出来并钉成确定值：ScrollView 子树里引擎的文本测量
+--- 不会把容器撑开，预览实测正文被同层角标挤成一行 4 个字。
+---@param s string
+---@param fontSize number
+---@return number
+local function estTextWidth(s, fontSize)
+    ---@type number
+    local w = 0
+    local i = 1
+    local n = #s
+    while i <= n do
+        local b = s:byte(i)
+        local step = 1
+        local adv = fontSize * 0.55
+        if b >= 0xF0 then
+            step = 4
+        elseif b >= 0xE0 then
+            step = 3
+            adv = fontSize
+        elseif b >= 0xC0 then
+            step = 2
+            adv = fontSize
+        end
+        w = w + adv
+        i = i + step
+    end
+    return w
+end
+
 ---@class ChatPanelOptions
 ---@field devTools? boolean 是否显示「跳过等待」（开发预览用）
 ---@field initialDraft? string 输入框默认内容
@@ -125,12 +155,24 @@ local function MakeBubbleRow(msg)
         }
     end
 
+    local metaText = (msg.clockText or "") .. (isUser and " · 洛杉矶 · 你" or " · 若夕")
+    local bodyW = estTextWidth(msg.text, 13)
+    local metaW = estTextWidth(metaText, 9)
+    if bodyW < metaW then
+        bodyW = metaW
+    end
+    if bubbleTextMaxW_ and bodyW > bubbleTextMaxW_ then
+        bodyW = bubbleTextMaxW_
+    end
+    local bubbleW = bodyW + BUBBLE_PAD_X * 2
+
     return UI.Panel {
         width = rowW_ or "100%",
         flexDirection = "row",
         justifyContent = isUser and "flex-end" or "flex-start",
         children = {
             UI.Panel {
+                width = bubbleW,
                 maxWidth = bubbleOuterMaxW_ or "78%",
                 backgroundColor = isUser and COLORS.userBubble or COLORS.herBubble,
                 borderRadius = 12,
@@ -139,15 +181,16 @@ local function MakeBubbleRow(msg)
                 children = {
                     UI.Label {
                         text = msg.text,
+                        width = bodyW,
+                        maxWidth = bubbleTextMaxW_,
                         fontSize = 13,
                         fontColor = isUser and COLORS.userText or COLORS.herText,
                         whiteSpace = "normal",
                         wordBreak = "break-word",
-                        maxWidth = bubbleTextMaxW_,
                         lineHeight = 1.35,
                     },
                     UI.Label {
-                        text = (msg.clockText or "") .. (isUser and " · 洛杉矶 · 你" or " · 若夕"),
+                        text = metaText,
                         fontSize = 9,
                         fontColor = COLORS.dimText,
                         whiteSpace = "nowrap",

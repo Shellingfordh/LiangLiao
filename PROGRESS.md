@@ -42,5 +42,56 @@ commit `fd87d29`「docs: update maker project documents」，elapsed 57s，`last
 - 同一批 commit 里另有两处**不是**我动的：`AGENTS.md` 被 `maker_build_current_directory`（author `taptap-maker`）重排成其策略头在前（排序逐行比对：项目内容零丢失，净增 2 个空行）；`scripts/**/*.meta` 5 个由云端 `TapCode Rollback <rollback@code.taptap.cn>` 为新建 lua 文件自动生成。
 - `git diff --name-only c6c7f53 HEAD` 里的 `.project/project.json`、`_uploads/*`、`.agents/skills`、`.opencode/skills` 属于 `fd1719e [1789968709443] sync at 2026/9/21 13:31:49`——本会话开始前云端已有的 commit，构建时 fast-forward 进来的，不是本次产出。
 
+## 构建 #3（修两个预览实测缺陷）：成功
+commit `4bde79c`，elapsed 52s，`[remote_build] 100% 构建流程全部完成`，`preview_refresh_status: 200`；本地 HEAD == `git ls-remote maker HEAD` == `4bde79c`。修前 LSP `--mode watch` 55s 仍 **Errors: 0**（mtime 17:25:54，我改的五个文件零 ERROR 零 WARN）。
+
+用户 17:10 左右自己打开了预览并回传截图，据此确认与修正：
+- ✅ 已成立：4:3 状态窗仍在（角色正立、背景在位）；时间行「洛杉矶 · 02:10 · 已经睡下了」；系统说明行、若夕开场气泡、`已聊 0 轮 · 记忆来源 memory · 最近事实 无`（MemoryService 在跑）、预填原文的输入框、蓝色「发送」、「跳过等待」灰着（未等待时正确禁用）、底部 idle 文案。**任务 2 的四件东西同屏成立。**
+- 🔴 缺陷 1 已修：气泡塌成一列两个字。根因是 ScrollView 子树里的百分比宽度（`maxWidth="78%"` + Label 自动补的 `maxWidth="100%"`）在首轮测量拿不到确定父宽。改法：`main.lua` 按 `graphics.width / GetDPR()` 算出聊天区逻辑宽传给 `ChatPanel.Build{outerWidth}`，行宽/气泡宽/文本宽全部换成确定像素。
+- 🔴 缺陷 2 已修：02:10 说「咖啡馆晚上那场还没开始，我先占位子」——与「已经睡下了」自相矛盾。`EventService` 加 `dayBreakHour=8`：22:00–次日 08:00 归 `ended`，08:00–19:00 才是 `upcoming`；事实句改成自带地点且随 `place` 分支（凌晨在公寓 →「早就收了，我回公寓了」），`ContentService` 模板同步去掉重复 `{place}`，避免「咖啡馆…咖啡馆…」叠字。
+
+## 闭环运行时证据（构建 #3 `4bde79c`，云端 runtime.log，2026-09-21 18:03–18:04）
+
+watcher 在 09:30:50Z 又静默死掉（用户会话正好落在死亡窗口内），我 10:07 按 `state.json` 的
+`nextStartTime` 游标**不带 `--reset`** 重启，一次拉回 22642 字节历史日志。`grep -c ERROR runtime.log` = **0**。
+逐条原文（`userId:863014094`，topic `user_script`，已去重）：
+
+```
+[M0-1] 启动 M0-1 竖切片
+[M0-1] 屏幕物理分辨率: 502.0x1116.0 DPR=1.0286885499954
+[M0-1] 时间状态: 2026-09-21 03:03 洛杉矶 UTC-7 DST=true 季节=秋 天气=风 可用性=offline 地点=apartment
+[MsgService] 初始化完成，正式链路等待 10.0 秒
+[Memory] 初始化，本地存档路径 memory/m0-1-la-stranger.json 云适配器=无
+[Memory] 没有本地存档，使用初始内存状态
+[M0-1] 状态窗背景已挂载: Textures/backgrounds/la-cafe-4x3.png
+[MsgService] 系统消息: M0-1 竖切片 · 现在只有「陌生网友 × 洛杉矶」这一条线
+[MsgService] 用户消息 #3 已发出 serverTime=1789985031
+[MsgService] 状态迁移 sent
+[M0-1] 发送 #3 → sent（10 秒后回复）
+[MsgService] 状态迁移 waiting
+[M0-1] 等待回复中，本次发送已忽略并保留草稿
+[MsgService] 状态迁移 typing
+[EventService] 事件事实 state=ended place=apartment clock=03:04
+[MsgService] 若夕回复 #4 fact=la_cafe_open_mic: 「塞法尔东非」咖啡馆那场早就收了，我回公寓了。你今天过得怎么样？
+[Memory] 本地存档已写入 372 字节
+[Memory] 记录第 1 轮 topics= 落盘=true
+[M0-1] 回复 #3 → replied 事实=la_cafe_open_mic 状态=ended 话题=无 正文=「塞法尔东非」…
+[MsgService] 状态迁移 replied → idle
+[MsgService] 用户消息 #5 已发出 serverTime=1789985053
+[M0-1] 发送 #5 → sent（10 秒后回复）
+```
+
+⇒ **完成条件 1 成立**：`sent → waiting → typing → replied` 一次跑通，且同屏截图对上「等待若夕回复 · 约 9 秒」
+与「若夕正在输入…」。附带被证到的还有：重复发送被拒且草稿不丢（日志一行 + 截图输入框仍有字）；
+回复确实引用咖啡馆活动事实并回显用户原文；`记忆来源` 从 `memory` 翻成 `file`（本地存档 372 字节真写盘）；
+03:03 走 `ended` 分支不再自相矛盾；`UTC-7 DST=true` 与 9 月美西一致。
+**未跑到的只有一条**：「跳过等待」按钮（截图 1 里它已正确点亮，但用户没点，日志无 `跳过等待：从 …` 行）。
+
+## 仍存的视觉缺陷（构建 #4 修）
+气泡仍是一行约 4 个字。日志证明确定宽度**已生效**（`[ChatPanel] 气泡宽度定为确定值：行 434 / 文本 412（屏幕逻辑宽 454）`），
+所以塌陷不是百分比问题：真正驱动气泡宽度的是同层那条 `nowrap` 的时间角标（约 50px），正文 Label 的测量宽度没有把
+容器撑开，于是正文被按 ~50px 换行。改法：不再依赖引擎文本测量，按字数估出确定宽度后同时钉死
+正文 Label 与气泡 Panel 的 `width`。
+
 ## 待用户裁决（文档漂移，不在我的白名单）
 `AGENTS.md`「没有本地运行时」一节把进入 Lua 的判据写成 `[M0-0] 启动 M0-0 原型`。本次入口日志改为 `[M0-1] 启动 M0-1 竖切片`，链路日志前缀分别是 `[MsgService] / [EventService] / [Memory] / [ChatPanel]`，回复落点为 `[M0-1] 回复 #N → replied 事实=la_cafe_open_mic`。`StatusWindow.lua` 仍打 `[M0-0]`，所以那一段老判据里只有这一句需要更新，等用户改 AGENTS.md（我不改）。
