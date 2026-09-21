@@ -12,6 +12,7 @@ local CAFE_EVENT = {
     title = "咖啡馆的开放麦克风夜",
     startHour = 19,   -- 与 TimeState 作息 19:00「还在外面 / cafe」对齐
     endHour = 22,     -- 与 TimeState 作息 22:00「回到公寓了」对齐
+    dayBreakHour = 8, -- 与作息 6:00「在煮咖啡」之后；凌晨到清晨属于「上一场已收」
 }
 
 ---@type table<string, string>
@@ -49,22 +50,27 @@ end
 local function eventStateAt(hour)
     if hour >= CAFE_EVENT.startHour and hour < CAFE_EVENT.endHour then
         return "ongoing"
-    elseif hour < CAFE_EVENT.startHour then
+    elseif hour >= CAFE_EVENT.dayBreakHour and hour < CAFE_EVENT.startHour then
         return "upcoming"
     end
+    -- 22 点之后到次日早上：属于「上一场早就收了」，不能说成还没开始去占位子
     return "ended"
 end
 
 --- 「咖啡馆活动未结束」这条事实的完整表述；其余状态也要有落点，否则回复会空
 ---@param state string
+---@param snap table
 ---@return string
-local function phraseFor(state)
+local function phraseFor(state, snap)
+    local place = PLACE_LABEL[snap.place] or "外面"
     if state == "ongoing" then
         return "咖啡馆这场还没收，人比昨天多一点"
     elseif state == "upcoming" then
-        return "咖啡馆晚上那场还没开始，我先占位子"
+        return "咖啡馆晚上那场还没开始，我还在" .. place
+    elseif snap.place == "apartment" then
+        return "咖啡馆那场早就收了，我回公寓了"
     end
-    return "咖啡馆那场已经收了，我在回去的路上了"
+    return "咖啡馆那场已经收了，我在" .. place
 end
 
 --- 选择当前时刻的事件事实快照
@@ -77,7 +83,7 @@ function EventService.FromSnapshot(snap)
         id = CAFE_EVENT.id,
         eventState = state,
         eventTitle = CAFE_EVENT.title,
-        eventPhrase = phraseFor(state),
+        eventPhrase = phraseFor(state, snap),
         eventEndsAt = string.format("%02d:00", CAFE_EVENT.endHour),
         place = snap.place,
         placeLabel = PLACE_LABEL[snap.place] or "外面",

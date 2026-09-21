@@ -260,10 +260,19 @@ function CreatePage()
         },
     })
 
+    -- 气泡宽度必须是确定像素：ScrollView 子树里的百分比宽度在首轮测量拿不到确定父宽，
+    -- 预览实测会塌成「一行两个字」。逻辑宽 = 物理宽 / DPR（AGENTS 规则 #0.8）。
+    local dpr = graphics:GetDPR()
+    if not dpr or dpr <= 0 then
+        dpr = 1
+    end
+    local chatOuterWidth = graphics.width / dpr - 32 - 2
+
     local chat = ChatPanel.Build({
         devTools = CONFIG.DevTools,
         initialDraft = ContentService.DefaultDraft(),
         minHeight = 190,
+        outerWidth = chatOuterWidth,
         onSend = HandleSend,
         onSkip = HandleSkip,
         onDraftChange = MessageService.SetDraft,

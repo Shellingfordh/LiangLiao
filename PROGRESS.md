@@ -33,5 +33,14 @@
 - LSP 门禁：`maker-lua-lsp --mode watch`（非 check，见项目记忆）跑 55s，`logs/lua_errors.log` mtime 16:29:58 为当次新写，结果 **Errors: 0**（Warnings 11 全在既有 `StatusWindow.lua` 的 unnecessary-if；HINT 6 条为未用参数）。首轮跑出 2 个真 ERROR（`MessageService.lua:123` return-type-mismatch、`main.lua:171` param-type-mismatch）已修。
 - **runtime.log 为空，且原因不是报错**：`.maker/logs/runtime/runtime.log` 至今不存在；`state.json` 显示 watcher `lastSuccessAt` 每 5 秒刷新、`consecutiveFailures: 0`、`lastError: null`，`watcher.out.log` 连续 `Maker runtime logs pulled: 0`。云端运行时日志只在**有游戏会话真的跑起来**时才产生，而打开预览这一动作我这边被宿主权限层拦了（browser-use 与 playwright 各 1 次，均在用户已口头授权后仍返回 `Auto mode: action blocked by classifier`）。因此 sent→waiting→typing→replied 的**闭环尚未拿到运行时证据**：既没有预览画面，也没有一次真实发送的日志（本机无 lua/luajit/UrhoXCLI，不能离线跑这套状态机，也没有伪造自动发送）。这一条如实挂在 BLOCKED.md。
 
+## 构建 #2（承载本文件与 BLOCKED.md）：成功
+commit `fd87d29`「docs: update maker project documents」，elapsed 57s，`last_progress: [remote_build] 100% 构建流程全部完成`，`preview_refresh_status: 200`，远端仍报「🎉 项目构建成功」；`scripts/` 内容与 `415cb4c` 一致，故 Lua 侧无新增风险。构建后 `git status` 干净（云端自长的 `cdd46e4 sync at…` commit 已随工具链并入本地 main）。
+再查运行时日志：`runtime.log` 仍不存在，`state.json` 依旧 `lastWrittenLogs: 0 / consecutiveFailures: 0 / lastError: null` —— 两次构建之间没有任何游戏会话跑起来，与预览入口被权限层拦截一致。**结论：自动验证口径里的「构建成功 + 日志无 ERROR」两条都成立（日志侧是「无 ERROR 可报」，因为会话未启动）；完成条件 1 的后半句（一次真实发送的闭环证据）尚未成立。**
+
+## 提交归属（白名单核查）
+- 我的改动只有：`scripts/main.lua`、新建 `scripts/services/{Message,Event,Content,Memory}Service.lua`、新建 `scripts/ui/ChatPanel.lua`、新建 `PROGRESS.md`/`BLOCKED.md`。`TimeState.lua`、`StatusWindow.lua` 未改（无需改）。
+- 同一批 commit 里另有两处**不是**我动的：`AGENTS.md` 被 `maker_build_current_directory`（author `taptap-maker`）重排成其策略头在前（排序逐行比对：项目内容零丢失，净增 2 个空行）；`scripts/**/*.meta` 5 个由云端 `TapCode Rollback <rollback@code.taptap.cn>` 为新建 lua 文件自动生成。
+- `git diff --name-only c6c7f53 HEAD` 里的 `.project/project.json`、`_uploads/*`、`.agents/skills`、`.opencode/skills` 属于 `fd1719e [1789968709443] sync at 2026/9/21 13:31:49`——本会话开始前云端已有的 commit，构建时 fast-forward 进来的，不是本次产出。
+
 ## 待用户裁决（文档漂移，不在我的白名单）
 `AGENTS.md`「没有本地运行时」一节把进入 Lua 的判据写成 `[M0-0] 启动 M0-0 原型`。本次入口日志改为 `[M0-1] 启动 M0-1 竖切片`，链路日志前缀分别是 `[MsgService] / [EventService] / [Memory] / [ChatPanel]`，回复落点为 `[M0-1] 回复 #N → replied 事实=la_cafe_open_mic`。`StatusWindow.lua` 仍打 `[M0-0]`，所以那一段老判据里只有这一句需要更新，等用户改 AGENTS.md（我不改）。

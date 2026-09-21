@@ -19,22 +19,23 @@ local TOPIC_WORDS = {
 }
 
 -- 事件事实 → 主干句。首版唯一的话题就是洛杉矶咖啡馆这一场。
+-- {event} 自带地点，所以模板里不再重复 {place}，否则会出现「咖啡馆…咖啡馆…」
 ---@type table<string, string[]>
 local EVENT_LINES = {
     ongoing = {
-        "还在{place}，{event}。你那边是不是真的快傍晚了？",
-        "{event}，{place}这会儿{weather}，我抽空回你一句。",
+        "{event}，店里这会儿{weather}。",
         "嗯，{event}，要到{ends}才收。",
+        "{event}。你那边这个点还醒着？",
     },
     upcoming = {
-        "{event}，我先在{place}坐着。",
-        "还没到点，{ends}才开始，我提前过去占位子。",
-        "{event}，等下要{place}帮忙搬东西。",
+        "{event}，{ends}才开始。",
+        "{event}，今天{weather}，我先把手头的做完。",
+        "{event}，你要跟我说说今天吗？",
     },
     ended = {
-        "{event}，{place}已经收了。你今天过得怎么样？",
-        "刚散场，我往{place}外走了。",
-        "{event}，嗓子有点哑。",
+        "{event}。你今天过得怎么样？",
+        "{event}，明天还有一场。",
+        "{event}，刚坐下。",
     },
 }
 

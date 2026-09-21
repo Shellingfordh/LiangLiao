@@ -25,6 +25,18 @@ local IDLE_HINT = "写下你想对她说的话，发送后她会隔一会儿才�
 local TYPING_GLYPHS = { "。", "。。", "。。。" }
 local TYPING_STEP_SECONDS = 0.45
 local SCROLL_SETTLE_FRAMES = 3
+local SCROLL_PAD = 10
+local BUBBLE_PAD_X = 11
+
+-- 气泡宽度：ScrollView 内子树的百分比宽度在首轮测量时拿不到确定父宽，
+-- "78%" 会塌成最小内容宽（预览实测：一行两个字）。所以由 main 传入屏幕逻辑宽，
+-- 这里一律换成确定像素值；没传时退回百分比（桌面窗体下不影响功能）。
+---@type number|nil
+local rowW_ = nil
+---@type number|nil
+local bubbleOuterMaxW_ = nil
+---@type number|nil
+local bubbleTextMaxW_ = nil
 
 ---@type Widget|nil
 local root_ = nil
@@ -83,6 +95,7 @@ end
 ---@field devTools? boolean 是否显示「跳过等待」（开发预览用）
 ---@field initialDraft? string 输入框默认内容
 ---@field minHeight? number 聊天区最小高度，防止短屏把输入框挤没
+---@field outerWidth? number 聊天区可用逻辑宽度（屏幕逻辑宽 - 页面左右内边距），用于把气泡宽度定成确定值
 ---@field onSend? fun(text: string) 点击发送 / 回车
 ---@field onSkip? fun() 点击跳过等待
 ---@field onDraftChange? fun(text: string) 输入变化，回写草稿
@@ -96,7 +109,7 @@ local function MakeBubbleRow(msg)
 
     if msg.role == "system" then
         return UI.Panel {
-            width = "100%",
+            width = rowW_ or "100%",
             alignItems = "center",
             children = {
                 UI.Label {
@@ -104,6 +117,8 @@ local function MakeBubbleRow(msg)
                     fontSize = 10,
                     fontColor = COLORS.systemText,
                     whiteSpace = "normal",
+                    wordBreak = "break-word",
+                    maxWidth = bubbleTextMaxW_,
                     textAlign = "center",
                 },
             },
@@ -111,15 +126,15 @@ local function MakeBubbleRow(msg)
     end
 
     return UI.Panel {
-        width = "100%",
+        width = rowW_ or "100%",
         flexDirection = "row",
         justifyContent = isUser and "flex-end" or "flex-start",
         children = {
             UI.Panel {
-                maxWidth = "78%",
+                maxWidth = bubbleOuterMaxW_ or "78%",
                 backgroundColor = isUser and COLORS.userBubble or COLORS.herBubble,
                 borderRadius = 12,
-                paddingHorizontal = 11,
+                paddingHorizontal = BUBBLE_PAD_X,
                 paddingVertical = 8,
                 children = {
                     UI.Label {
@@ -128,6 +143,7 @@ local function MakeBubbleRow(msg)
                         fontColor = isUser and COLORS.userText or COLORS.herText,
                         whiteSpace = "normal",
                         wordBreak = "break-word",
+                        maxWidth = bubbleTextMaxW_,
                         lineHeight = 1.35,
                     },
                     UI.Label {
@@ -167,6 +183,15 @@ function ChatPanel.Build(opts)
         whiteSpace = "nowrap",
     }
 
+    if opts.outerWidth and opts.outerWidth > 120 then
+        local inner = opts.outerWidth - SCROLL_PAD * 2
+        rowW_ = inner
+        bubbleOuterMaxW_ = inner
+        bubbleTextMaxW_ = inner - BUBBLE_PAD_X * 2
+        logInfo(string.format("气泡宽度定为确定值：行 %.0f / 文本 %.0f（屏幕逻辑宽 %.0f）",
+            inner, bubbleTextMaxW_, opts.outerWidth))
+    end
+
     typingLabel_ = UI.Label {
         text = "若夕正在输入。",
         fontSize = 13,
@@ -175,7 +200,7 @@ function ChatPanel.Build(opts)
     }
 
     typingRow_ = UI.Panel {
-        width = "100%",
+        width = rowW_ or "100%",
         flexDirection = "row",
         justifyContent = "flex-start",
         visible = false,
@@ -183,7 +208,7 @@ function ChatPanel.Build(opts)
             UI.Panel {
                 backgroundColor = COLORS.herBubble,
                 borderRadius = 12,
-                paddingHorizontal = 11,
+                paddingHorizontal = BUBBLE_PAD_X,
                 paddingVertical = 8,
                 children = { typingLabel_ },
             },
@@ -192,7 +217,7 @@ function ChatPanel.Build(opts)
 
     content_ = UI.Panel {
         id = "chatMessages",
-        width = "100%",
+        width = rowW_ or "100%",
         flexDirection = "column",
         gap = 8,
         children = { typingRow_ },
@@ -208,7 +233,7 @@ function ChatPanel.Build(opts)
         showScrollbar = true,
         backgroundColor = COLORS.panelBg,
         borderRadius = 12,
-        padding = 10,
+        padding = SCROLL_PAD,
         children = { content_ },
     }
 
