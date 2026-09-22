@@ -607,33 +607,41 @@ local function ScenarioEventReentry(dateKey)
 
     -- 19:45 空闲：回复走开放麦那一组文案，并带上送达瞬间的实例键
     goLocalHour(19, dateKey, 45)
-    local sentKey1945 = EventService.FactFor(cityId_, TimeState.NowUtc()).occurrenceKey
+    local fact1945 = EventService.FactFor(cityId_, TimeState.NowUtc())
+    local sentKey1945 = fact1945.occurrenceKey
     sendNow("今晚店里人多吗？")
     local opens1945 = herReplyCount()
     advance(idleWait_ + 2)
     local reply1945 = lastHerReply()
-    check("J0 19:45 的回复引用同一个事件实例键",
-        reply1945 ~= nil and reply1945.factKey == sentKey1945 and reply1945.factId == "la_cafe_open_mic",
-        string.format("key=%s fact=%s", tostring(reply1945 and reply1945.factKey),
-            tostring(reply1945 and reply1945.factId)))
-    -- 开放麦那一组独有措辞（不含「边距」「样张」「水刚烧开」）
-    check("J1 19:45 回复出自开放麦文案分支",
-        TextOf(reply1945 and reply1945.text):find("店里这会儿") ~= nil
-        or TextOf(reply1945 and reply1945.text):find("才收") ~= nil
-        or TextOf(reply1945 and reply1945.text):find("还醒着") ~= nil,
-        string.format("回复增量=%d 队列=%d", herReplyCount() - opens1945, MessageService.GetQueueLength()))
+    local text1945 = TextOf(reply1945 and reply1945.text)
+    check("J0 19:45 的回复引用同一个事件实例键，且确实只多出一条",
+        reply1945 ~= nil and herReplyCount() == opens1945 + 1
+        and reply1945.factKey == sentKey1945 and reply1945.factId == "la_cafe_open_mic",
+        string.format("key=%s fact=%s 回复增量=%d 队列=%d", tostring(reply1945 and reply1945.factKey),
+            tostring(reply1945 and reply1945.factId), herReplyCount() - opens1945,
+            MessageService.GetQueueLength()))
+    -- 精确断言：回复里必须出现「19:45 那个实例的原话」。
+    -- 不用「A 或 B 或 C」的措辞或匹配 —— 空回复、错模板都可能蹭过那种写法。
+    check("J1 19:45 回复用了开放麦实例自己的事实句",
+        fact1945.eventPhrase ~= "" and text1945:find(fact1945.eventPhrase, 1, true) ~= nil,
+        string.format("期望含=%s 实际=%s", fact1945.eventPhrase, text1945))
+    check("J1b 19:45 回复没有串到别的事件文案池",
+        text1945:find("边距") == nil and text1945:find("水刚烧开") == nil
+        and text1945:find("便签") == nil, text1945)
 
     -- 睡眠档发消息 → 清晨醒来补回：凌晨那件事必须说成「已经收了」，不能仍是正在进行
     beginScenario()
     goLocalHour(1, dateKey, 30)
+    local nightFact = EventService.FactFor(cityId_, TimeState.NowUtc())
     local nightMsg = sendNow("睡了吗，随便说一句。")
     MemoryService.Persist(MessageService.GetMessages())
     local nightPlan = EventService.PeekPlan(cityId_, dateKey)
     local nightGeneratedAt = nightPlan and nightPlan.generatedAtUtc or 0
     local sentNightKey = nightMsg and nightMsg.factKey or ""
     check("J2 凌晨发的消息带上凌晨那个实例键", sentNightKey ~= ""
+        and sentNightKey == nightFact.occurrenceKey
         and sentNightKey == string.format("%s/%s/la_apartment_night_rest", cityId_, dateKey),
-        sentNightKey)
+        string.format("key=%s 期望=%s", sentNightKey, nightFact.occurrenceKey))
 
     -- 模拟重进：服务全部重建，计划必须从存档接管而不是重算
     reinit_(SELFTEST_SAVE)
@@ -653,15 +661,22 @@ local function ScenarioEventReentry(dateKey)
     advance(30)
     local morningReply = lastHerReply()
     local morningText = TextOf(morningReply and morningReply.text)
-    check("J5 醒来补回引用凌晨事件已结束（说清几点收的）",
-        morningText:find("到06:00就收了") ~= nil, morningText)
-    check("J6 补回不把已结束事件说成未开始",
-        morningText:find("还没开始") == nil and morningText:find("就要开始") == nil, morningText)
-    check("J7 补回的回复落在清晨实例上", MessageService.GetQueueLength() == 0
+    -- 结束钟点从实例自己带上，不写死：改作息表时这条断言会跟着走，而不是留下过期的硬编码
+    local endedMark = "到" .. nightFact.eventEndsAt .. "就收了"
+    local morningFact = EventService.FactFor(cityId_, TimeState.NowUtc())
+    check("J5 醒来补回点名凌晨那件事、并报它几点收的",
+        morningText:find(endedMark, 1, true) ~= nil
+        and morningText:find(nightFact.eventTitle, 1, true) ~= nil,
+        string.format("期望含「%s · %s」实际=%s", nightFact.eventTitle, endedMark, morningText))
+    check("J6 补回不把已结束的那件事讲成还在进行",
+        nightFact.eventPhrase ~= "" and morningText:find(nightFact.eventPhrase, 1, true) == nil,
+        string.format("不该含=%s 实际=%s", nightFact.eventPhrase, morningText))
+    check("J7 补回的回复落在清晨实例上、用清晨自己的事实句", MessageService.GetQueueLength() == 0
         and herReplyCount() == opens + 1
-        and morningReply ~= nil and morningReply.factId == "la_apartment_morning_inbox",
-        string.format("fact=%s 队列=%d", tostring(morningReply and morningReply.factId),
-            MessageService.GetQueueLength()))
+        and morningReply ~= nil and morningReply.factId == "la_apartment_morning_inbox"
+        and morningText:find(morningFact.eventPhrase, 1, true) ~= nil,
+        string.format("fact=%s 期望含=%s 队列=%d", tostring(morningReply and morningReply.factId),
+            morningFact.eventPhrase, MessageService.GetQueueLength()))
     -- 账本记的是「已经进入会话的 occurrence」：补回那一刻回复所引用的清晨实例
     local morningKey = morningReply and morningReply.factKey or ""
     local ledger = MemoryService.FindLedgerEntry(morningKey)
@@ -671,17 +686,29 @@ local function ScenarioEventReentry(dateKey)
         string.format("key=%s start=%d end=%d", morningKey,
             ledger and ledger.startUtc or 0, ledger and ledger.endUtc or 0))
 
-    -- 忙碌档 → 17:00 窗口补回：下午校样那件事同样要报「收了」
+    -- 忙碌档 → 17:00 窗口补回：下午校样那件事同样要报「收了」，且回复落在补回那一刻的实例上
     beginScenario()
     goLocalHour(14, dateKey, 30)
+    local studioFact = EventService.FactFor(cityId_, TimeState.NowUtc())
     sendNow("下午忙不忙？")
     local opensBusy = herReplyCount()
     goLocalHour(17, dateKey, 5)
     advance(30)
-    local busyText = TextOf(lastHerReply() and lastHerReply().text)
-    check("J9 14:30 的消息在 17:05 补回时引用工作室事件已结束",
-        busyText:find("到17:00就收了") ~= nil and MessageService.GetQueueLength() == 0
-        and herReplyCount() == opensBusy + 1, busyText)
+    local busyReply = lastHerReply()
+    local busyText = TextOf(busyReply and busyReply.text)
+    local studioEndedMark = "到" .. studioFact.eventEndsAt .. "就收了"
+    local commuteFact = EventService.FactFor(cityId_, TimeState.NowUtc())
+    check("J9 14:30 的消息在 17:05 补回时点名工作室事件已收",
+        MessageService.GetQueueLength() == 0 and herReplyCount() == opensBusy + 1
+        and busyText:find(studioEndedMark, 1, true) ~= nil
+        and busyText:find(studioFact.eventTitle, 1, true) ~= nil,
+        string.format("期望含「%s · %s」实际=%s", studioFact.eventTitle, studioEndedMark, busyText))
+    check("J9b 补回落在路上那一档的实例上，并带它的 UTC 边界",
+        busyReply ~= nil and busyReply.factId == "la_commute_voice_notes"
+        and busyText:find(commuteFact.eventPhrase, 1, true) ~= nil
+        and commuteFact.eventEndUtc - commuteFact.eventStartUtc == 2 * 3600,
+        string.format("fact=%s 窗口=%d—%d 期望含=%s", tostring(busyReply and busyReply.factId),
+            commuteFact.eventStartUtc, commuteFact.eventEndUtc, commuteFact.eventPhrase))
 end
 
 --- 跑一次完整自检。调用前 main.lua 已经用自检存档 InitServices 过一遍。
