@@ -539,8 +539,8 @@ function StatusWindow.WarmUpBackground(onReady)
     end)
 end
 
--- 场景资产清单：scene_id → 远景静帧。作息表里的 apartment / campus / studio / commute
--- 目前没有原创静帧（见 BLOCKED.md），缺资产就显式留在咖啡馆，不伪称已经切换。
+-- 场景资产清单：scene_id → 远景静帧。作息表里的 campus / commute 目前没有原创静帧
+-- （见 BLOCKED.md），缺资产就显式留在当前画面，不伪称已经切换。
 ---@type table<string, string>
 local SCENE_BACKGROUNDS = {
     la_cafe = BACKGROUND_PATH,
