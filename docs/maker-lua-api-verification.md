@@ -737,5 +737,13 @@ WebGL 与原生 Android 上都不成立**，本项目代码里的 `nvgRotate(mat
 同一输入重算恒等，换城市则整批下标改变。也就是「同一天一定一样、不同天确实不一样」两条同时成立；
 剩下的「重进后仍引用同一实例」仍需 §14.5 那次会话。
 
+重进那条链也逐段追过一遍（结论：没有可修的东西，记下免得下次重复推演）：
+`Save()` 把 `mem_.eventPlans` **原样** `cjson.encode`，不做字段白名单，所以
+`occurrenceKey`/`templateId`/`startUtc`/`endUtc` 一定在 JSON 里；`readEventPlans` 只按
+`dateKey`/`cityId`/`occurrences` 非空筛天、occurrences 按引用透传；`EventService.Restore` 才是在
+**自己新建的**计划表上打 `fromSave = true`（不会把 `fromSave` 回写进存档、污染下一次判据）。
+`InitServices` 的顺序也核对过：`Load → EventService.Init → Restore(GetEventPlans())`，
+都在首次 `PlanFor` 查询之前，所以第二次进入必然先接管再生成。
+
 
 
