@@ -269,6 +269,12 @@ function HandleDevPreset(hour, label, minute)
     logInfo("开发测试切换：" .. label .. " → " .. snap.clock .. " " .. snap.availability)
     RefreshStatusLine(true)
     PushChatPhase()
+    -- 一次切换打全三条证据：事件提示（标题+生命周期）、状态背景（sceneId）、当地钟点
+    if lastFact_ then
+        logInfo(string.format("开发测试事件 key=%s 模板=%s 状态=%s 场景=%s 提示=%s 钟点=%s",
+            lastFact_.occurrenceKey, lastFact_.id, lastFact_.eventState, lastFact_.sceneId,
+            lastFact_.eventTitle, snap.clock))
+    end
     DevTestPanel.SetSummary("测试时间：" .. label .. " · " .. (lastFact_ and lastFact_.eventTitle or "")
         .. "/" .. (lastFact_ and EVENT_STATE_LABEL[lastFact_.eventState] or ""))
 end
