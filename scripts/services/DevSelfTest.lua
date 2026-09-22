@@ -652,11 +652,14 @@ local function ScenarioEventReentry(dateKey)
         and morningReply ~= nil and morningReply.factId == "la_apartment_morning_inbox",
         string.format("fact=%s 队列=%d", tostring(morningReply and morningReply.factId),
             MessageService.GetQueueLength()))
-    local ledger = MemoryService.FindLedgerEntry(sentNightKey)
-    check("J8 事件账本记住了凌晨那个实例", ledger ~= nil and ledger.eventId == "la_apartment_night_rest"
-        and ledger.startUtc < ledger.endUtc,
-        string.format("ledger=%s state=%s", tostring(ledger and ledger.key),
-            tostring(ledger and ledger.lastEventState)))
+    -- 账本记的是「已经进入会话的 occurrence」：补回那一刻回复所引用的清晨实例
+    local morningKey = morningReply and morningReply.factKey or ""
+    local ledger = MemoryService.FindLedgerEntry(morningKey)
+    check("J8 事件账本记下了回复所引用的实例（含 UTC 起止）",
+        ledger ~= nil and ledger.key == string.format("%s/%s/la_apartment_morning_inbox", cityId_, dateKey)
+        and ledger.startUtc < ledger.endUtc and ledger.lastServerTime > 0,
+        string.format("key=%s start=%d end=%d", morningKey,
+            ledger and ledger.startUtc or 0, ledger and ledger.endUtc or 0))
 
     -- 忙碌档 → 17:00 窗口补回：下午校样那件事同样要报「收了」
     beginScenario()
