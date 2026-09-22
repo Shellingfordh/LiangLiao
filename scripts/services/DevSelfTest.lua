@@ -510,17 +510,27 @@ local function ScenarioEventPlan(dateKey)
     beginScenario()
 
     local plan = EventService.PlanFor(cityId_, dateKey)
-    check("I0 一天的计划覆盖 8 个连续事件窗口", #plan.occurrences == 8,
-        string.format("事件 %d 个", #plan.occurrences))
+    local rows = TimeState.SCHEDULE
+    check("I0 计划逐行覆盖作息表，不多不少", #plan.occurrences == #rows,
+        string.format("事件 %d 个 / 作息 %d 档", #plan.occurrences, #rows))
     local contiguous = true
+    local samePlace = true
     for i = 2, #plan.occurrences do
         if plan.occurrences[i].startUtc ~= plan.occurrences[i - 1].endUtc then
             contiguous = false
         end
     end
+    for i = 1, #rows do
+        if plan.occurrences[i].place ~= rows[i].place then
+            samePlace = false
+        end
+    end
     check("I1 事件窗口首尾相接，不漏一小时也不重叠", contiguous,
         string.format("首=%d 末=%d", plan.occurrences[1].startUtc,
             plan.occurrences[#plan.occurrences].endUtc))
+    -- 这条就是「不另造平行真相源」的机械证明：事件说她在哪儿，作息表必须说同一处
+    check("I1b 每个事件实例的地点与作息表同一档声明的地点一致", samePlace,
+        string.format("计划 %d 条 vs 作息 %d 档", #plan.occurrences, #rows))
 
     -- 01:30：凌晨休息档（睡眠），场景必须是公寓静帧
     local at0130 = goLocalHour(1, dateKey, 30)

@@ -25,28 +25,16 @@ local PLAN_DATE_CAP = 4
 
 ---@class EventTemplate
 ---@field id string 模板 id（= 回复文案的键，落进消息的 factId）
----@field place string 作息表地点，只用于文案与状态窗一致性
 ---@field sceneId string 固定原创静帧 id，不做地图
 ---@field variants EventTemplateVariant[] 日期变体，按下标定种选取
 
---- 作息表的每个当地小时段对应一个模板。窗口与 SCHEDULE 的 place 逐段对齐，
---- 这样「她在上课」与「学校工作坊」不会出现两套说法。
----@type { id: string, fromHour: integer, toHour: integer }[]
-local DAILY_SLOTS = {
-    { id = "la_apartment_night_rest", fromHour = 0, toHour = 6 },
-    { id = "la_apartment_morning_inbox", fromHour = 6, toHour = 8 },
-    { id = "la_campus_workshop", fromHour = 8, toHour = 12 },
-    { id = "la_cafe_midday", fromHour = 12, toHour = 13 },
-    { id = "la_studio_zine_layout", fromHour = 13, toHour = 17 },
-    { id = "la_commute_voice_notes", fromHour = 17, toHour = 19 },
-    { id = "la_cafe_open_mic", fromHour = 19, toHour = 22 },
-    { id = "la_apartment_wind_down", fromHour = 22, toHour = 24 },
-}
-
+--- 一天的事件窗口不在这里声明：TimeState.SCHEDULE 逐行给出 from/to/place/event，
+--- 模板只管「那件事叫什么、什么情绪、在哪一幕」。改钟点只需要动作息表那一个地方，
+--- 不会出现「人说在上课、事写着校样」的两套真相。
 ---@type table<string, EventTemplate>
 local EVENT_TEMPLATES = {
     la_apartment_night_rest = {
-        id = "la_apartment_night_rest", place = "apartment", sceneId = "la_apartment",
+        id = "la_apartment_night_rest", sceneId = "la_apartment",
         variants = {
             {
                 title = "凌晨的安静",
@@ -63,7 +51,7 @@ local EVENT_TEMPLATES = {
         },
     },
     la_apartment_morning_inbox = {
-        id = "la_apartment_morning_inbox", place = "apartment", sceneId = "la_apartment",
+        id = "la_apartment_morning_inbox", sceneId = "la_apartment",
         variants = {
             {
                 title = "清晨的活动邮件",
@@ -80,7 +68,7 @@ local EVENT_TEMPLATES = {
         },
     },
     la_campus_workshop = {
-        id = "la_campus_workshop", place = "campus", sceneId = "la_studio",
+        id = "la_campus_workshop", sceneId = "la_studio",
         variants = {
             {
                 title = "学校工作坊的准备",
@@ -97,7 +85,7 @@ local EVENT_TEMPLATES = {
         },
     },
     la_cafe_midday = {
-        id = "la_cafe_midday", place = "cafe", sceneId = "la_cafe",
+        id = "la_cafe_midday", sceneId = "la_cafe",
         variants = {
             {
                 title = "午间的咖啡馆间隙",
@@ -114,7 +102,7 @@ local EVENT_TEMPLATES = {
         },
     },
     la_studio_zine_layout = {
-        id = "la_studio_zine_layout", place = "studio", sceneId = "la_studio",
+        id = "la_studio_zine_layout", sceneId = "la_studio",
         variants = {
             {
                 title = "小册子版面校样",
@@ -131,7 +119,7 @@ local EVENT_TEMPLATES = {
         },
     },
     la_commute_voice_notes = {
-        id = "la_commute_voice_notes", place = "commute", sceneId = "la_cafe",
+        id = "la_commute_voice_notes", sceneId = "la_cafe",
         variants = {
             {
                 title = "路上的语音便签",
@@ -148,7 +136,7 @@ local EVENT_TEMPLATES = {
         },
     },
     la_cafe_open_mic = {
-        id = "la_cafe_open_mic", place = "cafe", sceneId = "la_cafe",
+        id = "la_cafe_open_mic", sceneId = "la_cafe",
         variants = {
             {
                 title = "咖啡馆的开放麦克风夜",
@@ -165,7 +153,7 @@ local EVENT_TEMPLATES = {
         },
     },
     la_apartment_wind_down = {
-        id = "la_apartment_wind_down", place = "apartment", sceneId = "la_apartment",
+        id = "la_apartment_wind_down", sceneId = "la_apartment",
         variants = {
             {
                 title = "回家后的活动复盘",
@@ -369,24 +357,25 @@ function EventService.PlanFor(cityId, dateKey)
         return existing
     end
 
-    local templateList = DAILY_SLOTS
+    ---@type EventOccurrence[]
     local occurrences = {}
-    for i = 1, #templateList do
-        local slot = templateList[i]
-        local template = EVENT_TEMPLATES[slot.id]
+    local rows = TimeState.SCHEDULE
+    for i = 1, #rows do
+        local row = rows[i]
+        local template = EVENT_TEMPLATES[row.event]
         if template then
-            local seedText = cityId .. "|" .. dateKey .. "|" .. slot.id .. "|" .. SEED_SALT
+            local seedText = cityId .. "|" .. dateKey .. "|" .. template.id .. "|" .. SEED_SALT
             local rolled = fnv1a(seedText)
             local variants = template.variants
             local variantIndex = (rolled % #variants) + 1
             local variant = variants[variantIndex]
-            local endHour = slot.toHour
+            local endHour = row.to
             local endCityDate = dateKey
             if endHour >= 24 then
                 endHour = endHour - 24
                 endCityDate = TimeState.ShiftDateKey(dateKey, 1)
             end
-            local startUtc = math.floor(TimeState.UtcAtLocal(cityId, dateKey, slot.fromHour))
+            local startUtc = math.floor(TimeState.UtcAtLocal(cityId, dateKey, row.from))
             local endUtc = math.floor(TimeState.UtcAtLocal(cityId, endCityDate, endHour))
             ---@type EventOccurrence
             local occurrence = {
@@ -396,10 +385,10 @@ function EventService.PlanFor(cityId, dateKey)
                 dateKey = dateKey,
                 startUtc = startUtc,
                 endUtc = endUtc,
-                startClock = string.format("%02d:00", slot.fromHour % 24),
+                startClock = string.format("%02d:00", row.from % 24),
                 endClock = string.format("%02d:00", endHour % 24),
-                place = template.place,
-                placeLabel = PLACE_LABEL[template.place] or "外面",
+                place = row.place,
+                placeLabel = PLACE_LABEL[row.place] or "外面",
                 sceneId = template.sceneId,
                 title = variant.title,
                 summary = variant.summary,
@@ -408,6 +397,10 @@ function EventService.PlanFor(cityId, dateKey)
                 variantIndex = variantIndex,
             }
             occurrences[#occurrences + 1] = occurrence
+        else
+            -- 作息表挂了一个没有模板的事件 = 日程配置漏了一半，必须说出来而不是少给一个窗口
+            logWarn(string.format("作息表 %02d:00–%02d:00 声明的事件模板缺失: %s（该窗口不生成实例）",
+                row.from, row.to, tostring(row.event)))
         end
     end
 

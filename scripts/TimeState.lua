@@ -59,16 +59,21 @@ TimeState.CITIES = {
 
 -- 作息表：规格 §5.2 只给了「内部状态 / 可能地点 / 聊天行为」，没给钟点。
 -- 这张表是可实现层的创作，改这里就能改她的日程，不用动逻辑。
-local SCHEDULE = {
-    { from = 0,  to = 6,  availability = "offline",    place = "apartment", phrase = "已经睡下了" },
-    { from = 6,  to = 8,  availability = "idle",       place = "apartment", phrase = "在煮咖啡" },
-    { from = 8,  to = 12, availability = "busy",       place = "campus",    phrase = "在上课" },
-    { from = 12, to = 13, availability = "fragments",  place = "cafe",      phrase = "在吃午饭" },
-    { from = 13, to = 17, availability = "busy",       place = "studio",    phrase = "在赶项目" },
-    { from = 17, to = 19, availability = "fragments",  place = "commute",   phrase = "在路上" },
-    { from = 19, to = 22, availability = "idle",       place = "cafe",      phrase = "还在外面" },
-    { from = 22, to = 24, availability = "idle",       place = "apartment", phrase = "回到公寓了" },
+-- event 是「这一档她在做哪件事」的唯一声明处：EventService 按这张表生成每日事件计划，
+-- 所以钟点、地点、可用性与事件模板永远同源，不会出现「人说在上课、事写着校样」。
+TimeState.SCHEDULE = {
+    { from = 0,  to = 6,  availability = "offline",    place = "apartment", event = "la_apartment_night_rest",   phrase = "已经睡下了" },
+    { from = 6,  to = 8,  availability = "idle",       place = "apartment", event = "la_apartment_morning_inbox", phrase = "在煮咖啡" },
+    { from = 8,  to = 12, availability = "busy",       place = "campus",    event = "la_campus_workshop",         phrase = "在上课" },
+    { from = 12, to = 13, availability = "fragments",  place = "cafe",      event = "la_cafe_midday",             phrase = "在吃午饭" },
+    { from = 13, to = 17, availability = "busy",       place = "studio",    event = "la_studio_zine_layout",      phrase = "在赶项目" },
+    { from = 17, to = 19, availability = "fragments",  place = "commute",   event = "la_commute_voice_notes",     phrase = "在路上" },
+    { from = 19, to = 22, availability = "idle",       place = "cafe",      event = "la_cafe_open_mic",           phrase = "还在外面" },
+    { from = 22, to = 24, availability = "idle",       place = "apartment", event = "la_apartment_wind_down",     phrase = "回到公寓了" },
 }
+
+-- 同一张表的另一个把手：slotAt 与 EventService 读的是同一个数组，不是副本。
+local SCHEDULE = TimeState.SCHEDULE
 
 -- 可回复性策略 = 规格 §5.2「聊天行为」那一列的可实现层落地：
 -- 空闲 / 碎片时间能回（碎片时间更慢、更短），忙碌与睡眠一律排队到下一个可回复窗口。
