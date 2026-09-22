@@ -265,6 +265,11 @@ function Start()
     -- 这样 BootChat 与状态窗引用的是存档接管后的那一份事件实例
     RefreshSnapshot()
     BootChat()
+    -- 开场就把这一份事件事实的身份挂上屏：同一天第二次进入时这里该读成 计划=存档
+    if lastFact_ then
+        DevTestPanel.SetDetail(lastFact_.id .. " · " .. lastFact_.sceneId
+            .. " · 计划=" .. (lastFact_.planFromSave and "存档" or "当场"))
+    end
 
     logInfo(string.format(
         "M1 已就绪：状态窗 + 排队聊天（空闲等待 %.0f 秒，跳过按钮=%s，云记忆=%s）",
@@ -295,11 +300,10 @@ function HandleDevPreset(hour, label, minute)
             lastFact_.eventTitle, snap.clock))
     end
     DevTestPanel.SetSummary("测试时间：" .. label .. " · " .. (lastFact_ and lastFact_.eventTitle or "")
-        .. "/" .. (lastFact_ and EVENT_STATE_LABEL[lastFact_.eventState] or "")
-        -- 场景与「计划来自哪」一起上屏：条件 (a) 的三向一致与 (b) 的不重算都能肉眼读，
-        -- 不用等那条随时会被整批丢掉的日志。
-        .. " · " .. (lastFact_ and lastFact_.sceneId or "")
-        .. " · 计划=" .. (lastFact_ and (lastFact_.planFromSave and "存档" or "当场") or ""))
+        .. "/" .. (lastFact_ and EVENT_STATE_LABEL[lastFact_.eventState] or ""))
+    -- 第二行放证据字段：条件 (a) 的三向一致与 (b) 的「不重算」都能肉眼读，不用等那条随时会被整批丢掉的日志
+    DevTestPanel.SetDetail((lastFact_ and (lastFact_.id .. " · " .. lastFact_.sceneId
+        .. " · 计划=" .. (lastFact_.planFromSave and "存档" or "当场")) or ""))
 end
 
 function HandleDevReset()
@@ -308,6 +312,7 @@ function HandleDevReset()
     RefreshStatusLine(true)
     PushChatPhase()
     DevTestPanel.SetSummary("测试时间：真实时间")
+    DevTestPanel.SetDetail("已交还权威时间源")
 end
 
 function HandleDevAdvance()

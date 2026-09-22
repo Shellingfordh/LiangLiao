@@ -9,6 +9,8 @@ local DevTestPanel = {}
 
 ---@type Label|nil
 local summaryLabel_ = nil
+---@type Label|nil
+local detailLabel_ = nil
 ---@type Widget[]
 local controls_ = {}
 
@@ -36,6 +38,13 @@ function DevTestPanel.Build(opts)
         fontColor = { 216, 210, 198, 240 },
         whiteSpace = "nowrap",
     }
+    -- 第二行单独放证据字段：那两行都 nowrap，挤成一行会在窄屏上被裁掉半截
+    detailLabel_ = UI.Label {
+        text = "等待切换",
+        fontSize = 10,
+        fontColor = { 150, 207, 255, 220 },
+        whiteSpace = "nowrap",
+    }
 
     local panel = UI.Panel {
         id = "m1DevTestPanel",
@@ -60,6 +69,10 @@ function DevTestPanel.Build(opts)
                     UI.Label { text = "M1 测试", fontSize = 11, fontWeight = "bold", fontColor = { 150, 207, 255, 255 } },
                     summaryLabel_,
                 },
+            },
+            UI.Row {
+                gap = 6,
+                children = { detailLabel_ },
             },
             UI.Row {
                 gap = 4,
@@ -93,8 +106,16 @@ function DevTestPanel.SetSummary(text)
     end
 end
 
+---@param text string
+function DevTestPanel.SetDetail(text)
+    if detailLabel_ then
+        detailLabel_:SetText(text)
+    end
+end
+
 function DevTestPanel.Shutdown()
     summaryLabel_ = nil
+    detailLabel_ = nil
     controls_ = {}
 end
 
