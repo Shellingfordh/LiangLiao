@@ -52,7 +52,6 @@ local RESPONSE_GAP_SECONDS = 4
 ---@field sceneIdAtSend? string 送达时的场景 id
 ---@field phraseAtSend? string 送达时作息表里的那句原话
 ---@field effReplyAtUtc? number 本轮实际交付时刻（补发时重排，不落盘）
----@field backfillArmed? boolean 补发的输入窗已抬起（运行时字段，不落盘）
 
 ---@type MsgEntry[]
 local messages_ = {}
@@ -405,21 +404,25 @@ end
 
 --- 过期未交付的队首（离开期后重进、或排在别人后面）重排为「短暂正在输入后交付」，
 --- 但不改写权威的 planReplyAtUtc —— 落盘的始终是当初算好的计划。
---- 补发窗只抬一次：Update 是每帧调用的，若每次都把目标顶到 now + typing，目标就永远
---- 跑在时钟前面，`now >= effReplyAtUtc` 永不成立，队首会卡在「正在输入」里出不来。
+---
+--- 「抬窗」的条件必须是「这条还没在输入中」，判据用 state 而不是另开一个标记：
+---   * Update 每帧调用，若无条件把过期目标顶到 now + typing，目标永远跑在时钟前面，
+---     `now >= effReplyAtUtc` 永不成立，队首卡死在正在输入（M1 云端实测的第二个坑）。
+---   * 反过来，已经在打点的队首被时钟跨过计划时刻时（`state == typing` 且 `eff < now`，
+---     只差一两个采样点），**必须就地交付**，不能再补一个窗口 —— 否则会凭空多等 3 秒，
+---     实测让「10 秒链路」在计划后的第一个采样点被判成没回复（自检 A5/A6/A7 三连红）。
+---   * 而真正需要补窗的两种情况（重进时计划早已过期、排在别人后面）进入这里时
+---     state 还是 queued/sent，从没显示过输入，抬窗仍然生效。
 ---@param head MsgEntry
 ---@param now number
 ---@return number
 local function EffectiveReplyAt(head, now)
-    if head.backfillArmed then
-        return head.effReplyAtUtc or head.planReplyAtUtc or now
-    end
     local planned = head.effReplyAtUtc or head.planReplyAtUtc
     if not planned then
-        planned = now + TYPING_SECONDS
-    elseif planned < now then
-        planned = now + TYPING_SECONDS
-        head.backfillArmed = true
+        return now + TYPING_SECONDS
+    end
+    if planned < now and head.state ~= MessageService.PHASE.TYPING then
+        return now + TYPING_SECONDS
     end
     return planned
 end

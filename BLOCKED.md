@@ -68,15 +68,17 @@ assets/model/fashion+model+3d+model.thumb.webp← 同上，缩略图
 需要谁：资产决策（补静帧 = 生成新资产，本任务书明令禁止，所以挂在这里而不是自己做）。
 
 ## B-2 一次真实会话的 runtime.log 仍然要人开预览
-云端当前部署的是 M1 构建 #6（commit `623cc5a`，`preview_refresh` 200，远端返回「🎉 项目构建成功」），
-日志抓取器由构建自动带 `--reset` 起在 pid 60276，`state.json.updatedAt` 每 5 秒推进（14:48:51Z）、
-`consecutiveFailures: 0`、`lastWrittenLogs: 0`。
+云端当前部署的是 M1 构建 **#7，commit `28224c0`**（`preview_refresh` 200，远端返回「🎉 项目构建成功」，
+watcher pid 56072）。日志抓取器由构建自动带 `--reset` 重启（当时确认过本地没有 `runtime.log`、
+`lastWrittenLogs: 0`，所以没有证据被清掉）。
 但 `runtime.log` 只在**有游戏会话真的跑起来**时才产生；浏览器（browser-use / playwright）与
 Computer Use 驱动用户 Chrome 的路径在本项目历史上各被宿主权限层拦过（见本文 §1），本会话内再次尝试
-`get_debug_feedbacks` 也被拦，所以我不把它当可自动化步骤。
+`get_debug_feedbacks`、常驻日志看护、`user-browser-use.list_pages`（返回 `No current window`）均无果，
+所以我不把它当可自动化步骤。
 
-⚠️ **要开的必须是 `623cc5a` 之后**：这一版才修掉「队首永久卡在正在输入、一条都不回」的交付死锁
-（成因与复核过程见 `PROGRESS.md` 构建 #5 之前那一节）。开旧构建会把缺陷当成"她就是不回"。
+⚠️ **要开的必须是 `28224c0` 之后**（15:47 部署）：这一版除了「队首永久卡在正在输入、一条都不回」
+的交付死锁补丁（`623cc5a`）之外，还把自检里会空过的一条断言补强了（见下）。开旧构建会把缺陷
+当成"她就是不回"，或让 E5 以"没东西可回"的名义把历史丢失也判成通过。
 
 已经为此准备好的是 `scripts/services/DevSelfTest.lua`：会话一启动就会用真实服务 + 可控 UTC 跑完
 busy / offline / idle 三档、两条 FIFO、落盘重进、以及「计划时刻被改到未来就不许提前回复」的红→绿反向验证，

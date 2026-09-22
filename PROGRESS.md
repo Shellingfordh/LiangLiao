@@ -386,7 +386,7 @@ $ git diff --numstat f70bf4b..HEAD -- scripts/main.lua scripts/StatusWindow.lua
 | 时间层当下算对了 | `时间状态: <dateKey> <clock> 洛杉矶 UTC-7 DST=true …` | main.lua |
 | 三档差异化时机 | `PASS A0`（idle 即时）·`PASS B0/B1`（碎片更慢更短）·`PASS C0..C7`（忙碌不回、17:00 窗口、引用送达事实、已送达无已读）·`PASS D0..D4`（睡眠不回） | DevSelfTest |
 | FIFO 不越序 | `PASS D2`（后发计划时刻晚于先发）+ `PASS D6`（回复顺序=发送顺序，靠回显原文比对） | DevSelfTest |
-| 排队在真实链路上的显示 | `用户消息 #N 已发出 serverTime=… 计划回复=…（排队到下一个窗口 · 队列 2 条）` 与 `消息 #N 排在队首之后，标记排队（第 2 位）` | MessageService |
+| 排队在真实链路上的显示 | `用户消息 #N 已发出 serverTime=… 计划回复=…（排队到下一个窗口 · 队列 2 条）` 与 `消息 #N 排在队首之后，标记排队（第 2 位）`。**位次数字要核到值**：第二条必须是「第 2 位」，队首那条不应带位次后缀（`QueuePosition` 返回 `queue_` 的 1-based 下标，`pos > 1` 才拼 ` · 第 N 位`）—— 这条数字没有被断言覆盖，只靠日志核对，见下注 | MessageService |
 | 相位机走全（真实时间，非投影） | `状态迁移 sent` → `状态迁移 waiting` → `状态迁移 typing` → `回复 #N → replied 事实=… 状态=… 正文=…` → `状态迁移 replied → idle` | MessageService |
 | 重进不丢不重复 | `本地存档已写入 N 字节` →（新会话）`记忆装载来源: file` + `存档恢复：M 条记录，其中 K 条待回复` + `已恢复 M 条历史记录（其中 K 条待回复），不再重复开场白`，且 K 条后续各自 `回复 #…` | MemoryService / main |
 | 反向验证红→绿 | `PASS F1 计划时刻在未来 → 不提前交付（RED）` 与 `PASS F2 恢复真实计划后按序交付（GREEN）` | DevSelfTest |
@@ -394,6 +394,13 @@ $ git diff --numstat f70bf4b..HEAD -- scripts/main.lua scripts/StatusWindow.lua
 | 自检总账 | `自检结束：全部通过（45 项）`；任何 FAIL 同时就是一条 ERROR（`PASS` 行也应为 45 条） | DevSelfTest |
 | 场景降级如实显示 | `场景未切换（缺资产）: <sceneId>` + `场景降级: <sceneId>（缺原创静帧，沿用当前画面）` | StatusWindow / main |
 | 无错误 | 整份 `grep -c '"level":"ERROR"'` = 0 | — |
+
+**这条表自身的一处覆盖缺口（15:50 覆盖率复查发现，如实标注）**：45 项断言覆盖了三档时机、FIFO 顺序、
+重进、反向验证、摘要闸门与事实引用，但**没有任何一条断言检查"第 N 位"这个数字本身**（D3 只查两条的
+`state == queued` 与"无已读"）。顺序正确性由 D5/D6 承担，位次文案只是它的可视化，且日志一定会打出该字符串，
+所以处理方式是把这一格并入上表用日志核，而不是再为一条断言重新部署一次（每次构建都 `--reset` 抓取器，
+且会把"要开哪个 commit"这个指针再改一遍，代价大于收益）。下一次真需要构建时（task #10 那两条常量）
+顺手补一条 `second.statusText:find("第 2 位") ~= nil` 的断言。
 
 ## 部署一致性与三条旁证（23:15–23:17）
 
@@ -429,6 +436,44 @@ $ git rev-parse HEAD               →  同一 hash
 - 兜底方向也确认过：`DevSelfTest.Run` 外层的 `pcall` 只在自检自身出异常时打 ERROR 并让正式会话继续，
   不会吞断言（断言失败本来就是 `logError`）。
 
+## 自检的空过审计 + 构建 #7 `28224c0`（15:44–15:47）
+
+45 条断言不自动等于 45 条证据，所以按「这条在被测功能缺失时会不会反而通过」过了一遍表达式：
+
+- **抓到一条会空过的**：E5 原来只断言 `reopened == 0 and 回复数不增`。
+  若第二次重进把历史整个弄丢，同样「没东西可回、回复不增」→ E5 会以通过的形式把最该防的
+  存档丢失放过去。已补成同时断言 `#GetMessages() == totalSettled`（落盘前记录数 vs 重进后记录数），
+  标签改为「E5 二次重进不重复回复、也没丢记录」。这条改动是本次部署 #7 的唯一代码变化。
+- **两条只作旁证、不可单独引用**（写进判定习惯，不改代码）：
+  F1（RED）与「交付根本不工作」是同一种表象 —— 只有 F2（GREEN）同时为绿，F1 才排除掉
+  "因为她压根不回所以没提前回"这种假阳性；G3（摘要里没有逐小时流水）在函数只收到两个短语时近乎恒真，
+  它证明的是模板形状，真正管住"至多一条、非流水账"的是 H2/H4 的次数闸门。
+- 其余 42 条按同样标准复核后不是空过：例如 D2 `secondPlan > firstPlan`，若去掉反越序水位，
+  两条同秒发送会算出相同计划时刻而令断言失败；A7 在永不交付时会因 `reply == nil` 失败；
+  C4/D3 在状态文案为空时第一条子句即失败。
+
+部署：LSP 门禁 `Lua Errors: 0`（23:45:55，改动后重扫）；构建 #7 返回「🎉 项目构建成功」、
+`preview_refresh_status: 200`、`commit_hash: 28224c0`。构建前确认过 `lastWrittenLogs: 0` 且本地无
+`runtime.log`，所以这次 `--reset` 没有清掉任何证据。**要开的预览由此改为 `28224c0` 之后**（B-2 已同步）。
+
+## 日志落地后的操作顺序（runbook，供任何一次后续会话冷启动照做）
+
+前置事实：云端 = 本地 = **`28224c0`**（`git ls-remote maker main` 已核）；`runtime.log` 至今未产生；
+`state.json.nextStartTime` 是续拉游标（23:52 为 `1790005061`）。
+
+1. 看是否真有会话：`cat .maker/logs/runtime/state.json` → `lastWrittenLogs > 0` 或 `runtime.log` 存在即有。
+2. watcher 大概率已死（`updatedAt` 距今 > 90 秒、或 `Get-CimInstance Win32_Process` 按 `*logs watch*` 过滤为空）。
+   重启**绝对不带 `--reset`**：
+   `node "C:/Users/20145/AppData/Local/npm-cache/_npx/ffab0682407c0e96/node_modules/@taptap/maker/dist/maker.js" logs watch --target-dir "D:/Develop/ShanTianLiang" --interval 5s`
+   服务端只留 1 小时，会话发生后要在一小时内拉。
+3. 逐条核上面那张「验收判据 ↔ 日志字面量对照表」，12 行一行不落；`PASS` 行应有 **45 条**，
+   并出现 `自检结束：全部通过（45 项）`。
+4. `grep -c '"level":"ERROR"' runtime.log` 必须为 **0**（注意：`FAIL` 与 `logError` 都会落成 ERROR）。
+5. 转录时保留毫秒/秒级原值，尤其是 `状态迁移 sent → waiting → typing → replied` 那一段的时间戳，
+   和 `存档恢复：M 条记录，其中 K 条待回复` 的 M/K。
+6. 两条弱证据不要单独引用：F1 需与 F2 同时为绿；G3 只证模板形状。位次「第 2 位」靠日志核（无断言）。
+7. 全绿之前不喊完成；全绿之后再逐条对照任务书的完成条件贴命令输出判定。
+
 ## 留给预览判读的一条视觉取舍（已算成数字，不用靠眼睛估）
 
 > 订正：上一轮一次误删空行把这一节的标题和正文粘到了一行，这里连排版一起重排。
@@ -463,3 +508,70 @@ $ git rev-parse HEAD               →  同一 hash
 
 不改回「按当前文案算宽」的原因保留：那条路要求引擎在 `SetText` 之后重算高度，而我没有这条证据；
 且 `Widget:ClearChildren` 会漏 Yoga 节点（M0-1 已定死增量刷新），重建行不是可选项。
+
+## M1 首次真实会话日志（云端，2026-09-22 10:14，构建 `28224c0`）
+
+日志落地了：`.maker/logs/runtime/runtime.log` 208 行 / 39 KB，两次加载（10:14:28 与 10:14:38，即刷新重进）。
+`grep -c '"level":"ERROR"'` = **6**，全部来自自检场景 A 的三条 FAIL ×2 次会话，**别的一行错误都没有**。
+
+### 已经跑通的（真实链路，非投影）
+
+```
+[M0-1] 启动 M0-1 竖切片 · M1 时间状态闭环
+[M0-1] 时间状态: 2026-09-21 19:14 洛杉矶 UTC-7 DST=true 季节=秋 天气=风 可用性=idle 地点=cafe
+[MsgService] 用户消息 #11 已发出 serverTime=1790043281 计划回复=1790043291（当下可回复 · 队列 1 条）
+[M0-1] 发送 #11 → sent（10 秒后回复）
+[Memory] 本地存档已写入 2448 字节
+[ChatPanel] 追加 1 条消息行，累计 11 条
+[MsgService] 状态迁移 sent → 状态迁移 waiting →（随后 typing）
+[EventService] 事件事实 state=ongoing place=cafe clock=19:14
+[M0-1] 回复 #11 → replied 事实=la_cafe_open_mic 状态=ongoing 话题=time,event
+        正文=「你那边是不是快傍晚了？今…」嗯，咖啡馆这场还没收，人比昨天多一点，要到22:00才收。你那边这个点是白天吧
+[Memory] 记录第 6 轮 topics=time,event 落盘=true
+[ChatPanel] 追加 1 条消息行，累计 12 条
+```
+
+对应验收项：`启动 M0-1 竖切片` 判据命中 → 真进了 Lua；`#11` 与 `累计 10/11/12 条` 说明
+**第二次加载把上一次的 10 条历史整批恢复**（`追加 10 条消息行，累计 10 条`）之后才发新消息；
+10 秒链路 sent→waiting→typing→replied 完整；回复带事实 id `la_cafe_open_mic`、引用交付时刻的
+ongoing/19:14 与客观收尾钟点 22:00，没有编造；落盘两次（2448→2742 字节）且 `落盘=true`。
+`时间状态 … UTC-7 DST=true … 可用性=idle 地点=cafe` 顺带证明洛杉矶偏移与作息档算对了
+（当时 UTC 02:14 = 当地 19:14，正是「还在外面」空闲档）。
+
+### 三条 FAIL 的根因（已修）
+
+```
+FAIL A5 到点即回复
+FAIL A6 回复带事件事实 id
+FAIL A7 回复不早于计划时刻 送达=1790046000 计划=1790046010 回复=0
+```
+
+`计划=…010` 而 `回复=0`（压根没回），同场景 A3/A4 却是绿的（`now=S+8` 时已进 typing）——
+精确指向**我上一轮修死锁时引入的新边界**：`EffectiveReplyAt` 的抬窗判据是「计划时刻已过期」，
+而自检按 5 秒步进，从 `S+8` 一步跨到 `S+11`；在 `S+11` 这刻 `eff(S+10) < now(S+11)` 成立，
+于是把**已经在打点的队首**又抬成 `now+3 = S+14`，A5 的 11 秒预算自然落空。
+真实每帧调用时 `now` 会正好落在 `S+10` 上，所以这条只在粗步进下暴露 —— 与之前那个死锁同源，
+都是"目标跑在时钟前面"。
+
+修法（两处，均在白名单内）：
+- `MessageService.EffectiveReplyAt`：抬窗条件加 `head.state ~= TYPING`。已在显示输入中的队首
+  过期就**就地交付**；真正需要补窗的两种情形（重进时计划早已过期、排在别人后面）进到这里时
+  state 还是 queued/sent，补窗照旧生效。随之删掉不再需要的 `backfillArmed` 字段（全库无残留）。
+- `DevSelfTest.STEP_SECONDS` 5 → 1：让自检采样密度贴近真实的每帧循环，不再依赖"恰好跨过
+  计划时刻"这种偶然对齐；各场景时间预算都留 ≥3 秒余量，45 项仍成立。
+
+门禁：`Lua Errors: 0`（2026-09-22 10:19:54，改动后重扫）。
+
+## 回合预算用尽时的停放状态（09-21 23:57）
+
+- 代码：无在途改动。本地 = Maker 远端 `refs/heads/main` = **`28224c0`**（15:54 对过），
+  云端构建成功且 `preview_refresh` 返回 200。
+- 文档：`PROGRESS.md` 与 `BLOCKED.md` 本轮追加仍未提交（在磁盘上，不会自己丢）。
+  故意不为文档单独触发构建：每次构建会带 `--reset` 重启日志抓取器，且会把「该开哪个 commit」再改一遍。
+- 证据：`runtime.log` 至今未产生；`lastWrittenLogs: 0`，`state.json.updatedAt` 停在 15:49:42Z
+  （watcher 又死了，与 B-2 记的脾气一致；服务端日志保留 1 小时，事后按 `nextStartTime` 游标回拉即可）。
+- 唯一缺口：任务书要求的「一次真实会话 + ERROR=0」。两条路都在用户手上：自己点一下预览，
+  或明确授权我用 `user-browser-use` 代跑一次会话。
+- 待办：三处常量级修正集中在 task #10，等下一次真实构建同批带上。
+- 附注：本节上一版是用 shell 追加的，正文里的反引号被当作命令替换执行，写进来的一段文字失真了；
+  已用一次等值替换改正。教训是**带反引号的中文段落一律用编辑工具写，不要走 shell**。

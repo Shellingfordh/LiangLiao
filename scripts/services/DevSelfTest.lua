@@ -20,7 +20,7 @@ local DevSelfTest = {}
 
 local TAG = "[DevSelfTest]"
 local SELFTEST_SAVE = "memory/m1-selftest-la.json"
-local STEP_SECONDS = 5
+local STEP_SECONDS = 1
 
 ---@class DevSelfTestOptions
 ---@field cityId string
