@@ -2,7 +2,11 @@
 -- DevSelfTest.lua — 开发自检（职责单一：用可控 UTC 驱动真实服务并断言时机）
 -- 只做一件事：把 MessageService / EventService / ContentService / MemoryService
 -- 按真实调用路径跑一遍 busy / offline / idle 三档、FIFO 顺序、落盘重进、
--- 以及「计划回复时刻在未来就不许提前回复」的反向验证。
+-- 「计划回复时刻在未来就不许提前回复」的反向验证，以及每日事件计划：
+--   * 场景 I：固定 01:30 / 14:30 / 19:45 三个当地钟点，断言事件实例 id、occurrenceKey、
+--     sceneId、生命周期（upcoming/ongoing/ended）、同日重算的可复现性、下一日期才出新实例；
+--   * 场景 J：断言三个钟点的回复出自各自模板分支、排队补回把已结束事件说成「几点收的」，
+--     以及落盘重进后计划来自存档（fromSave=true、生成时刻未变）且实例键不变。
 -- 不 mock 任何被测服务，也不依赖被测服务没有的能力：
 --   * 时间用 TimeState.DevClockOffset 投影（权威时间源不变，只是把 now 拨到某个当地整点）；
 --   * 推进用 MessageService.Update(utcNow) 这个正式入口；
@@ -15,6 +19,7 @@ local TimeState = require("TimeState")
 local MessageService = require("services.MessageService")
 local ContentService = require("services.ContentService")
 local MemoryService = require("services.MemoryService")
+local EventService = require("services.EventService")
 
 local DevSelfTest = {}
 
@@ -84,12 +89,13 @@ local function TextOf(text)
     return text or ""
 end
 
---- 把权威时钟投影到「当地某天某小时」：偏移 = 目标 UTC - 真实 UTC
+--- 把权威时钟投影到「当地某天某时某分」：偏移 = 目标 UTC - 真实 UTC
 ---@param hour integer
 ---@param dateKey string
+---@param minute? integer
 ---@return TimeSnapshot
-local function goLocalHour(hour, dateKey)
-    local target = TimeState.UtcAtLocal(cityId_, dateKey, hour)
+local function goLocalHour(hour, dateKey, minute)
+    local target = TimeState.UtcAtLocal(cityId_, dateKey, hour, minute)
     TimeState.DevClockOffset = target - common.get_server_time()
     return TimeState.Snapshot(cityId_, TimeState.NowUtc())
 end
@@ -483,6 +489,188 @@ local function ScenarioAwaySummary()
     check("G3 摘要没有逐小时流水", line:find("在上课") == nil and line:find("在路上") == nil, line)
 end
 
+-- ---------------------------------------------------------------------------
+-- 场景 I：三个固定当地钟点 —— 事件实例、场景绑定、回复分支必须出自同一份计划
+-- 01:30 / 14:30 / 19:45 就是左上开发测试台的那三个按钮，这里按同一组时刻断言。
+-- ---------------------------------------------------------------------------
+
+---@param plan EventPlan
+---@return string
+local function KeysOf(plan)
+    local parts = {}
+    for i = 1, #plan.occurrences do
+        parts[#parts + 1] = string.format("%s#%d", plan.occurrences[i].occurrenceKey,
+            plan.occurrences[i].variantIndex)
+    end
+    return table.concat(parts, ",")
+end
+
+local function ScenarioEventPlan(dateKey)
+    logInfo("场景 I 每日事件计划（01:30 / 14:30 / 19:45）")
+    beginScenario()
+
+    local plan = EventService.PlanFor(cityId_, dateKey)
+    check("I0 一天的计划覆盖 8 个连续事件窗口", #plan.occurrences == 8,
+        string.format("事件 %d 个", #plan.occurrences))
+    local contiguous = true
+    for i = 2, #plan.occurrences do
+        if plan.occurrences[i].startUtc ~= plan.occurrences[i - 1].endUtc then
+            contiguous = false
+        end
+    end
+    check("I1 事件窗口首尾相接，不漏一小时也不重叠", contiguous,
+        string.format("首=%d 末=%d", plan.occurrences[1].startUtc,
+            plan.occurrences[#plan.occurrences].endUtc))
+
+    -- 01:30：凌晨休息档（睡眠），场景必须是公寓静帧
+    local at0130 = goLocalHour(1, dateKey, 30)
+    local fact0130 = EventService.FactFor(cityId_, at0130.utcSec)
+    check("I2 01:30 命中凌晨休息实例·ongoing·公寓",
+        fact0130.id == "la_apartment_night_rest" and fact0130.eventState == "ongoing"
+        and fact0130.sceneId == "la_apartment" and at0130.availability == "offline",
+        string.format("id=%s state=%s scene=%s avail=%s", fact0130.id, fact0130.eventState,
+            fact0130.sceneId, tostring(at0130.availability)))
+    check("I3 01:30 的 occurrenceKey 由城市/日期/模板组成",
+        fact0130.occurrenceKey == string.format("%s/%s/la_apartment_night_rest", cityId_, dateKey),
+        fact0130.occurrenceKey)
+    check("I4 事件实例带 UTC 起止、标题、摘要、情绪",
+        fact0130.eventStartUtc < fact0130.eventEndUtc and fact0130.eventTitle ~= ""
+        and fact0130.eventSummary ~= "" and fact0130.eventEmotion ~= "",
+        string.format("%s—%s %s", fact0130.eventStartsAt, fact0130.eventEndsAt, fact0130.eventEmotion))
+
+    -- 14:30：工作室校样正在发生；清晨的整理已经收了，晚间开放麦还没开始
+    local at1430 = goLocalHour(14, dateKey, 30)
+    local fact1430 = EventService.FactFor(cityId_, at1430.utcSec)
+    local q1430 = EventService.QueryAt(cityId_, at1430.utcSec)
+    check("I5 14:30 命中工作室校样·ongoing·工作室",
+        fact1430.id == "la_studio_zine_layout" and fact1430.eventState == "ongoing"
+        and fact1430.sceneId == "la_studio" and at1430.availability == "busy",
+        string.format("id=%s state=%s scene=%s", fact1430.id, fact1430.eventState, fact1430.sceneId))
+    check("I6 14:30 时清晨事件为 ended、晚间事件为 upcoming",
+        q1430.allStates.la_apartment_morning_inbox == "ended"
+        and q1430.allStates.la_cafe_open_mic == "upcoming",
+        string.format("morning=%s openmic=%s", tostring(q1430.allStates.la_apartment_morning_inbox),
+            tostring(q1430.allStates.la_cafe_open_mic)))
+
+    -- 19:45：咖啡馆开放麦正在发生；工作室校样已经收了
+    local at1945 = goLocalHour(19, dateKey, 45)
+    local fact1945 = EventService.FactFor(cityId_, at1945.utcSec)
+    local q1945 = EventService.QueryAt(cityId_, at1945.utcSec)
+    check("I7 19:45 命中咖啡馆开放麦·ongoing·咖啡馆",
+        fact1945.id == "la_cafe_open_mic" and fact1945.eventState == "ongoing"
+        and fact1945.sceneId == "la_cafe" and at1945.availability == "idle",
+        string.format("id=%s state=%s scene=%s", fact1945.id, fact1945.eventState, fact1945.sceneId))
+    check("I8 19:45 时工作室事件已 ended、夜间复盘 upcoming",
+        q1945.allStates.la_studio_zine_layout == "ended"
+        and q1945.allStates.la_apartment_wind_down == "upcoming",
+        string.format("studio=%s winddown=%s", tostring(q1945.allStates.la_studio_zine_layout),
+            tostring(q1945.allStates.la_apartment_wind_down)))
+
+    -- 三个钟点必须给出三个不同的事件实例，否则「切换时间什么都不变」也算通过就是空过
+    check("I9 三个钟点得到三个互不相同的事件实例",
+        fact0130.occurrenceKey ~= fact1430.occurrenceKey
+        and fact1430.occurrenceKey ~= fact1945.occurrenceKey
+        and fact0130.occurrenceKey ~= fact1945.occurrenceKey,
+        string.format("%s | %s | %s", fact0130.occurrenceKey, fact1430.occurrenceKey,
+            fact1945.occurrenceKey))
+
+    -- 可复现性：丢掉缓存按同一规则重算，实例键与变体下标必须一字不差
+    local keysBefore = KeysOf(plan)
+    local rebuilt = EventService.Regenerate(cityId_, dateKey)
+    check("I10 同日同城重算得到同一批实例（定种而非随机）",
+        KeysOf(rebuilt) == keysBefore, keysBefore)
+    -- 下一本地日期才产生新实例
+    local nextDay = TimeState.ShiftDateKey(dateKey, 1)
+    local nextPlan = EventService.PlanFor(cityId_, nextDay)
+    check("I11 下一本地日期才产生新实例", nextPlan.occurrences[1].occurrenceKey
+        ~= plan.occurrences[1].occurrenceKey
+        and nextPlan.occurrences[1].templateId == plan.occurrences[1].templateId,
+        string.format("%s → %s", nextPlan.occurrences[1].occurrenceKey, plan.occurrences[1].occurrenceKey))
+end
+
+-- ---------------------------------------------------------------------------
+-- 场景 J：三个钟点的回复分支与落盘重进 —— 引用的是同一个事件实例
+-- ---------------------------------------------------------------------------
+local function ScenarioEventReentry(dateKey)
+    logInfo("场景 J 事件实例的回复分支与重进一致性")
+    beginScenario()
+
+    -- 19:45 空闲：回复走开放麦那一组文案，并带上送达瞬间的实例键
+    goLocalHour(19, dateKey, 45)
+    local sentKey1945 = EventService.FactFor(cityId_, TimeState.NowUtc()).occurrenceKey
+    sendNow("今晚店里人多吗？")
+    local opens1945 = herReplyCount()
+    advance(idleWait_ + 2)
+    local reply1945 = lastHerReply()
+    check("J0 19:45 的回复引用同一个事件实例键",
+        reply1945 ~= nil and reply1945.factKey == sentKey1945 and reply1945.factId == "la_cafe_open_mic",
+        string.format("key=%s fact=%s", tostring(reply1945 and reply1945.factKey),
+            tostring(reply1945 and reply1945.factId)))
+    -- 开放麦那一组独有措辞（不含「边距」「样张」「水刚烧开」）
+    check("J1 19:45 回复出自开放麦文案分支",
+        TextOf(reply1945 and reply1945.text):find("店里这会儿") ~= nil
+        or TextOf(reply1945 and reply1945.text):find("才收") ~= nil
+        or TextOf(reply1945 and reply1945.text):find("还醒着") ~= nil,
+        string.format("回复增量=%d 队列=%d", herReplyCount() - opens1945, MessageService.GetQueueLength()))
+
+    -- 睡眠档发消息 → 清晨醒来补回：凌晨那件事必须说成「已经收了」，不能仍是正在进行
+    beginScenario()
+    goLocalHour(1, dateKey, 30)
+    local nightMsg = sendNow("睡了吗，随便说一句。")
+    MemoryService.Persist(MessageService.GetMessages())
+    local nightPlan = EventService.PeekPlan(cityId_, dateKey)
+    local nightGeneratedAt = nightPlan and nightPlan.generatedAtUtc or 0
+    local sentNightKey = nightMsg and nightMsg.factKey or ""
+    check("J2 凌晨发的消息带上凌晨那个实例键", sentNightKey ~= ""
+        and sentNightKey == string.format("%s/%s/la_apartment_night_rest", cityId_, dateKey),
+        sentNightKey)
+
+    -- 模拟重进：服务全部重建，计划必须从存档接管而不是重算
+    reinit_(SELFTEST_SAVE)
+    MessageService.Restore(MemoryService.GetRestoredMessages())
+    local restoredPlan = EventService.PeekPlan(cityId_, dateKey)
+    check("J3 重进后计划来自存档、生成时刻未变（没有重新生成同日事件）",
+        restoredPlan ~= nil and restoredPlan.fromSave == true
+        and restoredPlan.generatedAtUtc == nightGeneratedAt and nightGeneratedAt > 0,
+        string.format("fromSave=%s 生成时刻 %d→%d", tostring(restoredPlan and restoredPlan.fromSave),
+            nightGeneratedAt, restoredPlan and restoredPlan.generatedAtUtc or 0))
+    local headMsg = head()
+    check("J4 重进后排队消息仍引用同一实例键", headMsg ~= nil and headMsg.factKey == sentNightKey,
+        string.format("key=%s", tostring(headMsg and headMsg.factKey)))
+
+    local opens = herReplyCount()
+    goLocalHour(6, dateKey, 5)
+    advance(30)
+    local morningReply = lastHerReply()
+    local morningText = TextOf(morningReply and morningReply.text)
+    check("J5 醒来补回引用凌晨事件已结束（说清几点收的）",
+        morningText:find("到06:00就收了") ~= nil, morningText)
+    check("J6 补回不把已结束事件说成未开始",
+        morningText:find("还没开始") == nil and morningText:find("就要开始") == nil, morningText)
+    check("J7 补回的回复落在清晨实例上", MessageService.GetQueueLength() == 0
+        and herReplyCount() == opens + 1
+        and morningReply ~= nil and morningReply.factId == "la_apartment_morning_inbox",
+        string.format("fact=%s 队列=%d", tostring(morningReply and morningReply.factId),
+            MessageService.GetQueueLength()))
+    local ledger = MemoryService.FindLedgerEntry(sentNightKey)
+    check("J8 事件账本记住了凌晨那个实例", ledger ~= nil and ledger.eventId == "la_apartment_night_rest"
+        and ledger.startUtc < ledger.endUtc,
+        string.format("ledger=%s state=%s", tostring(ledger and ledger.key),
+            tostring(ledger and ledger.lastEventState)))
+
+    -- 忙碌档 → 17:00 窗口补回：下午校样那件事同样要报「收了」
+    beginScenario()
+    goLocalHour(14, dateKey, 30)
+    sendNow("下午忙不忙？")
+    local opensBusy = herReplyCount()
+    goLocalHour(17, dateKey, 5)
+    advance(30)
+    local busyText = TextOf(lastHerReply() and lastHerReply().text)
+    check("J9 14:30 的消息在 17:05 补回时引用工作室事件已结束",
+        busyText:find("到17:00就收了") ~= nil and MessageService.GetQueueLength() == 0
+        and herReplyCount() == opensBusy + 1, busyText)
+end
+
 --- 跑一次完整自检。调用前 main.lua 已经用自检存档 InitServices 过一遍。
 ---@param options DevSelfTestOptions
 ---@return boolean allPassed
@@ -506,6 +694,8 @@ function DevSelfTest.Run(options)
     ScenarioOfflineFifo(dateKey)
     ScenarioReentry(dateKey)
     ScenarioFuturePlan(dateKey)
+    ScenarioEventPlan(dateKey)
+    ScenarioEventReentry(dateKey)
     ScenarioAwaySummaryRule(dateKey)
     ScenarioAwaySummary()
 

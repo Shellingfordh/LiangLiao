@@ -1,48 +1,185 @@
 -- ============================================================================
--- EventService.lua — 从 TimeState 快照挑「固定事件事实」
--- 事实是既定事实，不是生成内容：回复只能引用这里返回的东西（设计规格 §5.2）。
--- 事件模板是小而确定的目录：时间状态决定当前模板，模板再决定状态窗和对话事实。
--- 不做随机剧情、不调用外部服务；同一城市、日期、时段总得到同一 occurrenceKey。
+-- EventService.lua — 每日事件计划 + 按 UTC 查询事件实例（设计规格 §5.3）
+-- 「先选事实，后写文案」在这里落地：每天用 城市 + 当地日期 + 固定种子 生成一份
+-- 覆盖 00:00–24:00 的事件实例表（plan），查询只按 UTC 命中其中一个 occurrence。
+-- 因此同一天同一城市任何时候得到同一批 occurrenceKey，重启读档后仍然复用存档里那份，
+-- 不再按当前地点现挑模板 —— 地点只是模板的属性，不是选择器。
+-- 事实是纯 Lua 规则的产物：没有随机数、没有运行时 LLM、没有外部服务。
+-- 变体由日期定种（同一天永远同一变体），所以「有日期差异」不等于「会漂移」。
 -- ============================================================================
+
+local TimeState = require("TimeState")
 
 local EventService = {}
 
+-- 定种盐：换这一串就等于换一套日程叙事，是版本标记而不是随机源。
+local SEED_SALT = "m1-events-v1"
+-- 存档里保留的本地日期数：跨日补回要看昨天，4 天足够且不会无限增长。
+local PLAN_DATE_CAP = 4
+
+---@class EventTemplateVariant
+---@field title string
+---@field summary string
+---@field emotion string
+---@field phrase string
+
+---@class EventTemplate
+---@field id string 模板 id（= 回复文案的键，落进消息的 factId）
+---@field place string 作息表地点，只用于文案与状态窗一致性
+---@field sceneId string 固定原创静帧 id，不做地图
+---@field variants EventTemplateVariant[] 日期变体，按下标定种选取
+
+--- 作息表的每个当地小时段对应一个模板。窗口与 SCHEDULE 的 place 逐段对齐，
+--- 这样「她在上课」与「学校工作坊」不会出现两套说法。
+---@type { id: string, fromHour: integer, toHour: integer }[]
+local DAILY_SLOTS = {
+    { id = "la_apartment_night_rest", fromHour = 0, toHour = 6 },
+    { id = "la_apartment_morning_inbox", fromHour = 6, toHour = 8 },
+    { id = "la_campus_workshop", fromHour = 8, toHour = 12 },
+    { id = "la_cafe_midday", fromHour = 12, toHour = 13 },
+    { id = "la_studio_zine_layout", fromHour = 13, toHour = 17 },
+    { id = "la_commute_voice_notes", fromHour = 17, toHour = 19 },
+    { id = "la_cafe_open_mic", fromHour = 19, toHour = 22 },
+    { id = "la_apartment_wind_down", fromHour = 22, toHour = 24 },
+}
+
+---@type table<string, EventTemplate>
 local EVENT_TEMPLATES = {
-    apartment_morning = {
+    la_apartment_night_rest = {
+        id = "la_apartment_night_rest", place = "apartment", sceneId = "la_apartment",
+        variants = {
+            {
+                title = "凌晨的安静",
+                summary = "凌晨在公寓睡着，白天那场活动的便签还摊在桌上",
+                emotion = "安静、低沉",
+                phrase = "我在公寓睡下了，桌上的便签还没收",
+            },
+            {
+                title = "凌晨的复盘梦",
+                summary = "凌晨在公寓休息，梦里还在排今天的流程",
+                emotion = "疲惫、松弛",
+                phrase = "刚睡下不久，梦里还在排今天的流程",
+            },
+        },
+    },
+    la_apartment_morning_inbox = {
         id = "la_apartment_morning_inbox", place = "apartment", sceneId = "la_apartment",
-        title = "清晨的活动邮件", endHour = 8,
-        phrases = { "我在公寓把活动邮件和便签归到一起", "咖啡刚好冲完，我在核对今天的活动清单" },
-        summary = "清晨整理了今天活动的邮件和便签", emotion = "安静、专注",
+        variants = {
+            {
+                title = "清晨的活动邮件",
+                summary = "清晨整理了今天活动的邮件和便签",
+                emotion = "安静、专注",
+                phrase = "我在公寓把活动邮件和便签归到一起",
+            },
+            {
+                title = "清晨的活动清单",
+                summary = "清晨在公寓核对今天的活动清单并冲了咖啡",
+                emotion = "清醒、有条理",
+                phrase = "咖啡刚好冲完，我在核对今天的活动清单",
+            },
+        },
     },
-    studio_layout = {
-        id = "la_studio_zine_layout", place = "studio", sceneId = "la_studio",
-        title = "小册子版面校样", endHour = 17,
-        phrases = { "工作室里在对小册子的最后一版校样", "我在工作室挪版面，桌上全是没裁的样张" },
-        summary = "在工作室完成小册子版面校样", emotion = "专注、略紧张",
-    },
-    cafe_open_mic = {
-        id = "la_cafe_open_mic", place = "cafe", sceneId = "la_cafe",
-        title = "咖啡馆的开放麦克风夜", endHour = 22,
-        phrases = { "咖啡馆这场开放麦克风还没收，人比昨天多一点", "店里正在轮到下一位上台，我坐在靠窗的位置" },
-        summary = "在咖啡馆参与开放麦克风夜", emotion = "放松、投入",
-    },
-    apartment_wind_down = {
-        id = "la_apartment_wind_down", place = "apartment", sceneId = "la_apartment",
-        title = "回家后的活动复盘", endHour = 6,
-        phrases = { "我回到公寓，把今晚活动的几张便签摊开了", "刚到家，正在把今天剩下的事情写进明天的清单" },
-        summary = "回到公寓整理活动后的便签", emotion = "疲惫、踏实",
-    },
-    campus_workshop = {
+    la_campus_workshop = {
         id = "la_campus_workshop", place = "campus", sceneId = "la_studio",
-        title = "学校工作坊的准备", endHour = 12,
-        phrases = { "学校工作坊快开始了，我在整理要用的材料", "我在学校的工作桌边，把示例顺了一遍" },
-        summary = "在学校准备一场小型工作坊", emotion = "忙碌、期待",
+        variants = {
+            {
+                title = "学校工作坊的准备",
+                summary = "在学校准备一场小型工作坊",
+                emotion = "忙碌、期待",
+                phrase = "学校工作坊快开始了，我在整理要用的材料",
+            },
+            {
+                title = "学校的示例课",
+                summary = "在学校的工作桌边过了一遍示例",
+                emotion = "专注、略赶",
+                phrase = "我在学校的工作桌边，把示例顺了一遍",
+            },
+        },
     },
-    commute_notes = {
+    la_cafe_midday = {
+        id = "la_cafe_midday", place = "cafe", sceneId = "la_cafe",
+        variants = {
+            {
+                title = "午间的咖啡馆间隙",
+                summary = "中午在咖啡馆吃午饭，顺手看晚上的安排",
+                emotion = "松弛、简短",
+                phrase = "我在店里吃午饭，顺便看晚上的安排",
+            },
+            {
+                title = "午间的活动电话",
+                summary = "中午在咖啡馆接了一个关于今晚活动的电话",
+                emotion = "有点被打断",
+                phrase = "在店里吃两口就接了个电话，说今晚的场地",
+            },
+        },
+    },
+    la_studio_zine_layout = {
+        id = "la_studio_zine_layout", place = "studio", sceneId = "la_studio",
+        variants = {
+            {
+                title = "小册子版面校样",
+                summary = "在工作室完成小册子版面校样",
+                emotion = "专注、略紧张",
+                phrase = "工作室里在对小册子的最后一版校样",
+            },
+            {
+                title = "工作室的样张",
+                summary = "在工作室挪版面，桌上堆着没裁的样张",
+                emotion = "沉浸、有点赶",
+                phrase = "我在工作室挪版面，桌上全是没裁的样张",
+            },
+        },
+    },
+    la_commute_voice_notes = {
         id = "la_commute_voice_notes", place = "commute", sceneId = "la_cafe",
-        title = "路上的语音便签", endHour = 19,
-        phrases = { "我在路上，刚把一个想法录进语音便签", "车还没到站，我在看晚上的活动安排" },
-        summary = "在路上整理晚间活动的语音便签", emotion = "短暂、轻快",
+        variants = {
+            {
+                title = "路上的语音便签",
+                summary = "在路上整理晚间活动的语音便签",
+                emotion = "短暂、轻快",
+                phrase = "我在路上，刚把一个想法录进语音便签",
+            },
+            {
+                title = "路上的等车时间",
+                summary = "在等车，看晚上的活动安排",
+                emotion = "零散、期待",
+                phrase = "车还没到站，我在看晚上的活动安排",
+            },
+        },
+    },
+    la_cafe_open_mic = {
+        id = "la_cafe_open_mic", place = "cafe", sceneId = "la_cafe",
+        variants = {
+            {
+                title = "咖啡馆的开放麦克风夜",
+                summary = "在咖啡馆参与开放麦克风夜",
+                emotion = "放松、投入",
+                phrase = "咖啡馆这场开放麦克风还没收，人比昨天多一点",
+            },
+            {
+                title = "咖啡馆的下一位上台",
+                summary = "在咖啡馆等下一位上台，坐在靠窗的位置",
+                emotion = "期待、安静",
+                phrase = "店里正在轮到下一位上台，我坐在靠窗的位置",
+            },
+        },
+    },
+    la_apartment_wind_down = {
+        id = "la_apartment_wind_down", place = "apartment", sceneId = "la_apartment",
+        variants = {
+            {
+                title = "回家后的活动复盘",
+                summary = "回到公寓整理活动后的便签",
+                emotion = "疲惫、踏实",
+                phrase = "我回到公寓，把今晚活动的几张便签摊开了",
+            },
+            {
+                title = "明天的清单",
+                summary = "回到家把今天剩下的事情写进明天的清单",
+                emotion = "收束、平静",
+                phrase = "刚到家，正在把今天剩下的事情写进明天的清单",
+            },
+        },
     },
 }
 
@@ -55,20 +192,325 @@ local PLACE_LABEL = {
     commute = "路上",
 }
 
+---@class EventOccurrence
+---@field occurrenceKey string 城市/当地日期/模板 id
+---@field templateId string
+---@field cityId string
+---@field dateKey string 该实例所属的当地日期
+---@field startUtc integer 事件开始的权威 UTC 秒
+---@field endUtc integer 事件结束的权威 UTC 秒
+---@field startClock string 当地开始钟点（展示用）
+---@field endClock string 当地结束钟点（展示用）
+---@field place string
+---@field placeLabel string
+---@field sceneId string
+---@field title string
+---@field summary string
+---@field emotion string
+---@field phrase string
+---@field variantIndex integer 当天定中第几个变体（可复现，不是随机）
+
+---@class EventPlan
+---@field cityId string
+---@field dateKey string
+---@field seedText string 定种输入，写进日志便于核对可复现性
+---@field generatedAtUtc integer 首次生成的 UTC 秒；读档后不变
+---@field fromSave boolean 是否来自存档（true = 没有重新生成同日事件）
+---@field occurrences EventOccurrence[]
+
+---@type table<string, EventPlan>
+local plans_ = {}
+
+--- 计划表按「城市/日期」分键：换城市就是换一份日程，不共用同一批实例。
+---@param cityId string
+---@param dateKey string
+---@return string
+local function planKey(cityId, dateKey)
+    return cityId .. "@" .. dateKey
+end
+
+local function fnv1a(s)
+    local h = 2166136261
+    for i = 1, #s do
+        h = (h ~ s:byte(i)) & 0xFFFFFFFF
+        h = (h * 16777619) & 0xFFFFFFFF
+    end
+    return h
+end
+
 local function logInfo(msg)
     print("[EventService] " .. msg)
     log:Write(LOG_INFO, "[EventService] " .. msg)
 end
 
+local function logWarn(msg)
+    print("[EventService] WARN: " .. msg)
+    log:Write(LOG_WARNING, "[EventService] " .. msg)
+end
+
+---@class EventServiceInitOptions
+---@field cityId? string
+---@field onPlansChanged? fun() 新生成了一天的计划（main.lua 用它把计划落盘）
+
+---@type fun()|nil
+local onPlansChanged_ = nil
+
+---@type string
+local cityId_ = "los_angeles"
+
+--- 进程级重建：清空计划缓存、设定默认城市、挂落盘回调。
+--- 清空是必须的，否则开发自检的「重进」场景会读到上一次缓存，
+--- 断言就成了「内存复用」而不是「存档复用」。
+---@param opts? EventServiceInitOptions
+function EventService.Init(opts)
+    opts = opts or {}
+    cityId_ = opts.cityId or cityId_
+    onPlansChanged_ = opts.onPlansChanged
+    plans_ = {}
+end
+
+---@return string
+function EventService.GetCityId()
+    return cityId_
+end
+
+--- 从存档接管已生成的计划。读回来的实例一律按存档内容使用，不重算，
+--- 所以重启后 occurrenceKey 与生命周期与重启前完全一致。
+---@param savedPlans EventPlan[]?
+---@return integer taken 实际接管的日期数
+function EventService.Restore(savedPlans)
+    if type(savedPlans) ~= "table" then
+        return 0
+    end
+    local taken = 0
+    for i = 1, #savedPlans do
+        local raw = savedPlans[i]
+        if type(raw) == "table" and type(raw.dateKey) == "string" and type(raw.cityId) == "string" then
+            ---@type EventOccurrence[]
+            local occurrences = {}
+            local rawOccs = raw.occurrences
+            if type(rawOccs) == "table" then
+                for j = 1, #rawOccs do
+                    local occ = rawOccs[j]
+                    -- 一条实例缺任一定位字段就整条丢掉：留着只会在查询时返回半截事实
+                    if type(occ) == "table"
+                        and type(occ.occurrenceKey) == "string"
+                        and type(occ.templateId) == "string"
+                        and type(occ.startUtc) == "number"
+                        and type(occ.endUtc) == "number" then
+                        occurrences[#occurrences + 1] = occ
+                    end
+                end
+            end
+            if #occurrences > 0 then
+                plans_[planKey(raw.cityId, raw.dateKey)] = {
+                    cityId = raw.cityId,
+                    dateKey = raw.dateKey,
+                    seedText = type(raw.seedText) == "string" and raw.seedText or "",
+                    generatedAtUtc = type(raw.generatedAtUtc) == "number" and math.floor(raw.generatedAtUtc) or 0,
+                    fromSave = true,
+                    occurrences = occurrences,
+                }
+                taken = taken + 1
+            end
+        end
+    end
+    logInfo(string.format("接管存档事件计划 %d 天", taken))
+    return taken
+end
+
+--- 当前缓存的计划表（落盘用）。按日期升序，只留最近 PLAN_DATE_CAP 天。
+---@return EventPlan[]
+function EventService.ExportPlans()
+    ---@type EventPlan[]
+    local list = {}
+    for _, plan in pairs(plans_) do
+        list[#list + 1] = plan
+    end
+    table.sort(list, function(a, b)
+        if a.dateKey == b.dateKey then
+            return a.cityId < b.cityId
+        end
+        return a.dateKey < b.dateKey
+    end)
+    while #list > PLAN_DATE_CAP do
+        table.remove(list, 1)
+    end
+    return list
+end
+
+---@param cityId string
+---@param dateKey string
+---@return EventPlan?
+function EventService.PeekPlan(cityId, dateKey)
+    return plans_[planKey(cityId, dateKey)]
+end
+
+--- 丢掉某一天的缓存并按同一规则重建。正常路径不用它；
+--- 开发自检要用它证明「同一天同一城市重算得到的还是那一批实例」，
+--- 也就是可复现性而不是「一直复用内存」。
+---@param cityId string
+---@param dateKey string
+---@return EventPlan
+function EventService.Regenerate(cityId, dateKey)
+    plans_[planKey(cityId, dateKey)] = nil
+    return EventService.PlanFor(cityId, dateKey)
+end
+
+--- 取某城市某当地日期的事件计划。已缓存或已从存档读回就直接返回（不重算）；
+--- 否则按 城市+日期+固定种子 生成一份，并通知调用方落盘。
+---@param cityId string
+---@param dateKey string
+---@return EventPlan
+function EventService.PlanFor(cityId, dateKey)
+    local key = planKey(cityId, dateKey)
+    local existing = plans_[key]
+    if existing then
+        return existing
+    end
+
+    local templateList = DAILY_SLOTS
+    local occurrences = {}
+    for i = 1, #templateList do
+        local slot = templateList[i]
+        local template = EVENT_TEMPLATES[slot.id]
+        if template then
+            local seedText = cityId .. "|" .. dateKey .. "|" .. slot.id .. "|" .. SEED_SALT
+            local rolled = fnv1a(seedText)
+            local variants = template.variants
+            local variantIndex = (rolled % #variants) + 1
+            local variant = variants[variantIndex]
+            local endHour = slot.toHour
+            local endCityDate = dateKey
+            if endHour >= 24 then
+                endHour = endHour - 24
+                endCityDate = TimeState.ShiftDateKey(dateKey, 1)
+            end
+            local startUtc = math.floor(TimeState.UtcAtLocal(cityId, dateKey, slot.fromHour))
+            local endUtc = math.floor(TimeState.UtcAtLocal(cityId, endCityDate, endHour))
+            ---@type EventOccurrence
+            local occurrence = {
+                occurrenceKey = string.format("%s/%s/%s", cityId, dateKey, template.id),
+                templateId = template.id,
+                cityId = cityId,
+                dateKey = dateKey,
+                startUtc = startUtc,
+                endUtc = endUtc,
+                startClock = string.format("%02d:00", slot.fromHour % 24),
+                endClock = string.format("%02d:00", endHour % 24),
+                place = template.place,
+                placeLabel = PLACE_LABEL[template.place] or "外面",
+                sceneId = template.sceneId,
+                title = variant.title,
+                summary = variant.summary,
+                emotion = variant.emotion,
+                phrase = variant.phrase,
+                variantIndex = variantIndex,
+            }
+            occurrences[#occurrences + 1] = occurrence
+        end
+    end
+
+    ---@type EventPlan
+    local plan = {
+        cityId = cityId,
+        dateKey = dateKey,
+        seedText = cityId .. "|" .. dateKey .. "|" .. SEED_SALT,
+        generatedAtUtc = math.floor(TimeState.NowUtc()),
+        fromSave = false,
+        occurrences = occurrences,
+    }
+    plans_[key] = plan
+    logInfo(string.format("生成 %s %s 的事件计划 %d 个事件（种子=%s）",
+        cityId, dateKey, #occurrences, plan.seedText))
+    if onPlansChanged_ then
+        onPlansChanged_()
+    end
+    return plan
+end
+
+---@param occurrence EventOccurrence
+---@param utcSec integer
+---@return string
+local function stateOf(occurrence, utcSec)
+    if utcSec < occurrence.startUtc then
+        return "upcoming"
+    elseif utcSec >= occurrence.endUtc then
+        return "ended"
+    end
+    return "ongoing"
+end
+
+---@class EventQuery
+---@field occurrence EventOccurrence 命中的事件实例（含 eventState）
+---@field eventState string ongoing|upcoming|ended
+---@field plan EventPlan
+---@field allStates table<string, string> templateId → 状态，给状态窗与自检用
+
+--- 按权威 UTC 查当日事件计划，命中正在发生的那一个实例。
+--- 计划按当地日期分键，所以跨日的排队补回只要给出对应 UTC 就能拿回同一实例。
+---@param cityId string
+---@param utcSec number
+---@return EventQuery|nil
+function EventService.QueryAt(cityId, utcSec)
+    local t = math.floor(utcSec)
+    local snap = TimeState.Snapshot(cityId, t)
+    local plan = EventService.PlanFor(cityId, snap.dateKey)
+    local occurrences = plan.occurrences
+    local allStates = {}
+    for i = 1, #occurrences do
+        allStates[occurrences[i].templateId] = stateOf(occurrences[i], t)
+    end
+    for i = 1, #occurrences do
+        local occ = occurrences[i]
+        if t >= occ.startUtc and t < occ.endUtc then
+            return {
+                occurrence = occ,
+                eventState = "ongoing",
+                plan = plan,
+                allStates = allStates,
+            }
+        end
+    end
+    -- 作息表是 00:00–24:00 连续覆盖的，走到这里说明计划与作息表错位（改日程时的真缺陷）。
+    -- 退回最近一个已结束的实例，而不是伪造一个「未开始」——那正是规格禁止的说法。
+    local nearest = nil
+    local nearestState = "ended"
+    for i = 1, #occurrences do
+        local occ = occurrences[i]
+        if occ.startUtc <= t and (not nearest or occ.startUtc > nearest.startUtc) then
+            nearest = occ
+        end
+    end
+    if not nearest then
+        nearest = occurrences[#occurrences]
+        nearestState = "upcoming"
+    end
+    if nearest then
+        logWarn(string.format("UTC %d 未命中 %s 的任何事件窗口，回退到 %s(%s)",
+            t, snap.dateKey, nearest.templateId, nearestState))
+        return {
+            occurrence = nearest,
+            eventState = nearestState,
+            plan = plan,
+            allStates = allStates,
+        }
+    end
+    return nil
+end
+
 ---@class EventFact
----@field id string
----@field occurrenceKey string
+---@field id string 模板 id（消息的 factId，回复文案的键）
+---@field occurrenceKey string 当天该事件实例的稳定标识
 ---@field eventState string ongoing|upcoming|ended
 ---@field eventTitle string
 ---@field eventPhrase string
 ---@field eventSummary string
 ---@field eventEmotion string
+---@field eventStartsAt string
 ---@field eventEndsAt string
+---@field eventStartUtc integer
+---@field eventEndUtc integer
 ---@field place string
 ---@field placeLabel string
 ---@field sceneId string
@@ -82,70 +524,44 @@ end
 ---@field season string
 ---@field phrase string
 ---@field serverTime integer
+---@field planFromSave boolean 这份事件事实出自存档里的计划还是当场生成
 ---@field queued boolean? 只有当下不可回复、事后补回时才为 true
 ---@field thenPhrase string? 消息送达时她所处档的原话（作息表事实）
 ---@field thenClock string? 消息送达时的当地钟点
+---@field sentOccurrenceKey string? 送达时刻命中的事件实例
+---@field sentEventState string? 交付时回头看送达那个实例的生命周期
+---@field sentEventTitle string? 送达时那个事件的标题
+---@field sentEventEndsAt string? 送达时那个事件的当地结束钟点
 ---@field gapSeconds integer? 从送达到交付经过了多少秒
 
----@param snap table
----@return table
-local function templateFor(snap)
-    if snap.place == "apartment" then
-        if snap.hour >= 6 and snap.hour < 8 then
-            return EVENT_TEMPLATES.apartment_morning
-        end
-        return EVENT_TEMPLATES.apartment_wind_down
-    elseif snap.place == "studio" then
-        return EVENT_TEMPLATES.studio_layout
-    elseif snap.place == "cafe" then
-        return EVENT_TEMPLATES.cafe_open_mic
-    elseif snap.place == "campus" then
-        return EVENT_TEMPLATES.campus_workshop
-    end
-    return EVENT_TEMPLATES.commute_notes
-end
-
----@param text string
----@return integer
-local function hash(text)
-    local h = 5381
-    for i = 1, #text do
-        h = (h * 33 ~ text:byte(i)) & 0x7FFFFFFF
-    end
-    return h
-end
-
----@param template table
----@param snap table
----@return string
-local function phraseFor(template, snap)
-    local phrases = template.phrases or { "我在" .. (PLACE_LABEL[snap.place] or "外面") }
-    local index = (hash((snap.dateKey or "") .. "|" .. template.id) % #phrases) + 1
-    return phrases[index]
-end
-
---- 选择当前时刻的事件事实快照。
---- 传 sentSnap（该条消息送达时刻的快照）即表示「这是排队之后的补回复」：那时的原话与
---- 钟点同样来自作息表，是既定事实，可以写进回复；这里不新增任何猜测或补全。
----@param snap table TimeState.Snapshot 的返回值（交付/当前时刻）
----@param sentSnap? table 同一条消息送达时刻的 TimeState 快照
+--- 交付时刻 + 可选送达时刻 → 一份事件事实。
+--- 传 sentUtcSec 即表示「这是排队之后的补回复」：送达那一刻命中的是另一个实例，
+--- 它现在多半已经收了，这一点必须如实写进事实里，不能继续说成正在开始。
+---@param cityId string
+---@param utcSec number 交付（或当前）时刻的权威 UTC 秒
+---@param sentUtcSec? number 同一条消息送达时刻的权威 UTC 秒
 ---@return EventFact
-function EventService.FromSnapshot(snap, sentSnap)
-    local template = templateFor(snap)
-    local occurrenceKey = string.format("%s/%s/%s", snap.cityId or "city", snap.dateKey or "date", template.id)
+function EventService.FactFor(cityId, utcSec, sentUtcSec)
+    local snap = TimeState.Snapshot(cityId, utcSec)
+    local query = EventService.QueryAt(cityId, utcSec)
+    local occ = query and query.occurrence or nil
+    local template = occ and EVENT_TEMPLATES[occ.templateId] or nil
     ---@type EventFact
     local fact = {
-        id = template.id,
-        occurrenceKey = occurrenceKey,
-        eventState = "ongoing",
-        eventTitle = template.title,
-        eventPhrase = phraseFor(template, snap),
-        eventSummary = template.summary,
-        eventEmotion = template.emotion,
-        eventEndsAt = string.format("%02d:00", template.endHour),
+        id = occ and occ.templateId or (template and template.id or snap.place),
+        occurrenceKey = occ and occ.occurrenceKey or "",
+        eventState = query and query.eventState or "ongoing",
+        eventTitle = occ and occ.title or "",
+        eventPhrase = occ and occ.phrase or snap.phrase,
+        eventSummary = occ and occ.summary or "",
+        eventEmotion = occ and occ.emotion or "",
+        eventStartsAt = occ and occ.startClock or "",
+        eventEndsAt = occ and occ.endClock or "",
+        eventStartUtc = occ and occ.startUtc or snap.utcSec,
+        eventEndUtc = occ and occ.endUtc or snap.utcSec,
         place = snap.place,
         placeLabel = PLACE_LABEL[snap.place] or "外面",
-        sceneId = template.sceneId or snap.sceneId or "",
+        sceneId = (occ and occ.sceneId) or snap.sceneId or "",
         availability = snap.availability,
         availabilityLabel = snap.availabilityLabel or "",
         brief = snap.brief == true,
@@ -156,27 +572,49 @@ function EventService.FromSnapshot(snap, sentSnap)
         season = snap.season,
         phrase = snap.phrase,
         serverTime = snap.utcSec,
+        planFromSave = query ~= nil and query.plan.fromSave == true,
     }
-    if sentSnap and sentSnap.utcSec and sentSnap.utcSec < snap.utcSec then
+
+    if sentUtcSec and math.floor(sentUtcSec) < snap.utcSec then
+        local sentSnap = TimeState.Snapshot(cityId, sentUtcSec)
+        local sentQuery = EventService.QueryAt(cityId, sentUtcSec)
         fact.queued = not sentSnap.replyable
         fact.thenPhrase = sentSnap.phrase
         fact.thenClock = sentSnap.clock
         fact.gapSeconds = math.max(0, math.floor(snap.utcSec - sentSnap.utcSec))
+        if sentQuery and sentQuery.occurrence then
+            fact.sentOccurrenceKey = sentQuery.occurrence.occurrenceKey
+            fact.sentEventTitle = sentQuery.occurrence.title
+            fact.sentEventEndsAt = sentQuery.occurrence.endClock
+            -- 送达那一刻它确实是正在发生；隔到交付时再查一次，状态可能已经收了。
+            fact.sentEventState = stateOf(sentQuery.occurrence, snap.utcSec)
+        end
     end
+
+    logInfo(string.format("事件事实 key=%s state=%s scene=%s clock=%s fromSave=%s",
+        fact.occurrenceKey, fact.eventState, fact.sceneId, fact.clock, tostring(fact.planFromSave)))
     if fact.queued then
-        logInfo(string.format("事件事实 id=%s occurrence=%s scene=%s 排队补回 送达=%s(%s) 隔 %d 秒",
-            fact.id, fact.occurrenceKey, fact.sceneId, tostring(fact.thenClock),
-            tostring(fact.thenPhrase), fact.gapSeconds or 0))
-    else
-        logInfo(string.format("事件事实 id=%s occurrence=%s scene=%s clock=%s",
-            fact.id, fact.occurrenceKey, fact.sceneId, fact.clock))
+        logInfo(string.format("排队补回 送达key=%s 送达态=%s 送达=%s 隔 %d 秒",
+            tostring(fact.sentOccurrenceKey), tostring(fact.sentEventState),
+            tostring(fact.thenClock), fact.gapSeconds or 0))
     end
     return fact
 end
 
+---@param templateId string
+---@return EventTemplate?
+function EventService.TemplateFor(templateId)
+    return EVENT_TEMPLATES[templateId]
+end
+
+--- 当前正在发生的事件模板 id（消息缺事实时的兜底值）。
 ---@return string
 function EventService.GetEventId()
-    return EVENT_TEMPLATES.cafe_open_mic.id
+    local query = EventService.QueryAt(cityId_, TimeState.NowUtc())
+    if query then
+        return query.occurrence.templateId
+    end
+    return "la_cafe_open_mic"
 end
 
 return EventService

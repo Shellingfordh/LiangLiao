@@ -3,8 +3,10 @@
 -- 约定：
 --   * Load/Save 是同步的本地能力，本地失败就退回内存并打日志，绝不让 UI 崩。
 --   * M1 起存档带完整消息记录：每条含权威 UTC 发送时间、当前状态、计划回复时刻、
---     事件事实 id 与送达时的作息事实，重进时由 main.lua 交给 MessageService.Restore。
---   * v1 存档（只有 transcript 摘要）仍可读，读回时迁移为消息记录。
+--     事件事实 id 与事件实例键（factKey）、送达时的作息事实，重进时由 main.lua 交给 MessageService.Restore。
+--   * v4 起存档额外带走「每日事件计划」（EventService 生成的那批事件实例）：
+--     重启后由 main.lua 交给 EventService.Restore 接管，不重新生成同日事件。
+--   * v1 存档（只有 transcript 摘要）与 v2/v3（无事件计划）仍可读，读回时迁移为当前版本。
 --   * clientCloud 只暴露异步接口，且按轮次节流（不逐条消息写云）。
 --   * 预览是否成功不依赖云存储：云回调只打日志，不驱动任何 UI 状态。
 -- ============================================================================
@@ -17,15 +19,23 @@ local CLOUD_KEY = "companion_memory_la"
 local CLOUD_FLUSH_EVERY_TURNS = 5
 -- 落盘的消息条数上限：只裁「已回复」的旧记录，任何未回复的排队消息都不会被裁掉
 local MESSAGE_CAP = 120
-local SAVE_VERSION = 3
+local SAVE_VERSION = 4
 local EVENT_LEDGER_CAP = 40
+-- 落盘的事件计划天数：与 EventService 的窗口一致，跨日补回要看昨天。
+local EVENT_PLAN_CAP = 4
 
 ---@class EventLedgerEntry
----@field key string
----@field eventId string
+---@field key string occurrenceKey
+---@field eventId string 模板 id
 ---@field title string
 ---@field sceneId string
----@field lastServerTime integer
+---@field startUtc integer 该实例开始（权威 UTC 秒）
+---@field endUtc integer 该实例结束（权威 UTC 秒）
+---@field lastEventState string 最后一次见到它时的生命周期
+---@field lastServerTime integer 最后一次见到它的权威 UTC 秒
+
+--- 事件计划的落盘结构就是 EventService 的 EventPlan（同名同形，不再造第二个类型）：
+--- 计划只有一处定义，存档读写与运行时查询说的是同一份事实。
 
 ---@class CompanionMemory
 ---@field version integer
@@ -37,6 +47,7 @@ local EVENT_LEDGER_CAP = 40
 ---@field topics string[]
 ---@field messages MsgEntry[]
 ---@field eventLedger EventLedgerEntry[]
+---@field eventPlans EventPlan[]
 
 ---@type CompanionMemory
 local mem_ = {
@@ -49,6 +60,7 @@ local mem_ = {
     topics = {},
     messages = {},
     eventLedger = {},
+    eventPlans = {},
 }
 
 local source_ = "memory"
@@ -148,6 +160,7 @@ local function sanitizeMessage(raw)
         placeAtSend = asString(raw.placeAtSend),
         sceneIdAtSend = asString(raw.sceneIdAtSend),
         phraseAtSend = asString(raw.phraseAtSend),
+        factKey = asString(raw.factKey),
     }
     return entry, nil
 end
@@ -206,12 +219,45 @@ local function readEventLedger(rawLedger)
                     eventId = eventId,
                     title = asString(raw.title) or "",
                     sceneId = asString(raw.sceneId) or "",
+                    -- v3 的账本没有起止与生命周期字段，读回来补 0/空串而不是报错
+                    startUtc = asInteger(raw.startUtc) or 0,
+                    endUtc = asInteger(raw.endUtc) or 0,
+                    lastEventState = asString(raw.lastEventState) or "",
                     lastServerTime = asInteger(raw.lastServerTime) or 0,
                 }
             end
         end
     end
     while #out > EVENT_LEDGER_CAP do
+        table.remove(out, 1)
+    end
+    return out
+end
+
+--- 读回事件计划表。字段不齐的那天整条丢掉：计划是事实源，半截计划比没有更坏。
+---@param rawPlans any
+---@return EventPlan[]
+local function readEventPlans(rawPlans)
+    local out = {}
+    if type(rawPlans) ~= "table" then
+        return out
+    end
+    for i = 1, #rawPlans do
+        local raw = rawPlans[i]
+        if type(raw) == "table"
+            and type(raw.dateKey) == "string"
+            and type(raw.cityId) == "string"
+            and type(raw.occurrences) == "table" and #raw.occurrences > 0 then
+            out[#out + 1] = {
+                cityId = raw.cityId,
+                dateKey = raw.dateKey,
+                seedText = asString(raw.seedText) or "",
+                generatedAtUtc = asInteger(raw.generatedAtUtc) or 0,
+                occurrences = raw.occurrences,
+            }
+        end
+    end
+    while #out > EVENT_PLAN_CAP do
         table.remove(out, 1)
     end
     return out
@@ -274,9 +320,12 @@ function MemoryService.Load()
         local migrated = mem_.version < SAVE_VERSION
         mem_.messages = readMessages(migrated and data.transcript or data.messages)
         mem_.eventLedger = readEventLedger(data.eventLedger)
+        mem_.eventPlans = readEventPlans(data.eventPlans)
         if migrated then
             mem_.version = SAVE_VERSION
-            logInfo("读到 v1 存档，已把 " .. tostring(#mem_.messages) .. " 条摘要迁移为消息记录")
+            logInfo("读到 v" .. tostring(asInteger(data.version) or 1) .. " 存档，已迁移为 v"
+                .. tostring(SAVE_VERSION) .. "（消息 " .. tostring(#mem_.messages)
+                .. " 条，事件计划 " .. tostring(#mem_.eventPlans) .. " 天）")
         end
         source_ = "file"
         local pending = 0
@@ -286,8 +335,8 @@ function MemoryService.Load()
                 pending = pending + 1
             end
         end
-        logInfo(string.format("本地存档已读回 turns=%d 记录=%d 条 待回复=%d 条",
-            mem_.turns, #mem_.messages, pending))
+        logInfo(string.format("本地存档已读回 turns=%d 记录=%d 条 待回复=%d 条 事件计划=%d 天 事件账本=%d 条",
+            mem_.turns, #mem_.messages, pending, #mem_.eventPlans, #mem_.eventLedger))
     end)
 
     if not ok then
@@ -320,6 +369,7 @@ function MemoryService.Save()
             topics = mem_.topics,
             messages = mem_.messages,
             eventLedger = mem_.eventLedger,
+            eventPlans = mem_.eventPlans,
         })
         local file = File(saveFile_, FILE_WRITE)
         if not file:IsOpen() then
@@ -363,6 +413,7 @@ local function toSaved(entry)
         placeAtSend = entry.placeAtSend,
         sceneIdAtSend = entry.sceneIdAtSend,
         phraseAtSend = entry.phraseAtSend,
+        factKey = entry.factKey,
     }
 end
 
@@ -424,6 +475,10 @@ local function recordEvent(fact)
         local entry = mem_.eventLedger[i]
         if entry.key == key then
             entry.lastServerTime = fact.serverTime or entry.lastServerTime
+            -- 生命周期只允许向前推进记录（ongoing → ended），不把已收的事件写回未开始
+            if entry.lastEventState ~= "ended" then
+                entry.lastEventState = fact.eventState or entry.lastEventState
+            end
             return
         end
     end
@@ -432,11 +487,37 @@ local function recordEvent(fact)
         eventId = fact.id,
         title = fact.eventTitle or "",
         sceneId = fact.sceneId or "",
+        startUtc = fact.eventStartUtc or 0,
+        endUtc = fact.eventEndUtc or 0,
+        lastEventState = fact.eventState or "",
         lastServerTime = fact.serverTime or 0,
     }
     while #mem_.eventLedger > EVENT_LEDGER_CAP do
         table.remove(mem_.eventLedger, 1)
     end
+end
+
+--- 存档里的事件计划（交给 EventService.Restore 接管）。
+---@return EventPlan[]
+function MemoryService.GetEventPlans()
+    return mem_.eventPlans
+end
+
+--- 收一份事件计划进存档。只改内存，是否写盘由调用方决定（见 main.lua 的落盘回调）。
+---@param plans EventPlan[]
+function MemoryService.SetEventPlans(plans)
+    mem_.eventPlans = readEventPlans(plans)
+end
+
+---@param occurrenceKey string
+---@return EventLedgerEntry|nil
+function MemoryService.FindLedgerEntry(occurrenceKey)
+    for i = 1, #mem_.eventLedger do
+        if mem_.eventLedger[i].key == occurrenceKey then
+            return mem_.eventLedger[i]
+        end
+    end
+    return nil
 end
 
 --- 一轮完整问答落库：轮次/话题/最近事实是关系摘要，消息记录由 messages 一次性带走。
@@ -491,6 +572,7 @@ function MemoryService.ResetInMemory()
     mem_.topics = {}
     mem_.messages = {}
     mem_.eventLedger = {}
+    mem_.eventPlans = {}
     source_ = "memory"
 end
 

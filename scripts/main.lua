@@ -29,6 +29,14 @@ local CONFIG = {
     AwaySummaryMinSeconds = 60, -- 离开超过这个时长才给一条「离开期间」摘要
 }
 
+--- 事件实例的生命周期上屏文案：状态窗注释行与回复共用同一套说法
+---@type table<string, string>
+local EVENT_STATE_LABEL = {
+    upcoming = "还没开始",
+    ongoing = "正在进行",
+    ended = "已经收了",
+}
+
 ---@type Widget|nil
 local uiRoot_ = nil
 ---@type Widget|nil
@@ -69,12 +77,20 @@ local function NowUtc()
     return TimeState.NowUtc()
 end
 
---- 刷新时间快照，并保证 lastFact_ 与它同源
+--- 刷新时间快照，并保证 lastFact_ 与它同源：事实来自当天的事件计划，不是现挑模板
 local function RefreshSnapshot()
     local snap = TimeState.Snapshot(CONFIG.City, NowUtc())
     lastSnap_ = snap
-    lastFact_ = EventService.FromSnapshot(snap)
+    lastFact_ = EventService.FactFor(CONFIG.City, snap.utcSec)
     return snap
+end
+
+--- 新生成了某一天的事件计划就立刻落盘（只写记忆，不动消息数组）。
+--- 计划一旦落盘，重进时由 EventService.Restore 接管，不会重算同日事件。
+function PublishEventPlans()
+    MemoryService.SetEventPlans(EventService.ExportPlans())
+    local ok = MemoryService.Save()
+    logInfo(string.format("事件计划落盘 %s", tostring(ok)))
 end
 
 -- UTC 秒 → 当地钟点的单格缓存：同一条排队消息的计划窗口是固定的，
@@ -103,6 +119,11 @@ end
 ---@param snap TimeSnapshot
 ---@return SendContext
 local function MakeSendContext(snap)
+    -- 与当前快照同一 UTC 时复用已刷新的那一份事实；否则现查，
+    -- 保证开发自检在没有走 RefreshSnapshot 的路径上也不会带上上一场景的旧实例键
+    local fact = (lastFact_ and lastFact_.serverTime == snap.utcSec and lastFact_)
+        or EventService.FactFor(CONFIG.City, snap.utcSec)
+    lastFact_ = fact
     return {
         plan = TimeState.ReplyPlanFor(CONFIG.City, snap.utcSec),
         availability = snap.availability,
@@ -110,7 +131,9 @@ local function MakeSendContext(snap)
         place = snap.place,
         sceneId = snap.sceneId,
         phrase = snap.phrase,
-        factId = (lastFact_ and lastFact_.id) or EventService.GetEventId(),
+        factId = fact.id,
+        -- 送达瞬间命中的事件实例：补回与重进都引用同一个键
+        factKey = fact.occurrenceKey,
     }
 end
 
@@ -160,21 +183,21 @@ end
 ---@param pending MsgEntry
 function HandleDeliver(pending)
     local snap = RefreshSnapshot()
-    local sentSnap = TimeState.Snapshot(CONFIG.City, pending.serverTime)
-    local fact = EventService.FromSnapshot(snap, sentSnap)
+    -- 送达时刻的那一个事件实例由 EventService 按 UTC 查出来：它现在多半已经收了
+    local fact = EventService.FactFor(CONFIG.City, snap.utcSec, pending.serverTime)
     lastFact_ = fact
     turnIndex_ = turnIndex_ + 1
 
     local replyText = ContentService.Reply(fact, pending.text, turnIndex_)
-    local reply = MessageService.AppendReply(replyText, snap.utcSec, fact.id, snap.clock)
+    local reply = MessageService.AppendReply(replyText, snap.utcSec, fact.id, snap.clock, fact.occurrenceKey)
     local topics = ContentService.DetectTopics(pending.text)
     MemoryService.RecordTurn(pending, reply, fact, topics, MessageService.GetMessages())
     ChatPanel.SetMemoryLine(MemoryService.GetSummaryLine())
 
-    logInfo(string.format("回复 #%d → replied 事实=%s 状态=%s 话题=%s 正文=%s",
-        pending.id, fact.id, fact.eventState,
-        table.concat(topics, ",") == "" and "无" or table.concat(topics, ","),
-        replyText))
+    -- 只记事实与长度：回复正文会带上用户原文片段，不整条进运行日志
+    logInfo(string.format("回复 #%d → replied 事实=%s key=%s 状态=%s 场景=%s 送达key=%s 送达态=%s 正文长度=%d",
+        pending.id, fact.id, fact.occurrenceKey, fact.eventState, fact.sceneId,
+        tostring(pending.factKey or fact.sentOccurrenceKey), tostring(fact.sentEventState), #replyText))
 end
 
 function Start()
@@ -219,6 +242,9 @@ function Start()
     SubscribeToEvents()
     StatusWindow.SetNoticesChanged(RefreshResourceNotices)
     RefreshResourceNotices()
+    -- 正式会话的服务与计划都在 InitServices 里重建过，开场前再取一次事实，
+    -- 这样 BootChat 与状态窗引用的是存档接管后的那一份事件实例
+    RefreshSnapshot()
     BootChat()
 
     logInfo(string.format(
@@ -237,12 +263,14 @@ end
 --- 开发测试台切换的是 TimeState 的本次运行投影，而非系统时间或存档。
 ---@param hour integer
 ---@param label string
-function HandleDevPreset(hour, label)
-    local snap = TimeState.SetDevLocalHour(CONFIG.City, hour)
+---@param minute? integer
+function HandleDevPreset(hour, label, minute)
+    local snap = TimeState.SetDevLocalHour(CONFIG.City, hour, minute)
     logInfo("开发测试切换：" .. label .. " → " .. snap.clock .. " " .. snap.availability)
     RefreshStatusLine(true)
     PushChatPhase()
-    DevTestPanel.SetSummary("测试时间：" .. label .. " · " .. snap.availabilityLabel)
+    DevTestPanel.SetSummary("测试时间：" .. label .. " · " .. (lastFact_ and lastFact_.eventTitle or "")
+        .. "/" .. (lastFact_ and EVENT_STATE_LABEL[lastFact_.eventState] or ""))
 end
 
 function HandleDevReset()
@@ -294,6 +322,10 @@ function InitServices(saveFile)
     MemoryService.Init({ cityId = CONFIG.City, cloud = adapter, saveFile = saveFile })
     local _, source = MemoryService.Load()
     logInfo("记忆装载来源: " .. source)
+    -- 事件层在记忆之后接：存档里已有当天的计划就直接接管，不重新生成同日事件
+    EventService.Init({ cityId = CONFIG.City, onPlansChanged = PublishEventPlans })
+    local restoredPlans = EventService.Restore(MemoryService.GetEventPlans())
+    logInfo(string.format("事件计划接管：存档 %d 天（记忆来源 %s）", restoredPlans, source))
     turnIndex_ = MemoryService.Get().turns
     MemoryService.CloudLoadAsync()
 end
@@ -309,13 +341,20 @@ function BootChat()
 
     local pendingCount = MessageService.Restore(MemoryService.GetRestoredMessages())
     ChatPanel.SetMemoryLine(MemoryService.GetSummaryLine())
+    -- 开场就报一次事件实例的键与生命周期，并说明它是不是从存档接管的
+    logInfo(string.format("开场事件 key=%s 模板=%s 状态=%s 场景=%s 计划来源=%s",
+        fact.occurrenceKey, fact.id, fact.eventState, fact.sceneId,
+        fact.planFromSave and "存档" or "当场生成"))
 
     if #MessageService.GetMessages() == 0 then
         MessageService.AddSystem(
             "陌生网友 × 洛杉矶 · 她按当地时间生活，在忙或在睡时你的消息会排队",
             snap.utcSec, snap.clock)
         logInfo("开场白（非回复链路）: " .. ContentService.OpeningLine(fact))
-        MessageService.AppendReply(ContentService.OpeningLine(fact), snap.utcSec, fact.id, snap.clock)
+        MessageService.AppendReply(ContentService.OpeningLine(fact), snap.utcSec, fact.id, snap.clock,
+            fact.occurrenceKey)
+        -- 首次开场也要把当天的计划留在存档里，否则重进时只能重算
+        PublishEventPlans()
     else
         logInfo(string.format("已恢复 %d 条历史记录（其中 %d 条待回复），不再重复开场白",
             #MessageService.GetMessages(), pendingCount))
@@ -510,7 +549,9 @@ function RefreshNoteLine()
     end
     local note = "M1 · 镜头仍锁定，回复只用送达与交付两个时刻的事件事实"
     if lastFact_ and lastFact_.eventTitle then
-        note = "事件 · " .. lastFact_.eventTitle .. " · " .. (lastFact_.eventEmotion or "")
+        note = string.format("事件 · %s（%s）· %s · %s—%s",
+            lastFact_.eventTitle, EVENT_STATE_LABEL[lastFact_.eventState] or lastFact_.eventState,
+            (lastFact_.eventEmotion or ""), lastFact_.eventStartsAt, lastFact_.eventEndsAt)
     end
     local sceneNote = StatusWindow.GetSceneNotice()
     if sceneNote ~= "" then

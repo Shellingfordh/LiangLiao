@@ -178,12 +178,14 @@ end
 --- 不触碰设备系统时间，也不写入存档；重启或 ResetDevClock 后立即回到权威 UTC。
 ---@param cityId string
 ---@param hour integer
+---@param minute? integer
 ---@return TimeSnapshot
-function TimeState.SetDevLocalHour(cityId, hour)
+function TimeState.SetDevLocalHour(cityId, hour, minute)
     local realUtc = common.get_server_time()
     local realSnap = TimeState.Snapshot(cityId, realUtc)
     local safeHour = math.max(0, math.min(23, math.floor(hour or 0)))
-    local targetUtc = TimeState.UtcAtLocal(cityId, realSnap.dateKey, safeHour)
+    local safeMinute = math.max(0, math.min(59, math.floor(minute or 0)))
+    local targetUtc = TimeState.UtcAtLocal(cityId, realSnap.dateKey, safeHour, safeMinute)
     TimeState.DevClockOffset = targetUtc - realUtc
     return TimeState.Snapshot(cityId, targetUtc)
 end
@@ -275,15 +277,33 @@ function TimeState.NextReplyableUtc(cityId, utcSec)
     return nil
 end
 
+--- 当地日期前后挪 N 天（事件计划要引用「昨天」和「明天」的日期键）。
+--- 走 daysFromCivil + os.date("!")，不碰设备本地时区。
+---@param dateKey string "YYYY-MM-DD"
+---@param days integer
+---@return string
+function TimeState.ShiftDateKey(dateKey, days)
+    local sec = civilDaySeconds(dateKey)
+    if not sec then
+        return dateKey
+    end
+    local shifted = os.date("!%Y-%m-%d", sec + math.floor(days) * 86400)
+    if type(shifted) ~= "string" then
+        return dateKey
+    end
+    return shifted
+end
+
 --- 反查「当地的某个整点」对应的 UTC 秒（开发自检用）。偏移按目标时刻自身迭代三次收敛。
 ---@param cityId string
 ---@param dateKey string "YYYY-MM-DD"（当地日期）
 ---@param hour integer 0-23
+---@param minute? integer 0-59，省略为整点
 ---@return integer
-function TimeState.UtcAtLocal(cityId, dateKey, hour)
+function TimeState.UtcAtLocal(cityId, dateKey, hour, minute)
     local city = TimeState.CITIES[cityId] or TimeState.CITIES.los_angeles
     local daySec = civilDaySeconds(dateKey) or 0
-    local localSec = daySec + hour * 3600
+    local localSec = daySec + hour * 3600 + math.floor(minute or 0) * 60
     local guess = localSec - city.stdOffset
     for _ = 1, 3 do
         local snap = TimeState.Snapshot(cityId, guess)

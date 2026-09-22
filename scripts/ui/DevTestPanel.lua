@@ -26,7 +26,7 @@ local function makeButton(text, onClick)
     return button
 end
 
----@param opts {onPreset: fun(hour: integer, label: string), onReset: fun(), onAdvance: fun()}
+---@param opts {onPreset: fun(hour: integer, label: string, minute: integer|nil), onReset: fun(), onAdvance: fun()}
 ---@return Widget
 function DevTestPanel.Build(opts)
     controls_ = {}
@@ -65,10 +65,10 @@ function DevTestPanel.Build(opts)
                 gap = 4,
                 flexWrap = "wrap",
                 children = {
-                    makeButton("睡眠 01:30", function() opts.onPreset(1, "睡眠 01:30") end),
-                    makeButton("忙碌 14:30", function() opts.onPreset(14, "忙碌 14:30") end),
-                    makeButton("碎片 12:30", function() opts.onPreset(12, "碎片 12:30") end),
-                    makeButton("空闲 19:45", function() opts.onPreset(19, "空闲 19:45") end),
+                    makeButton("睡眠 01:30", function() opts.onPreset(1, "睡眠 01:30", 30) end),
+                    makeButton("忙碌 14:30", function() opts.onPreset(14, "忙碌 14:30", 30) end),
+                    makeButton("碎片 12:30", function() opts.onPreset(12, "碎片 12:30", 30) end),
+                    makeButton("空闲 19:45", function() opts.onPreset(19, "空闲 19:45", 45) end),
                 },
             },
             UI.Row {

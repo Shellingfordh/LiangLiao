@@ -40,6 +40,7 @@ local RESPONSE_GAP_SECONDS = 4
 ---@field serverTime integer 该条消息落库时的权威 UTC 秒
 ---@field state string draft|sent|waiting|queued|typing|replied（用户消息）；her/system 固定 replied
 ---@field factId? string 回复（或送达时）引用的事件事实 id
+---@field factKey? string 引用的事件实例 occurrenceKey（送达与回复共用同一个键）
 ---@field statusText? string 用户消息当前给看的状态文案
 ---@field clockText? string 该条消息落库时当地的钟点，只用于气泡角标
 ---@field planReplyAtUtc? integer 计划回复的权威 UTC 秒（用户消息）
@@ -322,6 +323,7 @@ end
 ---@field sceneId? string
 ---@field phrase? string
 ---@field factId? string
+---@field factKey? string 送达时刻命中的事件实例（occurrenceKey），补回与重进都引用它
 
 --- 发送一条用户消息：一律入队（M1 起不再拒绝），并当场算好计划回复时刻
 ---@param text string
@@ -353,8 +355,9 @@ function MessageService.Send(text, serverTime, clockText, ctx)
     entry.placeAtSend = ctx.place
     entry.sceneIdAtSend = ctx.sceneId
     entry.phraseAtSend = ctx.phrase
-    -- 送达瞬间就带上事实 id：引用的是「哪一场活动」这个既定事实，不随回复时间漂移
+    -- 送达瞬间就带上事实 id 与实例键：引用的是「哪一场活动的哪一个实例」，不随回复时间漂移
     entry.factId = ctx.factId
+    entry.factKey = ctx.factKey
     entry.effReplyAtUtc = entry.planReplyAtUtc
     queue_[#queue_ + 1] = entry
 
@@ -479,11 +482,15 @@ end
 ---@param serverTime integer
 ---@param factId string
 ---@param clockText? string
+---@param factKey? string 本条回复所依据的事件实例 occurrenceKey
 ---@return MsgEntry
-function MessageService.AppendReply(text, serverTime, factId, clockText)
+function MessageService.AppendReply(text, serverTime, factId, clockText, factKey)
     local entry = Push(MessageService.ROLE.HER, text, serverTime, clockText)
     entry.factId = factId
-    logInfo(string.format("若夕回复 #%d fact=%s: %s", entry.id, tostring(factId), text))
+    entry.factKey = factKey
+    -- 只记事实与长度：回复正文会带上用户原文的片段，不整条落进运行日志
+    logInfo(string.format("若夕回复 #%d fact=%s key=%s 长度=%d",
+        entry.id, tostring(factId), tostring(factKey), #text))
     return entry
 end
 
