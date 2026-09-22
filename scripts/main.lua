@@ -54,6 +54,13 @@ local devTestPanel_ = nil
 local statusLine_ = ""
 ---@type number
 local clockElapsed_ = 0
+
+---@class SelfTestEcho
+---@field text string
+---@field left integer
+---@field elapsed number
+---@type SelfTestEcho?
+local selfTestEcho_ = nil
 ---@type table|nil
 local lastSnap_ = nil
 ---@type EventFact|nil
@@ -232,6 +239,10 @@ function Start()
         if not okRun then
             logError("开发自检异常退出（正式会话继续，不受影响）：" .. tostring(errRun))
         end
+        -- 开机那一瞬的整批日志会被日志管道丢掉（2026-09-22 实测：自检只上来 PASS A0…A6，
+        -- 同批的尾巴连同 M1 已就绪 一起没落盘），所以结论行要在之后几个真实帧里原样重发，
+        -- 让它落进别的抓取窗口。判据是结论行里的 场景=N/10。
+        selfTestEcho_ = { text = DevSelfTest.Summary(), left = 3, elapsed = 0 }
         TimeState.DevClockOffset = 0
     end
 
@@ -611,6 +622,16 @@ function HandleUpdate(eventType, eventData)
     -- 消息队列用权威 UTC 绝对时刻推进；这就是「她什么时候能回」的唯一计时处
     MessageService.Update(NowUtc())
     ChatPanel.Tick(timeStep)
+
+    -- 自检结论重发：每 4 秒一次、共 3 次，把它挪出开机那一批
+    if selfTestEcho_ and selfTestEcho_.left > 0 then
+        selfTestEcho_.elapsed = selfTestEcho_.elapsed + timeStep
+        if selfTestEcho_.elapsed >= 4 then
+            selfTestEcho_.elapsed = 0
+            selfTestEcho_.left = selfTestEcho_.left - 1
+            logInfo(selfTestEcho_.text .. string.format(" 重发%d/3", 3 - selfTestEcho_.left))
+        end
+    end
 
     clockElapsed_ = clockElapsed_ + timeStep
     if clockElapsed_ >= 20 then

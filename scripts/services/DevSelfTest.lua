@@ -47,6 +47,13 @@ local reinit_
 local passed_ = 0
 ---@type integer
 local failed_ = 0
+---@type string[]
+local done_ = {}
+---@type string
+local summary_ = "自检未运行"
+
+--- Run 里 runScenario 的调用条数；结论行拿它判断「有没有场景被整批日志丢掉」
+local SCENARIO_TOTAL = 10
 
 local function logInfo(msg)
     print(TAG .. " " .. msg)
@@ -725,8 +732,16 @@ local function runScenario(name, fn, dateKey)
         failed_ = failed_ + 1
         logError(string.format("场景 %s 抛出，该场景剩余断言未执行：%s", name, tostring(err)))
     end
+    done_[#done_ + 1] = name
     logInfo(string.format("场景 %s 结束：本场景判定 %d 条（累计 通过=%d 失败=%d）",
         name, passed_ + failed_ - before, passed_, failed_))
+end
+
+--- 一行式结论。开机那批突发会被日志管道整批丢掉（2026-09-22 实测），
+--- 所以结论必须能被 main.lua 在之后的抓取窗口里原样重发。
+---@return string
+function DevSelfTest.Summary()
+    return summary_
 end
 
 --- 跑一次完整自检。调用前 main.lua 已经用自检存档 InitServices 过一遍。
@@ -739,6 +754,8 @@ function DevSelfTest.Run(options)
     reinit_ = options.reinit
     passed_ = 0
     failed_ = 0
+    done_ = {}
+    summary_ = "自检未产出结论"
 
     local cleared = MemoryService.ClearSavedData()
     local baseSnap = TimeState.Snapshot(cityId_, TimeState.NowUtc())
@@ -759,11 +776,13 @@ function DevSelfTest.Run(options)
     runScenario("H", ScenarioAwaySummary, dateKey)
 
     MemoryService.ClearSavedData()
-    if failed_ == 0 then
-        logInfo(string.format("自检结束：全部通过（%d 项）", passed_))
+    summary_ = string.format("自检结论 通过=%d 失败=%d 场景=%d/%d[%s]",
+        passed_, failed_, #done_, SCENARIO_TOTAL, table.concat(done_, " "))
+    if failed_ == 0 and #done_ == SCENARIO_TOTAL then
+        logInfo(summary_ .. " 全部通过")
         return true
     end
-    logError(string.format("自检结束：通过 %d 项，失败 %d 项", passed_, failed_))
+    logError(summary_)
     return false
 end
 
