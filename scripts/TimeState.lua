@@ -174,6 +174,30 @@ function TimeState.NowUtc()
     return common.get_server_time() + TimeState.DevClockOffset
 end
 
+--- 开发测试专用：把本次运行投影到角色当地日期的指定钟点。
+--- 不触碰设备系统时间，也不写入存档；重启或 ResetDevClock 后立即回到权威 UTC。
+---@param cityId string
+---@param hour integer
+---@return TimeSnapshot
+function TimeState.SetDevLocalHour(cityId, hour)
+    local realUtc = common.get_server_time()
+    local realSnap = TimeState.Snapshot(cityId, realUtc)
+    local safeHour = math.max(0, math.min(23, math.floor(hour or 0)))
+    local targetUtc = TimeState.UtcAtLocal(cityId, realSnap.dateKey, safeHour)
+    TimeState.DevClockOffset = targetUtc - realUtc
+    return TimeState.Snapshot(cityId, targetUtc)
+end
+
+--- 开发测试专用：投影到明确的 UTC 秒，供“推进到下一可回复窗口”使用。
+---@param utcSec number
+function TimeState.SetDevUtc(utcSec)
+    TimeState.DevClockOffset = math.floor(utcSec) - common.get_server_time()
+end
+
+function TimeState.ResetDevClock()
+    TimeState.DevClockOffset = 0
+end
+
 ---@class ReplyPlan
 ---@field replyable boolean 送达时她是否处于可回复档
 ---@field brief boolean 碎片时间：回复要短

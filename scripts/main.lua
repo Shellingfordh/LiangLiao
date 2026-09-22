@@ -16,6 +16,7 @@ local ContentService = require("services.ContentService")
 local MemoryService = require("services.MemoryService")
 local DevSelfTest = require("services.DevSelfTest")
 local ChatPanel = require("ui.ChatPanel")
+local DevTestPanel = require("ui.DevTestPanel")
 
 ---@type {Title: string, City: string, ReplyWaitSeconds: integer, DevTools: boolean, UseCloudMemory: boolean, DevSelfTest: boolean, AwaySummaryMinSeconds: integer}
 local CONFIG = {
@@ -38,6 +39,8 @@ local statusLabel_ = nil
 local errorLabel_ = nil
 ---@type Label|nil
 local noteLabel_ = nil
+---@type Widget|nil
+local devTestPanel_ = nil
 
 -- 上一次上屏的状态文案，用来判断这一分钟要不要重画
 local statusLine_ = ""
@@ -225,9 +228,50 @@ end
 
 function Stop()
     MemoryService.FlushCloud()
+    DevTestPanel.Shutdown()
     ChatPanel.Shutdown()
     StatusWindow.Shutdown()
     UI.Shutdown()
+end
+
+--- 开发测试台切换的是 TimeState 的本次运行投影，而非系统时间或存档。
+---@param hour integer
+---@param label string
+function HandleDevPreset(hour, label)
+    local snap = TimeState.SetDevLocalHour(CONFIG.City, hour)
+    logInfo("开发测试切换：" .. label .. " → " .. snap.clock .. " " .. snap.availability)
+    RefreshStatusLine(true)
+    PushChatPhase()
+    DevTestPanel.SetSummary("测试时间：" .. label .. " · " .. snap.availabilityLabel)
+end
+
+function HandleDevReset()
+    TimeState.ResetDevClock()
+    logInfo("开发测试恢复真实时间")
+    RefreshStatusLine(true)
+    PushChatPhase()
+    DevTestPanel.SetSummary("测试时间：真实时间")
+end
+
+function HandleDevAdvance()
+    local head = MessageService.GetHead()
+    if not head then
+        logInfo("开发测试推进无效：没有待回复消息")
+        DevTestPanel.SetSummary("先发送一条消息再推进")
+        return
+    end
+    local target = head.planWindowStartUtc or head.planReplyAtUtc
+    if not target then
+        logError("开发测试无法推进：队首没有可回复计划")
+        return
+    end
+    -- 进入窗口（或到计划时刻）后仍保留短暂 typing；不直接伪造回复气泡。
+    TimeState.SetDevUtc(target)
+    logInfo("开发测试推进到队首可回复时刻 UTC=" .. tostring(target))
+    RefreshStatusLine(true)
+    MessageService.Update(NowUtc())
+    PushChatPhase()
+    DevTestPanel.SetSummary("已推进 · " .. FormatClock(target) .. " 可回复")
 end
 
 ---@param saveFile? string 独立存档路径（开发自检用），省略则用玩家的历史
@@ -371,6 +415,14 @@ function CreatePage()
         getVersion = MessageService.GetVersion,
     })
 
+    if CONFIG.DevTools then
+        devTestPanel_ = DevTestPanel.Build({
+            onPreset = HandleDevPreset,
+            onReset = HandleDevReset,
+            onAdvance = HandleDevAdvance,
+        })
+    end
+
     uiRoot_ = UI.SafeAreaView {
         id = "root",
         width = "100%",
@@ -411,6 +463,7 @@ function CreatePage()
                     noteLabel_,
                 },
             },
+            devTestPanel_,
         },
     }
 
@@ -482,10 +535,11 @@ function ApplyScene()
 end
 
 --- 状态文案一分钟一变；变了才重画，避免每帧 SetText
-function RefreshStatusLine()
+---@param force? boolean
+function RefreshStatusLine(force)
     local snap = RefreshSnapshot()
     local line = snap.cityLabel .. " · " .. snap.clock .. " · " .. snap.phrase
-    if line ~= statusLine_ then
+    if force or line ~= statusLine_ then
         statusLine_ = line
         if statusLabel_ then
             statusLabel_:SetText(line)
