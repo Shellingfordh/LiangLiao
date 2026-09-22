@@ -369,9 +369,8 @@ function ChatPanel.Build(opts)
         fontSize = 13,
         width = 72,
         height = 42,
-        onClick = function()
-            onSend_(ChatPanel.GetDraft())
-        end,
+        -- 这是给阅读 props 的工具和检查器的声明；运行时焦点判定使用下面的实例字段。
+        focusable = false,
     }
 
     root_ = UI.Panel {
@@ -426,11 +425,24 @@ function ChatPanel.Build(opts)
     logInfo(string.format("聊天区已构建 devTools=%s 草稿 %d 字",
         tostring(devTools_), #(opts.initialDraft or "")))
 
-    -- 按钮不能抢焦点：点了「发送」会先让 TextField 失焦 → 软键盘收起 → 画布高度变化 →
-    -- 整棵布局位移，而引擎的 Click 要求「按下与抬起命中同一个控件」（UI.lua:2379），
-    -- 于是手机上点发送永远不触发（回车走 onSubmit 反而正常）。EditMenu 用的是同一个开关。
+    -- 按钮不能抢焦点：点了「发送」会先让 TextField 失焦 → 软键盘收起 → 画布高度变化。
+    -- 除了焦点保护，还必须不把“发送”依赖在 OnClick：UI.HandlePointerUp 只在按下与
+    -- 抬起仍命中同一控件时才调用 OnClick（UI.lua:2379），布局变化会让该回调静默丢失。
+    -- 因而主操作在 OnPointerDown 完成；OnPointerUp 只负责恢复按钮按下视觉，不再二次发送。
     sendButton_.focusable = false
     skipButton_.focusable = false
+    function sendButton_:OnPointerDown(event)
+        if self.props.disabled or not event or not event:IsPrimaryAction() then
+            return
+        end
+        -- 等价于 Button:OnPointerDown 的按下视觉状态；这里显式保留，避免把主操作
+        -- 再委托给会受 PointerUp 命中条件影响的点击链路。
+        self:SetState({ pressed = true })
+        self:TransitionToStateBgColor()
+        local draft = ChatPanel.GetDraft()
+        logInfo("发送按钮按下 → 直接提交草稿 " .. tostring(#draft) .. " 字")
+        onSend_(draft)
+    end
 
     return root_
 end
