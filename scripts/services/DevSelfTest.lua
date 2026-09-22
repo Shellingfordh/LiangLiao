@@ -718,10 +718,10 @@ local function ScenarioEventReentry(dateKey)
             commuteFact.eventStartUtc, commuteFact.eventEndUtc, commuteFact.eventPhrase))
 end
 
---- 一个场景独立跑完再进下一个。
---- 2026-09-22 云端实测：场景 A 打印到 A6 之后整条 suite 静默消失，连「自检结束」都没有
---- ——任何一条断言的求值（含 string.format 的参数）抛出来都会吞掉后面所有场景，
---- 而日志里看不出是失败还是没跑。所以这里 pcall 兜住，并把每个场景的判定条数打出来。
+--- 一个场景独立跑完再进下一个，并落一行「本场景判定几条」。
+--- 2026-09-22 云端实测：开机那一瞬的突发日志会被管道整批丢掉（suite 只剩 PASS A0…A6，
+--- 同批的 开场事件 / M1 已就绪 一起缺席），而调用点本来就有 pcall，所以不是断言抛出吞掉后续场景。
+--- 没有这行收尾，日志被截到一半时分不清「这条场景没过」还是「整批没上来」。
 ---@param name string
 ---@param fn fun(dateKey: string): any
 ---@param dateKey string
