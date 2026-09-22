@@ -56,7 +56,8 @@ local statusLine_ = ""
 local clockElapsed_ = 0
 
 ---@class SelfTestEcho
----@field text string
+---@field text string 落日志的完整结论（判据：场景=N/10）
+---@field panel string 面板用的短结论（那行 nowrap，长文本会被裁掉）
 ---@field left integer
 ---@field elapsed number
 ---@type SelfTestEcho?
@@ -242,7 +243,14 @@ function Start()
         -- 开机那一瞬的整批日志会被日志管道丢掉（2026-09-22 实测：自检只上来 PASS A0…A6，
         -- 同批的尾巴连同 M1 已就绪 一起没落盘），所以结论行要在之后几个真实帧里原样重发，
         -- 让它落进别的抓取窗口。判据是结论行里的 场景=N/10。
-        selfTestEcho_ = { text = DevSelfTest.Summary(), left = 3, elapsed = 0 }
+        -- 屏上也挂一份短结论（面板那行 nowrap，长文本会被裁）：日志整批丢了也能肉眼读数。
+        local p, f, d, total = DevSelfTest.Result()
+        selfTestEcho_ = {
+            text = DevSelfTest.Summary(),
+            panel = string.format("自检 通过=%d 失败=%d 场景=%d/%d", p, f, d, total),
+            left = 3,
+            elapsed = 0,
+        }
         TimeState.DevClockOffset = 0
     end
 
@@ -287,7 +295,11 @@ function HandleDevPreset(hour, label, minute)
             lastFact_.eventTitle, snap.clock))
     end
     DevTestPanel.SetSummary("测试时间：" .. label .. " · " .. (lastFact_ and lastFact_.eventTitle or "")
-        .. "/" .. (lastFact_ and EVENT_STATE_LABEL[lastFact_.eventState] or ""))
+        .. "/" .. (lastFact_ and EVENT_STATE_LABEL[lastFact_.eventState] or "")
+        -- 场景与「计划来自哪」一起上屏：条件 (a) 的三向一致与 (b) 的不重算都能肉眼读，
+        -- 不用等那条随时会被整批丢掉的日志。
+        .. " · " .. (lastFact_ and lastFact_.sceneId or "")
+        .. " · 计划=" .. (lastFact_ and (lastFact_.planFromSave and "存档" or "当场") or ""))
 end
 
 function HandleDevReset()
@@ -477,6 +489,11 @@ function CreatePage()
             onReset = HandleDevReset,
             onAdvance = HandleDevAdvance,
         })
+        -- 自检跑在 Build 之前，那时 SetSummary 还没有 label 可写；这里补挂一次，
+        -- 让 场景=N/10 从开机起就在画面上，不依赖会被整批丢掉的日志。
+        if selfTestEcho_ then
+            DevTestPanel.SetSummary(selfTestEcho_.panel)
+        end
     end
 
     uiRoot_ = UI.SafeAreaView {
@@ -629,7 +646,9 @@ function HandleUpdate(eventType, eventData)
         if selfTestEcho_.elapsed >= 4 then
             selfTestEcho_.elapsed = 0
             selfTestEcho_.left = selfTestEcho_.left - 1
-            logInfo(selfTestEcho_.text .. string.format(" 重发%d/3", 3 - selfTestEcho_.left))
+            local n = string.format(" 重发%d/3", 3 - selfTestEcho_.left)
+            logInfo(selfTestEcho_.text .. n)
+            DevTestPanel.SetSummary(selfTestEcho_.panel .. n)
         end
     end
 

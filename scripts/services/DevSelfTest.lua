@@ -744,6 +744,15 @@ function DevSelfTest.Summary()
     return summary_
 end
 
+--- 屏上面板用的紧凑计数（面板那行 nowrap，长结论会被裁掉）。
+---@return integer passed
+---@return integer failed
+---@return integer done
+---@return integer total
+function DevSelfTest.Result()
+    return passed_, failed_, #done_, SCENARIO_TOTAL
+end
+
 --- 跑一次完整自检。调用前 main.lua 已经用自检存档 InitServices 过一遍。
 ---@param options DevSelfTestOptions
 ---@return boolean allPassed
