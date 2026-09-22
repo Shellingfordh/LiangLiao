@@ -546,6 +546,7 @@ local SCENE_BACKGROUNDS = {
     la_cafe = BACKGROUND_PATH,
     -- 开发测试用原创占位图；正式资产替换后只需改这里的路径，不改状态机。
     la_apartment = "Textures/backgrounds/la-apartment-dev-placeholder.png",
+    la_studio = "Textures/backgrounds/la-studio-dev-placeholder.png",
 }
 
 ---@type string

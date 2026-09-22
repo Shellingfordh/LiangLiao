@@ -18,24 +18,35 @@ local TOPIC_WORDS = {
     { topic = "food",    words = { "吃", "喝", "咖啡", "饭", "夜宵" } },
 }
 
--- 事件事实 → 主干句。首版唯一的话题就是洛杉矶咖啡馆这一场。
+-- 事件事实 → 主干句。每个事件有自己的模板池，禁止把咖啡馆文案套到别的生活事件上。
 -- {event} 自带地点，所以模板里不再重复 {place}，否则会出现「咖啡馆…咖啡馆…」
 ---@type table<string, string[]>
 local EVENT_LINES = {
-    ongoing = {
+    la_cafe_open_mic = {
         "{event}，店里这会儿{weather}。",
         "嗯，{event}，要到{ends}才收。",
         "{event}。你那边这个点还醒着？",
     },
-    upcoming = {
-        "{event}，{ends}才开始。",
-        "{event}，今天{weather}，我先把手头的做完。",
-        "{event}，你要跟我说说今天吗？",
+    la_studio_zine_layout = {
+        "{event}，这一页的边距还差一点。",
+        "{event}，我先把最后两张样张对完。",
+        "{event}，等我把这处颜色挪好再和你说。",
     },
-    ended = {
-        "{event}。你今天过得怎么样？",
-        "{event}，明天还有一场。",
-        "{event}，刚坐下。",
+    la_apartment_morning_inbox = {
+        "{event}，水刚烧开。",
+        "{event}，今天的安排还没完全醒过来。",
+    },
+    la_apartment_wind_down = {
+        "{event}，现在终于能安静坐一会儿。",
+        "{event}，我把最后一张便签压在杯子下面了。",
+    },
+    la_campus_workshop = {
+        "{event}，材料还差一小叠没摆好。",
+        "{event}，等人到齐前我再过一遍流程。",
+    },
+    la_commute_voice_notes = {
+        "{event}，现在不太方便打长字。",
+        "{event}，等到站我再看仔细一点。",
     },
 }
 
@@ -182,7 +193,7 @@ function ContentService.Reply(fact, userText, turnIndex)
     if briefReply then
         pool = BRIEF_LINES
     else
-        pool = EVENT_LINES[fact.eventState] or EVENT_LINES.ongoing
+        pool = EVENT_LINES[fact.id] or EVENT_LINES.la_cafe_open_mic
     end
     local seed = (userText or "") .. "|" .. fact.id .. "|" .. tostring(turnIndex)
     local pick = (hash(seed) % #pool) + 1

@@ -509,6 +509,9 @@ function RefreshNoteLine()
         return
     end
     local note = "M1 · 镜头仍锁定，回复只用送达与交付两个时刻的事件事实"
+    if lastFact_ and lastFact_.eventTitle then
+        note = "事件 · " .. lastFact_.eventTitle .. " · " .. (lastFact_.eventEmotion or "")
+    end
     local sceneNote = StatusWindow.GetSceneNotice()
     if sceneNote ~= "" then
         note = note .. " · " .. sceneNote
@@ -522,7 +525,7 @@ function ApplyScene()
     if not lastSnap_ or not widget then
         return
     end
-    local sceneId = lastSnap_.sceneId or ""
+    local sceneId = (lastFact_ and lastFact_.sceneId) or lastSnap_.sceneId or ""
     local result = StatusWindow.RequestScene(sceneId, function(path)
         widget:SetBackgroundImage(path)
     end)

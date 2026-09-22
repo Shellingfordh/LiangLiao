@@ -17,7 +17,15 @@ local CLOUD_KEY = "companion_memory_la"
 local CLOUD_FLUSH_EVERY_TURNS = 5
 -- 落盘的消息条数上限：只裁「已回复」的旧记录，任何未回复的排队消息都不会被裁掉
 local MESSAGE_CAP = 120
-local SAVE_VERSION = 2
+local SAVE_VERSION = 3
+local EVENT_LEDGER_CAP = 40
+
+---@class EventLedgerEntry
+---@field key string
+---@field eventId string
+---@field title string
+---@field sceneId string
+---@field lastServerTime integer
 
 ---@class CompanionMemory
 ---@field version integer
@@ -28,6 +36,7 @@ local SAVE_VERSION = 2
 ---@field lastFactId string
 ---@field topics string[]
 ---@field messages MsgEntry[]
+---@field eventLedger EventLedgerEntry[]
 
 ---@type CompanionMemory
 local mem_ = {
@@ -39,6 +48,7 @@ local mem_ = {
     lastFactId = "",
     topics = {},
     messages = {},
+    eventLedger = {},
 }
 
 local source_ = "memory"
@@ -178,6 +188,35 @@ local function readMessages(rawMessages)
     return out
 end
 
+---@param rawLedger any
+---@return EventLedgerEntry[]
+local function readEventLedger(rawLedger)
+    local out = {}
+    if type(rawLedger) ~= "table" then
+        return out
+    end
+    for i = 1, #rawLedger do
+        local raw = rawLedger[i]
+        if type(raw) == "table" then
+            local key = asString(raw.key)
+            local eventId = asString(raw.eventId)
+            if key and eventId then
+                out[#out + 1] = {
+                    key = key,
+                    eventId = eventId,
+                    title = asString(raw.title) or "",
+                    sceneId = asString(raw.sceneId) or "",
+                    lastServerTime = asInteger(raw.lastServerTime) or 0,
+                }
+            end
+        end
+    end
+    while #out > EVENT_LEDGER_CAP do
+        table.remove(out, 1)
+    end
+    return out
+end
+
 ---@class MemoryInitOptions
 ---@field cityId? string
 ---@field cloud? CloudAdapter
@@ -234,6 +273,7 @@ function MemoryService.Load()
         mem_.topics = (type(data.topics) == "table") and data.topics or {}
         local migrated = mem_.version < SAVE_VERSION
         mem_.messages = readMessages(migrated and data.transcript or data.messages)
+        mem_.eventLedger = readEventLedger(data.eventLedger)
         if migrated then
             mem_.version = SAVE_VERSION
             logInfo("读到 v1 存档，已把 " .. tostring(#mem_.messages) .. " 条摘要迁移为消息记录")
@@ -279,6 +319,7 @@ function MemoryService.Save()
             lastFactId = mem_.lastFactId,
             topics = mem_.topics,
             messages = mem_.messages,
+            eventLedger = mem_.eventLedger,
         })
         local file = File(saveFile_, FILE_WRITE)
         if not file:IsOpen() then
@@ -376,6 +417,28 @@ local function mergeTopics(topics)
     end
 end
 
+---@param fact EventFact
+local function recordEvent(fact)
+    local key = fact.occurrenceKey or fact.id
+    for i = 1, #mem_.eventLedger do
+        local entry = mem_.eventLedger[i]
+        if entry.key == key then
+            entry.lastServerTime = fact.serverTime or entry.lastServerTime
+            return
+        end
+    end
+    mem_.eventLedger[#mem_.eventLedger + 1] = {
+        key = key,
+        eventId = fact.id,
+        title = fact.eventTitle or "",
+        sceneId = fact.sceneId or "",
+        lastServerTime = fact.serverTime or 0,
+    }
+    while #mem_.eventLedger > EVENT_LEDGER_CAP do
+        table.remove(mem_.eventLedger, 1)
+    end
+end
+
 --- 一轮完整问答落库：轮次/话题/最近事实是关系摘要，消息记录由 messages 一次性带走。
 --- 记录（含排队中的消息与计划回复时刻）与摘要同一次写盘，不产生第二条路径。
 ---@param userMsg MsgEntry
@@ -391,6 +454,7 @@ function MemoryService.RecordTurn(userMsg, replyMsg, fact, topics, messages)
     end
     mem_.lastServerTime = userMsg.serverTime
     mem_.lastFactId = fact.id
+    recordEvent(fact)
     if replyMsg then
         mem_.lastServerTime = replyMsg.serverTime
     end
@@ -414,8 +478,8 @@ end
 
 ---@return string
 function MemoryService.GetSummaryLine()
-    return string.format("已聊 %d 轮 · 记忆来源 %s · 最近事实 %s",
-        mem_.turns, source_, mem_.lastFactId ~= "" and mem_.lastFactId or "无")
+    return string.format("已聊 %d 轮 · 记忆来源 %s · 最近事实 %s · 事件记录 %d 条",
+        mem_.turns, source_, mem_.lastFactId ~= "" and mem_.lastFactId or "无", #mem_.eventLedger)
 end
 
 function MemoryService.ResetInMemory()
@@ -426,6 +490,7 @@ function MemoryService.ResetInMemory()
     mem_.lastFactId = ""
     mem_.topics = {}
     mem_.messages = {}
+    mem_.eventLedger = {}
     source_ = "memory"
 end
 
