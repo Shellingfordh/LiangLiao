@@ -648,5 +648,71 @@ WebGL 与原生 Android 上都不成立**，本项目代码里的 `nvgRotate(mat
 ⚠️ 另记一条取证限制：**日志区分不出「点击发出」和「回车发出」**（两条路径汇入同一个发送函数）。
 要做成硬证据必须在发送入口带一个来源标签再构建一轮，别拿时序旁证当结论写进验收材料。
 
+## 14. ✅ 每日事件计划的云端运行证据（2026-09-22 17:45–17:46 实测，构建 `ea56ca2`）
+
+会话：预览带 `?localDev=1`，屏幕 502x1116 / DPR≈1.03，洛杉矶当地 02:45 冷启动，存档为空
+（`[Memory] 没有本地存档，使用初始内存状态`）。日志由 watcher 落在 `.maker/logs/runtime/runtime.log`
+（45 KB，最后一条 17:46:49）。下面每条都是日志原文（同一行的 `[Script]` 与 `INFO` 双写已去重）。
+
+### 14.1 计划只生成一次，时间来回跳不重算
+
+```
+[EventService] 生成 los_angeles 2026-09-22 的事件计划 8 个事件（种子=los_angeles|2026-09-22|m1-events-v1）
+[EventService] 接管存档事件计划 0 天
+[M0-1] 事件计划落盘 true
+```
+
+同一会话里连点面板 02:45 → 01:30 → 14:30 → 12:30，`生成 … 事件计划` 全日志**只出现一次**，
+且各钟点都命中当日计划里自己的实例：
+
+```
+[EventService] 事件事实 key=los_angeles/2026-09-22/la_apartment_night_rest state=ongoing scene=la_apartment clock=01:30 fromSave=false
+[EventService] 事件事实 key=los_angeles/2026-09-22/la_studio_zine_layout state=ongoing scene=la_studio clock=14:30 fromSave=false
+[EventService] 事件事实 key=los_angeles/2026-09-22/la_cafe_midday state=ongoing scene=la_cafe clock=12:30 fromSave=false
+```
+
+`fromSave` 在这里必然是 `false`——同进程内存缓存即可命中，**不能**拿它当「没重算」的证据；
+跨进程的那一半要靠重进后 `接管存档事件计划 N 天`（N≥1）+ `fromSave=true`，本轮**尚未取到**（见 14.5）。
+
+### 14.2 状态背景确实跟着事件实例走
+
+```
+[M0-1] 开发测试事件 key=los_angeles/2026-09-22/la_studio_zine_layout 模板=la_studio_zine_layout 状态=ongoing 场景=la_studio 提示=小册子版面校样 钟点=14:30
+[M0-0] 切换状态窗场景: la_studio → Textures/backgrounds/la-studio-dev-placeholder.png
+[M0-0] 场景静帧已在本地: Textures/backgrounds/la-studio-dev-placeholder.png
+```
+
+两张开发占位图（apartment / studio）能被 `PrepareBackground` 命中，说明 `.project/resources.json`
+的 `Textures/backgrounds/**` 把它们带进了包，增强引用模式没有裁掉。
+
+### 14.3 排队补回把已结束事件说成已结束（真链路，非自检）
+
+```
+[MsgService] 用户消息 #27 已发出 serverTime=1790070348 计划回复=1790082010（排队到下一个窗口 · 队列 1 条）
+[M0-1] 发送 #27 → 排队（她 06:00 之后能回，计划 1790082010）
+[EventService] 排队补回 送达key=los_angeles/2026-09-22/la_apartment_night_rest 送达态=ended 送达=02:45 隔 42255 秒
+[M0-1] 回复 #27 → replied 事实=la_studio_zine_layout key=los_angeles/2026-09-22/la_studio_zine_layout 状态=ongoing 场景=la_studio 送达key=los_angeles/2026-09-22/la_apartment_night_rest 送达态=ended 正文长度=264
+```
+
+回复引用**送达时刻**的实例并标 `ended`，同时自身落在**回复时刻**的实例上（studio ongoing）——
+目标里「不得把已结束事件说成未开始」这条在主链路上成立。
+
+### 14.4 日志隐私符合约定
+
+用户消息只落 `#id / serverTime / 计划回复 / 队列长度`；回复只落 `fact / key / 状态 / 场景 / 正文长度`。
+全程没有任何一条打出用户原文。
+
+### 14.5 本轮没取到的两项（都只需人手，代码侧无待办）
+
+1. **自检只跑到 A6 就没了后续**：`自检开始 → 场景 A → PASS A0…A6`，之后既无 `A7`、也无任何
+   `场景 B…` 与 `自检结束` 汇总行，且整份日志 `ERROR`/`FAIL` 计数为 0。所以新加的 I（计划覆盖）与
+   J（重进）断言**一行都没执行**。这是取证层面的结论，不能反推成「断言失败」——两种解释
+   （suite 中途抛出被吞 / 同毫秒突发被抓取窗口截断，见 §11）都指向同一个缺陷：
+   `DevSelfTest.Run` 串成一条直链，任何一条断言求值抛出来都会静默带走后面全部场景。
+   已在 `ea56ca2` 之后把每个场景改成 `pcall` + 「场景 X 结束：判定 N 条」收尾行，
+   下一次运行要么打全 I/J，要么把抛出原文（含文件行号）打成 ERROR。
+2. **面板 19:45 没点、也没做第二次冷进**：本轮点了 01:30 / 14:30 / 12:30，缺 19:45 那一档；
+   会话只启动过一次，所以「同日期重进 occurrenceKey 不变」还缺 `接管存档事件计划 ≥1 天` 的证据。
+
 
 

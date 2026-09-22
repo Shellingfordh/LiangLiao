@@ -711,6 +711,24 @@ local function ScenarioEventReentry(dateKey)
             commuteFact.eventStartUtc, commuteFact.eventEndUtc, commuteFact.eventPhrase))
 end
 
+--- 一个场景独立跑完再进下一个。
+--- 2026-09-22 云端实测：场景 A 打印到 A6 之后整条 suite 静默消失，连「自检结束」都没有
+--- ——任何一条断言的求值（含 string.format 的参数）抛出来都会吞掉后面所有场景，
+--- 而日志里看不出是失败还是没跑。所以这里 pcall 兜住，并把每个场景的判定条数打出来。
+---@param name string
+---@param fn fun(dateKey: string): any
+---@param dateKey string
+local function runScenario(name, fn, dateKey)
+    local before = passed_ + failed_
+    local ok, err = pcall(fn, dateKey)
+    if not ok then
+        failed_ = failed_ + 1
+        logError(string.format("场景 %s 抛出，该场景剩余断言未执行：%s", name, tostring(err)))
+    end
+    logInfo(string.format("场景 %s 结束：本场景判定 %d 条（累计 通过=%d 失败=%d）",
+        name, passed_ + failed_ - before, passed_, failed_))
+end
+
 --- 跑一次完整自检。调用前 main.lua 已经用自检存档 InitServices 过一遍。
 ---@param options DevSelfTestOptions
 ---@return boolean allPassed
@@ -728,16 +746,17 @@ function DevSelfTest.Run(options)
         SELFTEST_SAVE, tostring(cleared), baseSnap.dateKey, baseSnap.clock))
 
     local dateKey = baseSnap.dateKey
-    ScenarioIdleChain(dateKey)
-    ScenarioFragments(dateKey)
-    ScenarioBusy(dateKey)
-    ScenarioOfflineFifo(dateKey)
-    ScenarioReentry(dateKey)
-    ScenarioFuturePlan(dateKey)
-    ScenarioEventPlan(dateKey)
-    ScenarioEventReentry(dateKey)
-    ScenarioAwaySummaryRule(dateKey)
-    ScenarioAwaySummary()
+    -- 顺序即原顺序；标签取各场景断言的编号前缀，日志里「场景 X 结束」可对回断言
+    runScenario("A", ScenarioIdleChain, dateKey)
+    runScenario("B", ScenarioFragments, dateKey)
+    runScenario("C", ScenarioBusy, dateKey)
+    runScenario("D", ScenarioOfflineFifo, dateKey)
+    runScenario("E", ScenarioReentry, dateKey)
+    runScenario("F", ScenarioFuturePlan, dateKey)
+    runScenario("I", ScenarioEventPlan, dateKey)
+    runScenario("J", ScenarioEventReentry, dateKey)
+    runScenario("G", ScenarioAwaySummaryRule, dateKey)
+    runScenario("H", ScenarioAwaySummary, dateKey)
 
     MemoryService.ClearSavedData()
     if failed_ == 0 then
