@@ -124,6 +124,18 @@ pid 39000 / 46176 / 50380 / 60188 全都一样 —— 与并发无关，是这�
 判活性别看 `watcher.out.log`（它会一直打 `pulled: 0` 假象），看 `state.json.updatedAt` 与 node 进程是否存在。
 （把这套做成常驻看护脚本的尝试被宿主权限层拦下：不在仓库外部署常驻进程。所以维持"事后回拉"这条。）
 
+### B-2 已闭环（2026-09-22 10:45，构建 `6f97e86`）
+
+用户跑了真实会话并在结束后回我，回拉成功：`runtime.log` 149 行、`FAIL` 0、`"level":"ERROR"` 0，
+上一版报错的 `A5/A6/A7` 三项这次是 `PASS`（`送达=1790046000 计划=1790046010 回复=1790046010`），
+真链路 `#13/#15/#16/#17` 走满 sent→waiting→typing→replied、「跳过等待」生效、存档 3156→4417 字节、
+重进恢复出前 12 条历史。**唯一没拿到的**是自检结尾那行总账 —— 已查明是抓取窗口吃掉了同步突发的几百行（判据与依据写进
+`PROGRESS.md`「M1 第二次真实会话日志」节），不是游戏里断的；同理「拉到的片段 0 ERROR」也**不足以**
+证明余下 36 项是绿的，那一格只能看 Maker 网页 Error Report（服务端是全量聚合：10:14 那次本地只有
+208 行、根本没有总账行，网页却列出了「通过 42 项，失败 3 项」）。
+再上一条：10:14 那次（`28224c0`）Maker 网页 Error Report 是**全量**的「通过 42 项，失败 3 项」，
+3 项正好是 A5/A6/A7，所以余下 42 项（含红→绿反向验证 F1/F2、重进 D/E、摘要 G/H）已在真实会话里绿过一次。
+
 ## B-3 工具链把会话前就存在的文档脏改动一起提交了（内容无损，但是偏差）
 MCP `maker_build_current_directory` 连续两次以 `-32603 MCP tool invocation did not complete` 结束：
 第一次已经把 commit `fe739ec` + push 做完（远端 HEAD 已核对一致），但远端构建阶段没跑到
@@ -175,12 +187,15 @@ $ node .../@taptap/maker/dist/maker.js build --target-dir D:/Develop/ShanTianLia
 验收项「通过 `maker_build_current_directory` 构建」按字面未满足，按实质（同一工具链、同一远端构建、
 同一 `preview-refresh`）已满足 —— 差异如实留在此处供用户裁决。
 
-## B-5 构建失败次数：0（M1 四次云端构建全绿 + 一次未跑到）
+## B-5 构建失败次数：0（M1 六次云端构建全绿 + 一次未跑到）
 `415cb4c`→`fd87d29`→`4bde79c`→`a539dda`→`f70bf4b`（M0-1 五次）→ M1：`fe739ec`(代码，经 CLI 构建成功)
-→ `76823fb` → `49f2cae` → **`623cc5a`（交付死锁补丁）** 四次都返回「🎉 项目构建成功」+
-`preview_refresh_status: 200`。部署一致性是外部核对过的，不是自说：
-`git ls-remote maker main` 与 `git ls-remote origin main` 与 `git rev-parse HEAD` 同为
-`623cc5a214dcb46df9f6e231e01d592bb3027a4d`（23:16）。
+→ `76823fb` → `49f2cae` → **`623cc5a`（交付死锁补丁）** → `28224c0`（E5 空过补强）→
+**`6f97e86`（A5/A6/A7 回归修复：抬窗加 `state ~= TYPING` + `STEP_SECONDS` 5→1）** 六次都返回
+「🎉 项目构建成功」+ `preview_refresh_status: 200`。部署一致性是外部核对过的，不是自说：
+`git ls-remote maker main` = `git ls-remote origin main` = `git rev-parse HEAD` =
+`6f97e860f1f1d037e11d26814e3206f24fc19062`（2026-09-22 11:02），且从该 commit 里直接读出
+`MessageService.lua:424` 的 `planned < now and head.state ~= MessageService.PHASE.TYPING`
+与 `DevSelfTest.lua:23` 的 `STEP_SECONDS = 1` —— 跑在云端的就是这两处改动。
 无「连续 3 次构建失败」情形（连续 3 次的是**工具响应通路**，见 B-4，不是构建本身失败）。
 未生成测试二维码、未扫码、未动 Git 配置、未装依赖（含被权限层挡下的两次：一次本地 Lua 运行时探测、
 一次仓库外常驻日志看护脚本）、未接外部后端、无 LLM 调用、未新增任何资产。
