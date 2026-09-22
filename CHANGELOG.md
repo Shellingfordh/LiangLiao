@@ -34,8 +34,9 @@
 （每次 `[remote_build] 100% 构建流程全部完成` + `preview_refresh_status: 200`）。
 `de500f6` 的构建调用 MCP 侧 300s 超时，之后核实 **`origin/main == de500f6`（推送已完成、0 commits ahead）**；
 补发的「只构建已推上去的版本」两次分别拿到 `409 Conflict`（= 上一个构建仍在跑）与 `429 Too Many Requests`
-（限流），已停止重发。所以这一版的**远端构建状态未经确认**，靠日志用词即可判定预览上跑的是哪一版：
-出现 `自检结论 … 场景=N/10` 是 `de500f6`，只有 `自检结束：…` 是 `def95b5`。
+（限流），当时已停止重发。19:20 限流解除后按同样方式（`confirm_remote_build_without_submit`，不提交本地
+未跟踪改动）对最终版重发一次，17s 完成：`[remote_build] 100% 构建流程全部完成` + `preview_refresh_status: 200`。
+所以**云端当前部署的是 `642836d`**（`8a0f6ea`→`c9d259a`→`9c00d0d`→`8ab50f0`→`642836d` 全部随这一次构建落地）。
 `git diff --check` 退出 0。
 `maker-lua-lsp --mode watch`（**不用 `check`**）：首轮真报 2 个错——`EventPlan` 与 `EventPlanEntry`
 是同一个形状却被命名成两个类型；合并为单一类型后复跑 Errors: 0。
