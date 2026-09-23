@@ -21,20 +21,30 @@
 ### 可用能力
 
 - 文本、单图或多视图生成 3D 模型；
-- 贴图、格式转换、网格处理、自动绑定和动作重定向为可选后处理；
-- 本项目网页端工作流：生成原创角色 / 道具 → 检查 → 导出 GLB → 导入 Maker。
+- 贴图、格式转换、网格处理（retopology）、自动绑定（rig）为可选后处理；
+- **本项目网页端工作流**：生成原创角色 / 道具 → 检查 → 导出 GLB → 导入 Maker。
+
+**两条本地可操作的 Tripo 通道（2026-09-23 实测）**：
+
+| 通道 | 能不能本地操作 | 实测范围 |
+| --- | --- | --- |
+| Maker MCP `create_3d_asset` | ✅ 已实测连通（`action=get_options` 正常返回），不需要浏览器、不需要网页登录态 | `start/continue/query/get_options/post_process`；`operation` 有 `rig` / `texture` / `retopology` / `convert`；`face_limit` **48–20000**；`convert` 支持 GLTF/FBX/USDZ/OBJ/STL/3MF |
+| Tripo 网页版（studio.tripo3d.ai） | ⚠️ 只能人工在网页操作，本地无 MCP 通道 | **动画（idle/walk 等）只在这一侧**：MCP 没有动画 operation，工具描述明确「Tripo animation retargeting is intentionally not supported」 |
+
+⇒ 本地能 rig、能减面、能转格式；**产不出动画数据**。`D:\…\Tripo3d_Godot_Bridge` 那个插件不是驱动端，只是
+本地 WebSocket 接收端（`127.0.0.1:60650`，收 `.fbx/.obj/.glb/.gltf/.zip`，5 MB 分片），配对动作在网页侧由人点。
 
 ### 文件与性能契约
 
 | 资产 | 交付格式 | 运行时格式 | 目标 |
 | --- | --- | --- | --- |
-| 主角 | GLB（A-pose 低模） | **MDL**（`UrhoXCLI import-gltf` 转换） | 单角色 ≤ 5,000 faces；仅保留 PoC 需要的 idle、坐/看手机、walk |
+| 主角 | GLB（A-pose 低模） | **MDL**（`UrhoXCLI import-gltf` 转换） | 单角色 ≤ 5,000 faces；仅保留 PoC 需要的 idle、坐/看手机、walk。⚠️ 现有 14,298 面未达标；Tripo `face_limit` 可设 48–20000，用 `retopology` 压 |
 | 小道具 | GLB | **MDL** | 单件 1,000–3,000 faces（咖啡杯、书、唱片、背包、台灯） |
 | 备选 | FBX | MDL | 仅 GLB 转换失败时使用，且必须先做 Maker 真机验证 |
 
 **GLB 不是 Maker 的运行时格式。** 运行时一律 `cache:GetResource("Model", "…mdl")`；导入会自动处理坐标系转换（右手系→左手系）、UV 翻转与单位换算。配套工具：`skills/model-info` 查面数（验证 ≤5,000 目标）、`skills/anim-info` 查动画轨道。实测导入注意事项（丢 skin、丢 metallicRoughness）见 `docs/asset-provenance.md`。
 
-不要使用现有 IP 的人名、外形特征、台词、音乐或场景素材。Tripo Studio 网页会员和 OpenAPI 权益是否互通未核验；当前实施以网页导出为准。
+不要使用现有 IP 的人名、外形特征、台词、音乐或场景素材。Tripo Studio 网页会员与 OpenAPI/MCP 权益是否互通**仍未核验**；已实测的是 MCP 这条线能 rig / 减面 / 转格式，**动画仍以网页导出为准**。
 
 官方资料：<https://studio.tripo3d.ai/>、<https://developers.tripo3d.ai/en/docs/introduction>、<https://developers.tripo3d.ai/en/docs/quick-start>。
 
@@ -51,6 +61,13 @@
 1. 为上海、成都、洛杉矶、伦敦分别生成公寓、咖啡馆、通勤、休闲地点的空间母版；
 2. 导出 360 全景或录制短镜头，作为 Maker 状态窗的背景/远景与提交视频素材；
 3. 前景始终由低模 Tripo 角色和少量 Maker 场景道具构成。
+
+**Marble 本地操作不了（2026-09-23 穷尽核实，别再重试）**：Maker MCP 工具列表里**没有任何 Marble 工具**；
+本机未装 Playwright；用户已在跑的 Chrome 没有开 9222/9223 调试端口（接管需重启浏览器，会打断当前会话）；
+全新无头浏览器没有登录态，进不去会员功能；WebSearch/WebFetch 官方文档被本环境网络策略拦截。
+⇒ **现实分工：Marble 只能网页端人工操作导出，本地负责把文件接进工程。** 已有成功先例见 `docs/asset-provenance.md`
+（世界视口 `Screenshot` 原生导出 1280×960 精确 4:3）。Marble 全景 → Cubemap 这条路本地也验不了
+（`convert-panorama` 本地不存在，且本地运行时连引擎自带 `SpecularHDR.dds` 都加载不到，没有对照物），只能上云端验。
 
 ### 禁止作为默认方案的用法
 
@@ -108,8 +125,15 @@ Marble 高质量 GLB 不直接作为 Maker 移动端主场景：官方规格约�
   瘦身只用 `build.asset_ignores`（glob，**相对项目根**），文件留在库里；**不要靠删已追踪资产来瘦身**——
   Maker 云端会用 `TapCode Rollback` commit 把它们原样塞回 `raw-assets/`；
 - 不要用 `asset_ignores` 排除贴图：导入后的 `.mdl` 是压缩的，无法从模型侧证明某张贴图未被引用；
-- **本仓库没有本地运行时**，唯一的运行/预览入口是 Maker 云端；验证走 `runtime.log`，详见
-  `maker-lua-api-verification.md` §11 的收尾 runbook；
+- **本地有一个 Windows 运行时，但它只能证明 3D 链路，不能代替云端构建**（2026-09-23 实测，详见
+  `docs/3d-scene-character-movement.md` §2）。入口 `D:/Develop/ShanTianLiang/.cli/rt/UrhoXRuntime.exe`
+  （**只在主仓**，`.cli/` 被 gitignore，worktree 里没有），与 Maker CLI 内部参数一致即可跑：
+  `UrhoXRuntime.exe <entry.lua> -tapcode_dir=<source> -skip_login -p=Res -w -width=1080 -height=1920`，
+  **`cwd` 必须是 `<source>`**。已知边界：沙箱里 `io` 为 `nil`、`os.execute/remove/rename` 已移除，取证只能走
+  `Image:SavePNG` 与 `File`+`WriteString`；本地 `Autoload/*.pak` 是云端的**子集**（缺
+  `RenderPaths/Forward.xml`、两个 `SpecularHDR.dds`、`Vignetting.png`）；完整游戏本地跑不起来
+  （`TimeState.lua:349` 的 `os.date("!%Y")` 因 `common.get_server_time()` 越界而抛错）。`UrhoXCLI` 仍**只在云端**
+  `/workspace/.cli/` 下，GLB→MDL 这步本地做不了。**上真机/出交付物仍然只能走 `runtime.log` 与云端构建**；
 - 发布前准备图标、至少 3 张截图、宣传图/封面、简介、开发者的话和实机视频。
 
 官方入口：<https://maker.taptap.cn/help>、<https://maker.taptap.cn/skills>。

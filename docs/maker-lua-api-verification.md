@@ -362,13 +362,17 @@ function LineEdit:SetTextSelectable(enable) end
 
 | 项 | 原因 | 建议 |
 | --- | --- | --- |
-| 真机运行 Lua | `UrhoXRuntime` 需 GLIBC 2.38，当前沙箱为 2.35 | 在开发机跑 `skills/run-lua-headless` 验证时区表 |
+| 真机运行 Lua | `UrhoXRuntime` 需 GLIBC 2.38，当前**云端 Linux 沙箱**为 2.35 | 在开发机跑 `skills/run-lua-headless` 验证时区表。**2026-09-23 补充**：Windows 开发机上 `.cli/rt/UrhoXRuntime.exe` 可跑，但**完整游戏仍起不来**——`TimeState.lua:349` 的 `os.date("!%Y")` 因 `common.get_server_time()` 本地返回越界值而抛 `date result cannot be represented`，`main.lua:222` 的 `RefreshSnapshot()` 中断；只能跑绕开 TimeState 的 PoC |
 | 移动端中文 IME | 文档无记载 | M0-1 真机第一优先验证 |
 | 资产文件大小上限 | Dev Kit 无记载，原始来源是登录墙 | 实测，或以 Maker 后台报错为准 |
 | `clientCloud` 单值大小上限 | 只查到频率/总量配额（300/分、48 MB/分） | 记忆摘要做长度上限，勿无限增长 |
 
 > `UrhoXRuntime` 与 `UrhoXCLI` 均可从 `https://urhox-demo-platform.spark.xd.com/runtime/<platform>/latest/UrhoXRuntime.zip`
 > 免登录下载（已验证 linux 版 45 MB 可下载解压）。开发机上 `python3 .cli/install-urhox-runtime.py` 会自动处理。
+> **2026-09-23 实测补正**：Windows 版已由该脚本装好，落在 `D:/Develop/ShanTianLiang/.cli/rt/`（`UrhoXRuntime.exe` 24 MB，
+> 配套 `Autoload/*.pak`、`d3dcompiler_47.dll`、`shaderc.dll`）。但**这个 zip 只给 UrhoXRuntime**：
+> `UrhoXCLI` 本地仍不存在（全盘扫过 `.cli/`、npm `_npx` 缓存、`mcp-runtime/0.0.34/dist/maker.js`，命中 0 次），
+> GLB→MDL 这步只能在 Maker 云端 `/workspace/.cli/` 下发生，本地做不了。
 
 ---
 
@@ -592,13 +596,17 @@ WARNING: DownloadManager: no resources resolved for batch download
 
 | 想走的路 | 结果 |
 | --- | --- |
-| 本地 headless 跑引擎出图对方向 | 仓库无引擎可执行文件，`.cli/` 只有 `install-urhox-runtime.py`；AGENTS.md 已定「没有本地运行时」为硬边界，不为此现装引擎 |
+| 本地 headless 跑引擎出图对方向 | **2026-09-23 已推翻本条前提**：`.cli/install-urhox-runtime.py` 已把 Windows 运行时装好（`.cli/rt/UrhoXRuntime.exe`，24 MB），本地可跑并用 `Image:SavePNG` 落真实渲染像素。但当时的三条限制仍成立：沙箱 `io=nil`（取证只能走 `SavePNG` 与 `File`）、本地 `Autoload/*.pak` 是云端子集、`UrhoXRuntime` 需 GLIBC 2.38 的 **linux** 版在当前云端沙箱（2.35）仍跑不了 ⇒ **Windows 本机能出图，云端沙箱不能** |
 | 从 Lua 里回读 RT 像素的 alpha 直接判定 | **API 不存在**：`GetPixel` / `GetPixelInt` 只在 CPU 侧 `Image`（`.emmylua/Image.d.lua:141-169`），`Texture2D` 侧只有 `GetDataSize`。RenderTarget 是 GPU 纹理，读不回来 |
 | 解码测试二维码拿到可公开访问的 play 链接，用浏览器自己截图 | 失败：`cv2.QRCodeDetector` 对 2/3/4/6 倍放大 + 灰度 + Otsu 全部解不出（Maker 二维码是带样式的非标准模块图），`pyzbar`/`zxingcpp` 本机没有 |
 | 用浏览器打开 Maker 预览页截图 | **部分可行，见下方 §12.1**。`mcp__browser-use`（Qoder 内置浏览器）与 `playwright` 两条都被 302 到 `/intro`，它们没有 TapTap 会话；但 `mcp__user-browser-use`（接管用户真实 Chrome）**有登录态**，只是要求浏览器当前有窗口，否则报 `No current window`。先 `cmd //c start "" "<url>"` 拉起浏览器即可 |
 
 结论：方向与 alpha 两个未知数**只有真机（或用户已登录的预览页）能判定**，
 一次扫码按上面的判读表即可同时给出两个答案。
+
+> **本条已于 2026-09-21 由真机关闭**：角色正立、位于右侧约 65%、角色框无黑底 ⇒ `nvgRotate(math.pi)` 保留。
+> 上表第一条路「本地 headless 出图」的前提也已在 2026-09-23 被推翻（Windows 运行时装好了），
+> 但**真机结论不变**——本地只能证明渲染链路，交付判定仍以真机/云端为准。
 
 **扫码之后的两条取证通道（2026-09-20 从 `@taptap/maker` 0.0.33 包内 skill 核实）**：
 

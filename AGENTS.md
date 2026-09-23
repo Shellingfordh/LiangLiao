@@ -224,6 +224,7 @@ preserved for later edits and builds.
 | --- | --- |
 | `docs/2026-09-15-parallel-companion-design.md` | 产品、数据模型、时间状态、场景、PoC 范围与验收 |
 | `docs/platform-capabilities.md` | Tripo、Marble、TapTap Maker 的能力、格式、资产流程与限制 |
+| `docs/3d-scene-character-movement.md` | 3D 场景与角色移动的分层方案（T1–T5）、每层的确定性证据、Tripo/Marble 本地可操作性、当前 3D 体量预算 |
 | `docs/maker-lua-api-verification.md` | Maker 平台假设逐项验证（时区 / 运行时 LLM / GLB→MDL / clientCloud / 全景 / 预览 0% 定性与收尾 runbook） |
 | `docs/asset-provenance.md` | 资产唯一真源表、GLB/MDL 实测差异、重导入命令、M0-1 阻塞项 |
 | `docs/demand.md` | Tripothon S1 赛事规则与提交物 |
@@ -258,10 +259,32 @@ preserved for later edits and builds.
 
 不要恢复或引用已移除的旧"三位 NPC 小镇"方案、旧角色名或旧 PoC 模板。
 
-## 没有本地运行时
+## 本地运行时与云端验证的分工
 
-本仓库不含可执行引擎：`scripts/` 与 `assets/` 只是源码，**唯一的运行/预览入口是 Maker 云端**。
-「跑一下 / 预览 / 看结果」的正规路径是 `maker_build_current_directory`，随后读
+**本地有一个 Windows 运行时，能跑、能出图，但它不是云端构建的替代品**（2026-09-23 实测，证据与完整口径见
+`docs/3d-scene-character-movement.md` §2）。
+
+入口在**主仓** `D:/Develop/ShanTianLiang/.cli/rt/UrhoXRuntime.exe`（`.cli/` 被 gitignore，**worktree 里没有**，
+只能按绝对路径用）。参数与 Maker CLI 内部一致，**`cwd` 必须是 `<source>`**：
+
+```
+UrhoXRuntime.exe <entry.lua> -tapcode_dir=<source> -skip_login -p=Res -w -width=1080 -height=1920
+```
+
+已实证用途：**3D 链路取证**（真实项目资产的渲染 + 固定相机 + 角色沿预设路径移动，已用 `Image:SavePNG`
+落出 3 张真实渲染像素）。三条边界，别再重新踩：
+
+1. **取证只有两条通道**：`Image:SavePNG` 与 `File(path, FILE_WRITE)` + `WriteString`。
+   `print()` / `log:Write()` **都不进**本地引擎日志，`io` 库整体为 `nil`；`File` 写入被固定在
+   `Documents/temp/savedata/<project>/<userId>/`，**子目录必须预先存在**，否则 `SavePNG` 报 `Could not open file`。
+2. **本地资源是云端的子集**：`RenderPaths/Forward.xml`、`Cube/Day|Dusk/*SpecularHDR.dds`、
+   `Editor/Textures/Engine/Vignetting.png` 本地缺失，依赖它们的特性本地验不了；
+   `UrhoXCLI` 只在云端 `/workspace/.cli/`（见上文「GLB 不是运行时格式」）。
+3. **完整游戏本地跑不起来**：`common.get_server_time()` 本地返回越界值 → `TimeState.lua:349` 的
+   `os.date("!%Y")` 抛 `date result cannot be represented` → `main.lua:222` 的 `RefreshSnapshot()` 中断。
+   本地只能跑绕开 TimeState 的 PoC。
+
+**上真机 / 出交付物仍然只有云端一条路**：`maker_build_current_directory` → 读
 `.maker/logs/runtime/runtime.log`（topics 含 `engine`，引擎层报错也会落这里）。
 判据：该文件出现且含 `[M0-1] 启动 M0-1 竖切片`（M0-0 时代是 `[M0-0] 启动 M0-0 原型`）→ 已进入 Lua；
 文件不出现 → 仍卡在资源装载层。
@@ -269,7 +292,6 @@ preserved for later edits and builds.
 实测只活 4~8 分钟。所以：**日志证据要在下一次构建前转录进文档**；取证的当下先量 `state.json.updatedAt`
 是否还在推进（停了就按 `nextStartTime` 游标重启，**别再带 `--reset`**）；判活性不要用 `watcher.out.log`。
 四条坑的完整口径见 `docs/maker-lua-api-verification.md` §11。
-不要试图在本地启动游戏，也不要为此找本地端口/进程。
 
 
 

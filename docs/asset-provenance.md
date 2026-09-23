@@ -127,13 +127,25 @@ Maker 云端在 2026-09-19 自动回填了 `raw-assets/` 下的源 GLB、解包�
 ## 待办（阻塞项，按优先级）
 
 1. **恢复 normal 贴图槽**：材质改回 `Techniques/PBR/PBRDiffNormal.xml` 并接上 `Textures/lin-ruoxi_00_N.png`，否则 3.23 MB 的法线图白备着，角色表面细节全平。
-2. **骨骼**：源 GLB 的 65 关节 skin 在两次导入后都没进 MDL。M0-1 的 idle/坐/走动画在此之前无从谈起；先确认 `import-gltf` 的绑定参数，必要时改用带绑定的导出或 FBX 通路。
-3. **RM 贴图**：让导入器导出 metallicRoughness，替换常量粗糙度。
-4. **面数**：14,298 面对 `spec` 与 `docs/demand.md` 的 `face_limit <= 5000` 不达标。
-5. **贴图预算**：三张 4096² 对 14k 面角色过配；状态窗只占竖屏约 35%，建议 basecolor/normal 降到 2048² 与 1024²。
-6. **清理 `assets/Meshes/lin-ruoxi.mdl.bak`**：753,790 字节的旧模型备份，确认新版可用后删除。
-7. **背景包体预算**：`assets/Textures/backgrounds/la-cafe-4x3.png` 已于 2026-09-20 从 Marble 世界视口导出并落地（见上节），但 2.30 MB 相对当前 1.20 MB 运行包偏大，且 RGBA 的 alpha 通道并未使用；进包前确认是否需要转 RGB 或压缩。
-8. **发布素材（2026-09-21 复核）**：真机截图已有**两张**在库（`screenshots/device/m00-realdevice-01-fullframe.jpg`
+2. **骨骼（2026-09-23 重写）**：**资产本身是绑好骨骼的，是转换器把 skin 丢了**——这与「资产没绑骨骼」是两回事，修复动作完全不同。
+   源 GLB 含 `Armature` skin、65 个 `mixamorig:*` 关节、`JOINTS_0`/`WEIGHTS_0` 齐全、权重和异常 0 例；
+   而两次导入后的 MDL 侧 `mixamorig`/`Hips`/`Armature`/`Skeleton`/`Bone` 命中数全为 0，`import-gltf` 丢弃了 skin。
+   本地运行时实测（`.tmp/poc/anim_probe.lua`，经 `File` API 落盘）：`skeleton = true`、`numBones = 0.0`、
+   `GetNumAnimations` 报 `attempt to call a nil value` ⇒ 运行时只能走 `StaticModel` 分支。
+   要查 `import-gltf` 的绑定参数，或改用 FBX 通路。
+   ⚠️ **这是两条独立阻塞项，不是一个**：第二条见下，修好 skin 也不会自动获得动画。
+3. **动画数据（2026-09-23 新增，与上一条独立）**：源 GLB 本身 `animations | 无`——**即使 skin 修好了，也没有 idle/walk 可播**。
+   引擎侧 API 面是齐全的（`AnimatedModel`、`AnimationController:PlayExclusive`、`AnimationState` 都在 `.emmylua/`），缺的是数据。
+   Maker MCP 的 `create_3d_asset` 只提供 `rig` / `texture` / `retopology` / `convert` 四种 operation，**没有动画**，
+   工具描述亦明确「Tripo animation retargeting is intentionally not supported」；`face_limit` 范围是 48–20000（不是只到 5000）。
+   所以动画只能去 Tripo 网页版产出（账号是会员），T2 这一层基本绑定在网页工作流上。
+4. **RM 贴图**：让导入器导出 metallicRoughness，替换常量粗糙度。
+5. **面数**：14,298 面对 `spec` 与 `docs/demand.md` 的 `face_limit <= 5000` 不达标；可用 MCP `create_3d_asset` 的
+   `retopology`（`face_limit` 48–20000）压。
+6. **贴图预算**：三张 4096² 对 14k 面角色过配；状态窗只占竖屏约 35%，建议 basecolor/normal 降到 2048² 与 1024²。
+7. **清理 `assets/Meshes/lin-ruoxi.mdl.bak`**：753,790 字节的旧模型备份，确认新版可用后删除。
+8. **背景包体预算**：`assets/Textures/backgrounds/la-cafe-4x3.png` 已于 2026-09-20 从 Marble 世界视口导出并落地（见上节），但 2.30 MB 相对当前 1.20 MB 运行包偏大，且 RGBA 的 alpha 通道并未使用；进包前确认是否需要转 RGB 或压缩。
+9. **发布素材（2026-09-21 复核）**：真机截图已有**两张**在库（`screenshots/device/m00-realdevice-01-fullframe.jpg`
    13:12、`m00-realdevice-02-crop.jpg` 13:21，均为原生设备截图、同一 `5ac225f` 构建），还差第三张以证「稳定」；
    `.project/project.json` 的 `assets.screenshots` 仍为 `[]`（登记动作需要改 `.project/`，未做），
    `assets.icon` 指向 `./game_material/la-cafe-icon.png` —— 该目录被远端 pre-receive 排除，图标只能走 Maker 网页侧。

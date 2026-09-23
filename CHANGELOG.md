@@ -1,5 +1,35 @@
 # Changelog
 
+## 2026-09-23 — 本地运行时定位与 3D 场景/角色移动分层方案
+
+### Changed
+
+- **更正一条写进硬边界的错误事实：本仓库其实有本地运行时。** 此前 `AGENTS.md`、`README.md`、
+  `docs/platform-capabilities.md` 三处都写着「没有本地运行时」，`AGENTS.md` 甚至把它当成硬边界并写下
+  「不要试图在本地启动游戏，也不要为此找本地端口/进程」。实测：`.cli/install-urhox-runtime.py` 已把
+  Windows 运行时装在主仓 `.cli/rt/UrhoXRuntime.exe`（24 MB），用与 Maker CLI 内部一致的参数即可跑，
+  并已产出真实渲染像素。三处已改为「本地运行时与云端验证的分工」，**保留仍然成立的部分**：
+  `UrhoXCLI` 只在云端、本地资源是云端子集、完整游戏因 `TimeState` 的 `os.date("!%Y")` 越界仍跑不起来、
+  交付判定仍只能走云端构建 + `runtime.log`。连带更正 `docs/maker-lua-api-verification.md` §9 与 §12
+  两条以「仓库无引擎可执行文件」为前提的记录。
+- **角色动画阻塞项从「一个」改成「两个独立的」**（`docs/asset-provenance.md` 待办 2/3）：资产本身绑好了
+  65 个 `mixamorig` 关节、权重和异常 0 例，是 `import-gltf` 转换时丢了 skin（两次都没救回来）；
+  而源 GLB 本身 `animations | 无`——**即使 skin 修好也没有动画可播**。引擎侧 API 齐全
+  （`AnimatedModel` / `AnimationController:PlayExclusive` 都在 `.emmylua/`），缺的是数据。
+- **Tripo 本地可操作性定论**：Maker MCP 的 `create_3d_asset` 就是 Tripo 通道，本地已实测连通，能
+  rig / retopology（`face_limit` 48–20000）/ convert，但**没有动画 operation**（工具描述明确 animation
+  retargeting not supported）⇒ 动画只能去 Tripo 网页版。`docs/platform-capabilities.md` §2 原先把
+  「动作重定向」列为可用后处理，与 MCP 实际能力不符，已改。
+- **Marble 本地不可操作定论**：MCP 无工具、Playwright 未装、用户 Chrome 无调试端口、无头浏览器无登录态、
+  联网文档被本环境网络策略拦截。分工固定为「网页端人工导出 + 本地接进工程」。
+
+### Added
+
+- `docs/3d-scene-character-movement.md`：3D 场景与角色移动的分层方案 T1–T5，每层标注确定性证据。
+  **T1（固定镜头完全不动 + 角色沿预设路径移动并转向、全程无玩家输入）已用真实项目资产在本地跑出
+  3 张渲染截图**——相机三次逐像素一致、角色走预设矩形路径并按移动方向转向；不需要任何新资产、约 60 行。
+  T2 需先解两个资产阻塞项，T3 是相机轨迹变体，T4 不做首轮，T5 是现状兜底。
+
 ## 2026-09-22 — M1 事件层：从「按时段查模板」升级为「每日事件计划」
 
 ### Changed
