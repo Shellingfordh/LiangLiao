@@ -42,7 +42,13 @@ local uiRoot_ = nil
 ---@type Widget|nil
 local preview_ = nil
 ---@type Label|nil
-local statusLabel_ = nil
+local infoClockLabel_ = nil
+---@type Label|nil
+local infoCityLabel_ = nil
+---@type Label|nil
+local infoPlaceLabel_ = nil
+---@type Label|nil
+local infoStateLabel_ = nil
 ---@type Label|nil
 local errorLabel_ = nil
 ---@type Label|nil
@@ -54,6 +60,8 @@ local devTestPanel_ = nil
 local statusLine_ = ""
 ---@type number
 local clockElapsed_ = 0
+---@type { id: integer, role: string, text: string }|nil
+local pendingQuote_ = nil
 
 ---@class SelfTestEcho
 ---@field text string 落日志的完整结论（判据：场景=N/10）
@@ -125,8 +133,9 @@ end
 --- 发送瞬间确定的那批事实：可用性、地点、场景、事件事实 id 与回复计划。
 --- 主循环与开发自检共用这一份构造，避免两条路径各说一套。
 ---@param snap TimeSnapshot
+---@param quote? { id: integer, role: string, text: string }
 ---@return SendContext
-local function MakeSendContext(snap)
+local function MakeSendContext(snap, quote)
     -- 与当前快照同一 UTC 时复用已刷新的那一份事实；否则现查，
     -- 保证开发自检在没有走 RefreshSnapshot 的路径上也不会带上上一场景的旧实例键
     local fact = (lastFact_ and lastFact_.serverTime == snap.utcSec and lastFact_)
@@ -142,6 +151,8 @@ local function MakeSendContext(snap)
         factId = fact.id,
         -- 送达瞬间命中的事件实例：补回与重进都引用同一个键
         factKey = fact.occurrenceKey,
+        -- 引用只是附加信息：MessageService 会校验它是否成立，不成立就降级
+        quote = quote,
     }
 end
 
@@ -158,7 +169,10 @@ function HandleSend(rawText)
     local snap = RefreshSnapshot()
     local text = (rawText or ""):gsub("^%s+", ""):gsub("%s+$", "")
 
-    local msg = MessageService.Send(text, snap.utcSec, snap.clock, MakeSendContext(snap))
+    local msg = MessageService.Send(text, snap.utcSec, snap.clock, MakeSendContext(snap, pendingQuote_))
+    -- 引用是一次性的：无论这一条是否成功发出，都不该粘到下一条上
+    pendingQuote_ = nil
+    ChatPanel.ClearPendingQuote()
     if not msg then
         -- 只有空白草稿会被拒；这条不打 ERROR，免得把正常操作记成故障（服务内部已有自己的错误日志）
         logInfo("发送未生效，草稿留在输入框")
@@ -166,6 +180,9 @@ function HandleSend(rawText)
         return
     end
     ChatPanel.ClearDraft()
+    if msg.quotedMessageId then
+        logInfo(string.format("发送 #%d 引用 #%d（%s）", msg.id, msg.quotedMessageId, msg.quotedRole or "?"))
+    end
     if msg.planWindowStartUtc then
         logInfo(string.format("发送 #%d → 排队（她 %s 之后能回，计划 %d）",
             msg.id, FormatClock(msg.planWindowStartUtc), msg.planReplyAtUtc or 0))
@@ -175,6 +192,21 @@ function HandleSend(rawText)
     end
     MemoryService.Persist(MessageService.GetMessages())
     PushChatPhase()
+end
+
+--- 点某条气泡上的「引用」：只记 id/role/text，不在这里判断合不合法
+---（合法性由 MessageService.Send 统一判，判不过就降级成普通消息）
+---@param msg MsgEntry
+function HandleQuote(msg)
+    if not msg or not msg.id then
+        return
+    end
+    if msg.role ~= "user" and msg.role ~= "her" then
+        logInfo(string.format("消息 #%d 是系统消息，不能引用", msg.id))
+        return
+    end
+    pendingQuote_ = { id = msg.id, role = msg.role, text = msg.text or "" }
+    ChatPanel.SetPendingQuote(pendingQuote_)
 end
 
 --- 开发预览：直接推进到回复，走的仍是同一条生成 + 落库路径
@@ -196,16 +228,36 @@ function HandleDeliver(pending)
     lastFact_ = fact
     turnIndex_ = turnIndex_ + 1
 
-    local replyText = ContentService.Reply(fact, pending.text, turnIndex_)
-    local reply = MessageService.AppendReply(replyText, snap.utcSec, fact.id, snap.clock, fact.occurrenceKey)
+    -- 引用只作为被回指的宾语与话题词输入，可用性/事件/时刻仍全部来自 fact
+    local quote = pending.quotedMessageId and {
+        role = pending.quotedRole or "user",
+        text = pending.quotedTextPreview or "",
+    } or nil
+
+    ---@type MsgEntry|nil
+    local reply = nil
+    local okStream = pcall(function()
+        local segments = ContentService.ReplySegments(fact, pending.text, turnIndex_, quote)
+        reply = MessageService.BeginReplyStream(
+            segments, snap.utcSec, fact.id, snap.clock, fact.occurrenceKey)
+    end)
+    -- 多段上屏是纯增强：任何异常都退回既有的单串模板，绝不让队列卡在这一条上
+    if not okStream or not reply then
+        logError("多段回复失败，退回单串模板（队列不中断）")
+        reply = MessageService.AppendReply(
+            ContentService.Reply(fact, pending.text, turnIndex_),
+            snap.utcSec, fact.id, snap.clock, fact.occurrenceKey)
+    end
+
     local topics = ContentService.DetectTopics(pending.text)
     MemoryService.RecordTurn(pending, reply, fact, topics, MessageService.GetMessages())
     ChatPanel.SetMemoryLine(MemoryService.GetSummaryLine())
 
     -- 只记事实与长度：回复正文会带上用户原文片段，不整条进运行日志
-    logInfo(string.format("回复 #%d → replied 事实=%s key=%s 状态=%s 场景=%s 送达key=%s 送达态=%s 正文长度=%d",
+    logInfo(string.format("回复 #%d → replied 事实=%s key=%s 状态=%s 场景=%s 送达key=%s 送达态=%s 正文长度=%d 引用=%s",
         pending.id, fact.id, fact.occurrenceKey, fact.eventState, fact.sceneId,
-        tostring(pending.factKey or fact.sentOccurrenceKey), tostring(fact.sentEventState), #replyText))
+        tostring(pending.factKey or fact.sentOccurrenceKey), tostring(fact.sentEventState),
+        #reply.text, tostring(pending.quotedMessageId or 0)))
 end
 
 function Start()
@@ -421,14 +473,67 @@ function InitUI()
 end
 
 function CreatePage()
-    statusLabel_ = UI.Label {
-        id = "statusLine",
-        text = TimeState.StatusLine(CONFIG.City),
-        fontSize = 13,
-        fontColor = { 210, 204, 196, 210 },
-        textAlign = "left",
+    -- 信息层级收进状态窗内：一级「当地时间 + 城市」，二级「地点」，三级「当前状态」。
+    -- 全部走 absolute + 左下角：状态窗是 4:3 画框，角色站在中间，
+    -- 贴边放既不裁切（窄屏换行）也不压人。半透明底 + 细边，读起来是 HUD 而不是弹窗，
+    -- 与左上角蓝框的开发自检面板在颜色和形状上都区分开。
+    infoClockLabel_ = UI.Label {
+        id = "infoClock",
+        text = "--:--",
+        fontSize = 16,
+        fontWeight = "bold",
+        fontColor = { 238, 233, 224, 245 },
         whiteSpace = "nowrap",
+    }
+    infoCityLabel_ = UI.Label {
+        id = "infoCity",
+        text = "",
+        fontSize = 10,
+        fontColor = { 150, 207, 255, 220 },
+        whiteSpace = "nowrap",
+    }
+    infoPlaceLabel_ = UI.Label {
+        id = "infoPlace",
+        text = "",
+        fontSize = 10,
+        fontColor = { 200, 194, 184, 228 },
+        whiteSpace = "normal",
+        wordBreak = "break-word",
+    }
+    infoStateLabel_ = UI.Label {
+        id = "infoState",
+        text = "",
+        fontSize = 10,
+        fontColor = { 208, 168, 126, 238 },
+        whiteSpace = "normal",
+        wordBreak = "break-word",
+    }
+
+    local infoCard = UI.Panel {
+        id = "statusInfoCard",
+        position = "absolute",
+        left = 10,
+        bottom = 10,
+        maxWidth = "66%",
+        flexDirection = "column",
+        gap = 1,
+        paddingHorizontal = 9,
+        paddingVertical = 7,
+        borderRadius = 9,
+        backgroundColor = { 14, 16, 21, 200 },
+        borderWidth = 1,
+        borderColor = { 122, 130, 142, 70 },
         pointerEvents = "none",
+        children = {
+            UI.Row {
+                gap = 6,
+                alignItems = "center",
+                flexWrap = "wrap",
+                children = { infoClockLabel_, infoCityLabel_ },
+            },
+            infoPlaceLabel_,
+            infoStateLabel_,
+        },
     }
 
     errorLabel_ = UI.Label {
@@ -487,6 +592,7 @@ function CreatePage()
         onSend = HandleSend,
         onSkip = HandleSkip,
         onDraftChange = MessageService.SetDraft,
+        onQuote = HandleQuote,
         getMessages = MessageService.GetMessages,
         getVersion = MessageService.GetVersion,
     })
@@ -536,9 +642,9 @@ function CreatePage()
                         pointerEvents = "none",
                         children = {
                             preview,
+                            infoCard,
                         },
                     },
-                    statusLabel_,
                     errorLabel_,
                     chat,
                     noteLabel_,
@@ -627,8 +733,18 @@ function RefreshStatusLine(force)
     local line = snap.cityLabel .. " · " .. snap.clock .. " · " .. snap.phrase
     if force or line ~= statusLine_ then
         statusLine_ = line
-        if statusLabel_ then
-            statusLabel_:SetText(line)
+        -- 信息卡按层级拆开写：钟点最重，城市次之，地点与当前状态最轻
+        if infoClockLabel_ then
+            infoClockLabel_:SetText(snap.clock)
+        end
+        if infoCityLabel_ then
+            infoCityLabel_:SetText(snap.cityLabel)
+        end
+        if infoPlaceLabel_ then
+            infoPlaceLabel_:SetText(snap.place)
+        end
+        if infoStateLabel_ then
+            infoStateLabel_:SetText(snap.phrase)
         end
         ApplyScene()
     end

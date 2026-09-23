@@ -161,6 +161,9 @@ local function sanitizeMessage(raw)
         sceneIdAtSend = asString(raw.sceneIdAtSend),
         phraseAtSend = asString(raw.phraseAtSend),
         factKey = asString(raw.factKey),
+        quotedMessageId = asInteger(raw.quotedMessageId),
+        quotedRole = asString(raw.quotedRole),
+        quotedTextPreview = asString(raw.quotedTextPreview),
     }
     return entry, nil
 end
@@ -414,6 +417,9 @@ local function toSaved(entry)
         sceneIdAtSend = entry.sceneIdAtSend,
         phraseAtSend = entry.phraseAtSend,
         factKey = entry.factKey,
+        quotedMessageId = entry.quotedMessageId,
+        quotedRole = entry.quotedRole,
+        quotedTextPreview = entry.quotedTextPreview,
     }
 end
 

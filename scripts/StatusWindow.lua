@@ -304,15 +304,22 @@ local function createLighting(scene)
             -- 近景状态窗：拉开雾距，避免角色被雾吃掉
             zone.fogStart = 40.0
             zone.fogEnd = 120.0
+            -- 把预设实际生效的环境光档位打出来：AMBIENT_PREBAKED 会把 cAmbientColor
+            -- 硬清零，那种情况下背光侧只能靠补光救，改 ambientColor 是空操作。
+            -- ambientSource 用 tostring 读：不同绑定层可能给枚举名也可能给整数。
+            trace(string.format("光照=LightGroup 预设 ambientSource=%s rgb=%.2f,%.2f,%.2f",
+                tostring(zone.ambientSource),
+                zone.ambientColor.r, zone.ambientColor.g, zone.ambientColor.b))
+        else
+            trace("光照=LightGroup 预设（无 Zone）")
         end
-        trace("光照=LightGroup 预设")
     else
         trace("光照=备用方向光（LightGroup/Dusk.xml 与 Daytime.xml 都不存在）", LOG_WARNING)
         -- LightGroup 不存在时场景里就没有 Zone，而 Zone 默认 ambientSource 是 AMBIENT_PREBAKED：
         -- 那种模式下着色器会把 cAmbientColor 硬清零（engine-docs/recipes/rendering.md），
         -- zone.ambientColor 是空操作。必须显式切到 AMBIENT_COLOR，环境光才真正进得去。
         -- AMBIENT_COLOR 下漫反射强度固定为 1.0，亮度只由 ambientColor 本身决定。
-        -- 没有这一段时全场景只有两盏硬光，背光面直接纯黑——就是真机上「光影不太好」那一项。
+        -- 没有这一段时全场景只有一盏硬光，背光面直接纯黑——就是真机上「光影不太好」那一项。
         -- 已经有一个 Zone 就改它，别另建一个：新建 Zone 默认 priority=0，
         -- 会顶掉已有那一档（含它的 IBL / SH / Bloom / 雾）。
         ---@type Zone|nil
@@ -326,7 +333,7 @@ local function createLighting(scene)
         end
         zone.ambientSource = AMBIENT_COLOR
         -- 室内暖黄为主、掺一点冷调当天光：背光面有层次而不是死黑
-        zone.ambientColor = Color(0.30, 0.27, 0.24)
+        zone.ambientColor = Color(0.34, 0.31, 0.28)
         zone.fogColor = Color(0.16, 0.15, 0.16)
         -- 近景状态窗：与 LightGroup 分支同一组雾距
         zone.fogStart = 40.0
@@ -344,15 +351,34 @@ local function createLighting(scene)
         sun.castShadows = true
     end
 
-    -- 右前补光，让人物面部和夹克更清晰
-    local fillNode = scene:CreateChild("FillLight")
+    -- 两盏补光两个分支都挂：「背光侧死黑」是共性问题，兜底分支有环境光也仍旧偏硬，
+    -- LightGroup 分支若带 AMBIENT_PREBAKED 更是只有灯没有环境光。
+    -- 主光只认一盏——兜底分支现造的 Sun 或预设自带的那盏方向光。这里再造一盏方向光
+    -- 会跟它打架（两个方向各投一遍阴影，中间反而发灰），所以补光一律用点光、不投影。
+    -- 一冷一暖是为了让受光侧与背光侧分得开：全是暖光只会把侧脸糊成一团。
+    local coolNode = scene:CreateChild("CoolFillLight")
+    coolNode.position = Vector3(-2.2, 1.4, 1.8)
+    local cool = coolNode:CreateComponent("Light")
+    cool.lightType = LIGHT_POINT
+    cool.color = Color(0.60, 0.72, 0.92)
+    cool.brightness = 1.1
+    cool.range = 9.0
+    cool.castShadows = false
+
+    -- 右前暖面光：把面部和夹克的细节拉出来，亮度略高于冷补光，
+    -- 保持「右前是主受光面」的方向感
+    local fillNode = scene:CreateChild("WarmFillLight")
     fillNode.position = Vector3(1.6, 1.8, 2.4)
     local fill = fillNode:CreateComponent("Light")
     fill.lightType = LIGHT_POINT
-    fill.color = Color(1.0, 0.92, 0.85)
-    fill.brightness = 1.6
+    fill.color = Color(1.0, 0.90, 0.80)
+    fill.brightness = 1.4
     fill.range = 8.0
     fill.castShadows = false
+
+    -- 布光结果进 boot trace：真机上要判断「改这几个数够不够」还是「得换 Technique」，
+    -- 凭的是这一行，不是截图
+    trace(string.format("三点布光 主光=1 冷补=%.1f 暖面=%.1f（均不投影）", 1.1, 1.4))
 end
 
 --- 几何占位人（深墨绿夹克 / 米白针织 / 深色牛仔裤 / 白鞋）

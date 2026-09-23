@@ -1,9 +1,11 @@
 -- ============================================================================
 -- ContentService.lua — 固定模板 + 变量替换生成回复
 -- 运行时没有 LLM（见 docs/maker-lua-api-verification.md），这里只做查表拼装：
--- 输入 = EventService 的事件事实 + 用户原文，输出 = 一条简短中文。
+-- 输入 = EventService 的事件事实 + 用户原文（+ 可选引用），输出 = 1–3 条短句。
 -- 同一事实 + 同一原文必须得到同一句（可复现，不引入随机）。
 -- 模板用 {token} 占位，避免 string.format 的参数顺序在中文句子里数错。
+-- 引用（quote）只做两件事：被回指的宾语、话题词匹配的额外输入。
+-- 它没有任何入口能改写事实——可用性/事件/时刻一律来自 EventService 的 fact。
 -- ============================================================================
 
 local ContentService = {}
@@ -82,6 +84,18 @@ local TOPIC_SUFFIX = {
     event = "你要是在就好了",
 }
 
+-- 引用回指句：只「认下」被引用的那一句，不替它编内容、不做任何事实断言。
+-- 排在通用话题后缀之前，所以「引用」比「猜话题」更早被回应。
+---@type string[]
+local QUOTE_ECHO_LINES = {
+    "你刚才那句「{quote}」，我看见了。",
+    "「{quote}」这句我记下了。",
+}
+
+---@class ReplyQuote
+---@field role string "user" | "her"
+---@field text string 已裁剪的引用预览（MessageService 存进 quotedTextPreview 的那份）
+
 local function hash(s)
     local h = 5381
     for i = 1, #s do
@@ -98,22 +112,6 @@ local function fill(tpl, vars)
         return vars[key] or ""
     end))
     return out
-end
-
----@type string[]
-local SENTENCE_ENDINGS = { "。", "？", "！", "…", ";", "；", ".", "!", "?" }
-
---- 半句接在后面时该不该再补一个逗号：预览实测出现过「刚坐下。，你那边…」的叠标点
----@param s string
----@return boolean
-local function endsWithSentencePunct(s)
-    for i = 1, #SENTENCE_ENDINGS do
-        local e = SENTENCE_ENDINGS[i]
-        if s:sub(-#e) == e then
-            return true
-        end
-    end
-    return false
 end
 
 --- UTF-8 安全截断，只用于回显用户原文，按字符数裁
@@ -141,6 +139,14 @@ local function clip(s, maxRunes)
         return s
     end
     return s:sub(1, bytePos - 1) .. "…"
+end
+
+--- 对外暴露的截断：引用预览也要按字符数裁，而这条规则全工程只能有一份
+---@param s string
+---@param maxRunes integer
+---@return string
+function ContentService.ClipPreview(s, maxRunes)
+    return clip(s or "", maxRunes)
 end
 
 --- 事件事实 → 模板变量表
@@ -196,12 +202,14 @@ function ContentService.DetectTopics(text)
     return found
 end
 
---- 生成回复正文。同一组事实 + 同一句原文必须得到同一句（可复现，不引入随机）。
+--- 组装 1–3 段短回复。事实只从 fact 取（EventService 是唯一事实源），
+--- quote 只作为被回指的宾语和话题词匹配的额外输入。
 ---@param fact EventFact
 ---@param userText string 用户原文（参与选模板与回显）
 ---@param turnIndex integer 第几轮，用于稳定地换措辞
----@return string
-function ContentService.Reply(fact, userText, turnIndex)
+---@param quote? ReplyQuote 本次消息引用的那条（已裁剪）
+---@return string[]
+local function BuildSegments(fact, userText, turnIndex, quote)
     local briefReply = fact.brief == true
     local pool
     if briefReply then
@@ -209,38 +217,76 @@ function ContentService.Reply(fact, userText, turnIndex)
     else
         pool = EVENT_LINES[fact.id] or EVENT_LINES.la_cafe_open_mic
     end
+    local quoteText = quote and quote.text or ""
     local seed = (userText or "") .. "|" .. fact.id .. "|" .. tostring(turnIndex)
     local pick = (hash(seed) % #pool) + 1
     local vars = varsOf(fact)
+    vars.quote = quoteText
 
-    local body = fill(pool[pick] or pool[1] or "", vars)
+    ---@type string[]
+    local segments = {}
 
+    -- 第一段：主干句。碎片档到此为止（规格 §5.2 要求回复要短）
+    local head = fill(pool[pick] or pool[1] or "", vars)
     if fact.queued and fact.thenPhrase then
         if fact.sentEventState == "ended" then
-            body = fill(QUEUED_ENDED_PREFIX, vars) .. body
+            head = fill(QUEUED_ENDED_PREFIX, vars) .. head
         else
-            body = fill(QUEUED_PREFIX, vars) .. body
+            head = fill(QUEUED_PREFIX, vars) .. head
         end
     end
-
     -- 回显用户原文：证明回复是对这句话的回应，而不是自说自话
     local quoted = clip(userText or "", 12)
     if quoted ~= "" then
-        body = "「" .. quoted .. "」" .. body
+        head = "「" .. quoted .. "」" .. head
+    end
+    segments[#segments + 1] = head
+
+    if briefReply then
+        return segments
     end
 
-    if not briefReply then
-        local topics = ContentService.DetectTopics(userText)
-        local suffixTpl = topics[1] and TOPIC_SUFFIX[topics[1]]
-        if suffixTpl and suffixTpl ~= "" then
-            local suffix = fill(suffixTpl, vars)
-            if suffix ~= "" then
-                body = body .. (endsWithSentencePunct(body) and "" or "，") .. suffix
-            end
+    -- 第二段：被引用的那一句。紧跟在主干句之后、通用话题后缀之前。
+    if quoteText ~= "" then
+        local echoSeed = quoteText .. "|" .. fact.id .. "|" .. tostring(turnIndex)
+        local echoPick = (hash(echoSeed) % #QUOTE_ECHO_LINES) + 1
+        local echoTpl = QUOTE_ECHO_LINES[echoPick]
+        if echoTpl and echoTpl ~= "" then
+            segments[#segments + 1] = fill(echoTpl, vars)
         end
     end
 
-    return body
+    -- 第三段：原文（连同被引用那句）里出现某个话题时追加的半句
+    local topics = ContentService.DetectTopics((userText or "") .. " " .. quoteText)
+    local suffixTpl = topics[1] and TOPIC_SUFFIX[topics[1]]
+    if suffixTpl and suffixTpl ~= "" then
+        local suffix = fill(suffixTpl, vars)
+        if suffix ~= "" then
+            segments[#segments + 1] = suffix
+        end
+    end
+
+    return segments
+end
+
+--- 生成回复正文（单串）。多段上屏走 ReplySegments；这个入口留给兜底与兼容。
+---@param fact EventFact
+---@param userText string 用户原文（参与选模板与回显）
+---@param turnIndex integer 第几轮，用于稳定地换措辞
+---@return string
+function ContentService.Reply(fact, userText, turnIndex)
+    return table.concat(BuildSegments(fact, userText, turnIndex, nil), "")
+end
+
+--- 生成 1–3 段短回复，由 MessageService 复用 typing 相位逐句上屏。
+--- 分段之间天然以句号收尾，所以不再需要拼接口点号的兜底。
+---@param fact EventFact
+---@param userText string 用户原文（参与选模板与回显）
+---@param turnIndex integer 第几轮，用于稳定地换措辞
+---@param quote? ReplyQuote 本次消息引用的那条
+---@return string[]
+function ContentService.ReplySegments(fact, userText, turnIndex, quote)
+    return BuildSegments(fact, userText, turnIndex, quote)
 end
 
 --- 重进时唯一一条「离开期间」摘要。只报客观间隔与两头的作息原话，

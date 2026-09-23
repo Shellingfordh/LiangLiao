@@ -7,6 +7,7 @@
 -- ============================================================================
 
 local UI = require("urhox-libs/UI")
+local ContentService = require("services.ContentService")
 
 local ChatPanel = {}
 
@@ -27,6 +28,11 @@ local TYPING_STEP_SECONDS = 0.45
 local SCROLL_SETTLE_FRAMES = 3
 local SCROLL_PAD = 10
 local BUBBLE_PAD_X = 11
+-- 「引用」按钮固定宽。状态文案是事后 SetText 换上去的，按钮宽度却不能再变，
+-- 否则同一条气泡从「已送达」变「已排队」时按钮会把 meta 行顶出气泡边界。
+local QUOTE_BTN_W = 42
+-- 引用条里预览的字符数上限。气泡内角标字号小，20 字足够认出引的是哪一句。
+local QUOTE_STRIP_MAX = 20
 -- 气泡宽度按「最坏情况的状态文案」预留：状态是事后 SetText 换上去的，
 -- 如果按创建那一刻的文案算宽度，消息从「已送达」变「已排队」时会溢出气泡边界。
 local STATUS_WIDTH_RESERVE = "已送达 · 对方只有碎片时间，已排队 · 第 9 位"
@@ -61,6 +67,12 @@ local skipButton_ = nil
 local typingRow_ = nil
 ---@type Label|nil
 local typingLabel_ = nil
+---@type Panel|nil
+local quoteStrip_ = nil
+---@type Label|nil
+local quotePreviewLabel_ = nil
+---@type { id: integer, role: string, text: string }|nil
+local pendingQuote_ = nil
 
 local devTools_ = false
 local awaiting_ = false
@@ -77,6 +89,10 @@ local rowsById_ = {}
 local statusByMsgId_ = {}
 ---@type table<integer, string>
 local renderedStatus_ = {}
+---@type table<integer, Label?>
+local bodyByMsgId_ = {}
+---@type table<integer, string>
+local renderedBody_ = {}
 
 ---@type fun(text: string): nil
 local onSend_ = function() end
@@ -84,6 +100,8 @@ local onSend_ = function() end
 local onSkip_ = function() end
 ---@type fun(text: string): nil
 local onDraftChange_ = function() end
+---@type fun(msg: MsgEntry): nil
+local onQuote_ = function() end
 ---@type fun(): MsgEntry[]
 local messagesProvider_ = function()
     return {}
@@ -136,6 +154,7 @@ end
 ---@field onSend? fun(text: string) 点击发送 / 回车
 ---@field onSkip? fun() 点击跳过等待
 ---@field onDraftChange? fun(text: string) 输入变化，回写草稿
+---@field onQuote? fun(msg: MsgEntry) 点击某条气泡上的「引用」
 ---@field getMessages? fun(): MsgEntry[]
 ---@field getVersion? fun(): integer
 
@@ -164,8 +183,9 @@ local function MakeBubbleRow(msg)
 
     local metaText = (msg.clockText or "") .. (isUser and " · 洛杉矶 · 你" or " · 若夕")
     local statusText = isUser and (msg.statusText or "") or ""
+    local quotePreview = msg.quotedTextPreview or ""
     local bodyW = estTextWidth(msg.text, 13)
-    local metaW = estTextWidth(metaText, 9)
+    local metaW = estTextWidth(metaText, 9) + QUOTE_BTN_W
     -- 状态文案是事后换上去的，宽度必须当场预留，否则「已送达」变「已排队」时会撑出气泡
     local statusW = isUser and estTextWidth(STATUS_WIDTH_RESERVE, 10) or 0
     if bodyW < metaW then
@@ -195,25 +215,89 @@ local function MakeBubbleRow(msg)
         statusByMsgId_[msg.id] = statusLabel
     end
 
-    local children = {
-        UI.Label {
-            text = msg.text,
+    local quoteButton = UI.Button {
+        id = "msgQuote" .. tostring(msg.id),
+        text = "引用",
+        variant = "secondary",
+        fontSize = 9,
+        height = 18,
+        width = QUOTE_BTN_W,
+        paddingLeft = 0,
+        paddingRight = 0,
+        -- 给阅读 props 的工具与检查器的声明；运行时焦点判定用下面的实例字段。
+        focusable = false,
+    }
+    -- 按钮不能抢焦点（否则输入框失焦 → 软键盘收起 → 画布高度变化 → 点击静默丢失），
+    -- 主操作也放在 OnPointerDown：UI.HandlePointerUp 的 OnClick 受命中条件影响。
+    quoteButton.focusable = false
+    function quoteButton:OnPointerDown(event)
+        if not event or not event:IsPrimaryAction() then
+            return
+        end
+        self:SetState({ pressed = true })
+        self:TransitionToStateBgColor()
+        logInfo(string.format("引用按钮按下 → 消息 #%d（%s）", msg.id, msg.role))
+        onQuote_(msg)
+    end
+
+    ---@type Widget[]
+    local children = {}
+
+    -- 引用卡：只显示被引用那句的裁剪预览，不重复正文
+    if quotePreview ~= "" then
+        children[#children + 1] = UI.Panel {
             width = bodyW,
             maxWidth = bubbleTextMaxW_,
-            fontSize = 13,
-            fontColor = isUser and COLORS.userText or COLORS.herText,
-            whiteSpace = "normal",
-            wordBreak = "break-word",
-            lineHeight = 1.35,
-        },
-        UI.Label {
-            text = metaText,
-            fontSize = 9,
-            fontColor = COLORS.dimText,
-            whiteSpace = "nowrap",
-            marginTop = 3,
+            backgroundColor = { 255, 255, 255, 24 },
+            borderRadius = 7,
+            paddingHorizontal = 6,
+            paddingVertical = 3,
+            marginBottom = 4,
+            children = {
+                UI.Label {
+                    text = "引用 " .. quotePreview,
+                    fontSize = 9,
+                    fontColor = COLORS.dimText,
+                    whiteSpace = "normal",
+                    wordBreak = "break-word",
+                },
+            },
+        }
+    end
+
+    -- 正文标签要留下来：多段回复是往同一条 text 上追加，只能换字不能重建行
+    local bodyLabel = UI.Label {
+        text = msg.text,
+        width = bodyW,
+        maxWidth = bubbleTextMaxW_,
+        fontSize = 13,
+        fontColor = isUser and COLORS.userText or COLORS.herText,
+        whiteSpace = "normal",
+        wordBreak = "break-word",
+        lineHeight = 1.35,
+    }
+    bodyByMsgId_[msg.id] = bodyLabel
+    renderedBody_[msg.id] = msg.text
+    children[#children + 1] = bodyLabel
+
+    -- flexWrap 兜底：窄屏上 meta 文案放不下时，按钮换行而不是被挤出气泡
+    children[#children + 1] = UI.Row {
+        width = bodyW,
+        alignItems = "center",
+        gap = 6,
+        flexWrap = "wrap",
+        marginTop = 3,
+        children = {
+            UI.Label {
+                text = metaText,
+                fontSize = 9,
+                fontColor = COLORS.dimText,
+                whiteSpace = "nowrap",
+            },
+            quoteButton,
         },
     }
+
     if statusLabel then
         children[#children + 1] = statusLabel
     end
@@ -245,6 +329,7 @@ function ChatPanel.Build(opts)
     onSend_ = opts.onSend or onSend_
     onSkip_ = opts.onSkip or onSkip_
     onDraftChange_ = opts.onDraftChange or onDraftChange_
+    onQuote_ = opts.onQuote or onQuote_
     messagesProvider_ = opts.getMessages or messagesProvider_
     versionProvider_ = opts.getVersion or versionProvider_
     phase_ = "idle"
@@ -253,6 +338,9 @@ function ChatPanel.Build(opts)
     rowsById_ = {}
     statusByMsgId_ = {}
     renderedStatus_ = {}
+    bodyByMsgId_ = {}
+    renderedBody_ = {}
+    pendingQuote_ = nil
 
     memoryLabel_ = UI.Label {
         id = "chatMemoryLine",
@@ -291,6 +379,59 @@ function ChatPanel.Build(opts)
                 paddingVertical = 8,
                 children = { typingLabel_ },
             },
+        },
+    }
+
+    quotePreviewLabel_ = UI.Label {
+        text = "",
+        fontSize = 10,
+        fontColor = COLORS.dimText,
+        whiteSpace = "normal",
+        wordBreak = "break-word",
+        flexGrow = 1,
+        flexBasis = 0,
+    }
+
+    local cancelQuoteButton = UI.Button {
+        text = "取消",
+        variant = "secondary",
+        fontSize = 9,
+        height = 20,
+        paddingLeft = 6,
+        paddingRight = 6,
+        focusable = false,
+    }
+    cancelQuoteButton.focusable = false
+    function cancelQuoteButton:OnPointerDown(event)
+        if not event or not event:IsPrimaryAction() then
+            return
+        end
+        self:SetState({ pressed = true })
+        self:TransitionToStateBgColor()
+        ChatPanel.ClearPendingQuote()
+    end
+
+    quoteStrip_ = UI.Panel {
+        id = "chatQuoteStrip",
+        width = "100%",
+        flexShrink = 0,
+        flexDirection = "row",
+        alignItems = "center",
+        gap = 6,
+        visible = false,
+        backgroundColor = { 28, 31, 38, 235 },
+        borderRadius = 8,
+        paddingHorizontal = 8,
+        paddingVertical = 5,
+        children = {
+            UI.Label {
+                text = "引用",
+                fontSize = 9,
+                fontColor = COLORS.accent,
+                whiteSpace = "nowrap",
+            },
+            quotePreviewLabel_,
+            cancelQuoteButton,
         },
     }
 
@@ -410,6 +551,7 @@ function ChatPanel.Build(opts)
                 gap = 8,
                 children = { statusLabel_, skipButton_ },
             },
+            quoteStrip_,
             UI.Panel {
                 id = "chatInputBar",
                 width = "100%",
@@ -490,6 +632,25 @@ local function RefreshStatuses()
     end
 end
 
+--- 多段回复是往同一条 text 上追加，所以已上屏的正文标签也要跟着换字。
+--- 只换字不重建行：ClearChildren 不会销毁 Yoga 节点，重建会漏节点。
+---@return boolean changed
+local function RefreshBodies()
+    local msgs = messagesProvider_()
+    local changed = false
+    for i = 1, #msgs do
+        local msg = msgs[i]
+        local label = bodyByMsgId_[msg.id]
+        if label and renderedBody_[msg.id] ~= msg.text then
+            renderedBody_[msg.id] = msg.text
+            label:SetText(msg.text)
+            changed = true
+            logInfo(string.format("消息 #%d 正文追加到 %d 字", msg.id, #msg.text))
+        end
+    end
+    return changed
+end
+
 --- 每帧调用：合并同一帧内的多次变更
 ---@param dt number
 function ChatPanel.Tick(dt)
@@ -502,6 +663,9 @@ function ChatPanel.Tick(dt)
         renderedVersion_ = version
         AppendNewRows()
         RefreshStatuses()
+        if RefreshBodies() then
+            scrollAfterFrames_ = SCROLL_SETTLE_FRAMES
+        end
     end
 
     if phase_ == "typing" then
@@ -563,6 +727,34 @@ function ChatPanel.SetMemoryLine(line)
     end
 end
 
+--- 记下准备随下一条消息发出的引用。quote 传 nil 等于取消。
+--- 只存 id / role / text 三样，不碰 TimeState 与 EventService 的任何事实。
+---@param quote? { id: integer, role: string, text: string }
+function ChatPanel.SetPendingQuote(quote)
+    pendingQuote_ = quote
+    if not quoteStrip_ or not quotePreviewLabel_ then
+        return
+    end
+    if not quote or not quote.text or quote.text == "" then
+        quoteStrip_:SetVisible(false)
+        return
+    end
+    local who = quote.role == "her" and "她" or "你"
+    quotePreviewLabel_:SetText(string.format("%s：%s", who,
+        ContentService.ClipPreview(quote.text, QUOTE_STRIP_MAX)))
+    quoteStrip_:SetVisible(true)
+end
+
+---@return { id: integer, role: string, text: string }|nil
+function ChatPanel.GetPendingQuote()
+    return pendingQuote_
+end
+
+function ChatPanel.ClearPendingQuote()
+    ChatPanel.SetPendingQuote(nil)
+    logInfo("已取消待发送的引用")
+end
+
 ---@return string
 function ChatPanel.GetDraft()
     if inputField_ then
@@ -601,9 +793,14 @@ function ChatPanel.Shutdown()
     skipButton_ = nil
     typingRow_ = nil
     typingLabel_ = nil
+    quoteStrip_ = nil
+    quotePreviewLabel_ = nil
+    pendingQuote_ = nil
     rowsById_ = {}
     statusByMsgId_ = {}
     renderedStatus_ = {}
+    bodyByMsgId_ = {}
+    renderedBody_ = {}
     renderedVersion_ = -1
 end
 

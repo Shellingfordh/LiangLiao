@@ -6,7 +6,14 @@
 -- 所以真机上跟 common.get_server_time() 走，开发自检可以用可控 UTC 驱动。
 -- 计划回复时刻（planReplyAtUtc）由 main.lua 用 TimeState.ReplyPlanFor 算好传进来；
 -- 文案由 ContentService 生成，事实由 EventService 选，存档由 MemoryService 落。
+-- 另管两件 M2-A 的事：
+--   * 引用（quotedMessageId/quotedRole/quotedTextPreview）：只认当前会话里真实存在的
+--     user/her 消息，任何不成立都降级成普通消息，而不是拒绝发送。
+--   * 多段回复：一条回复仍是一个 MsgEntry，短句按间隔追加进同一条 text，
+--     期间相位回到 typing。拆成多条会同时搅乱 FIFO 计数与「一条回复一条记录」。
 -- ============================================================================
+
+local ContentService = require("services.ContentService")
 
 local MessageService = {}
 
@@ -24,6 +31,9 @@ MessageService.PHASE = {
     TYPING = "typing",
 }
 
+-- 逐句上屏的段间隔对外公开：DevSelfTest 要靠它把时钟拨到下一句，主循环也可能要读。
+MessageService.SEGMENT_GAP_SECONDS = 2.5
+
 -- 相位时长（秒）。sent 与 typing 固定；waiting/queued 的长度取决于外部传入的计划。
 local SENT_SECONDS = 1.5
 local TYPING_SECONDS = 3.0
@@ -32,6 +42,11 @@ local TYPING_SECONDS = 3.0
 local MIN_REPLY_LEAD = math.floor(SENT_SECONDS + TYPING_SECONDS + 0.5)
 -- 她连续两条回复之间的最小间隔：后发的消息不得越过先发的消息
 local RESPONSE_GAP_SECONDS = 4
+-- 同一条回复里，上一句与下一句之间的间隔。复用 typing 相位，所以这个值同时决定
+-- 「正在输入」气泡停留多久；太短会像一次性刷出一整段，太长会让人以为她没在打。
+local SEGMENT_GAP_SECONDS = MessageService.SEGMENT_GAP_SECONDS
+-- 引用预览的字符数上限。裁过的文本才落盘，存档里不放第二条私聊原文。
+local QUOTE_PREVIEW_MAX = 24
 
 ---@class MsgEntry
 ---@field id integer
@@ -52,7 +67,13 @@ local RESPONSE_GAP_SECONDS = 4
 ---@field placeAtSend? string 送达时的地点（作息表事实，不是猜测）
 ---@field sceneIdAtSend? string 送达时的场景 id
 ---@field phraseAtSend? string 送达时作息表里的那句原话
+---@field quotedMessageId? integer 引用的消息 id（只可能是当前会话里的 user/her 消息）
+---@field quotedRole? string 被引用消息的角色
+---@field quotedTextPreview? string 被引用消息的裁剪预览，随存档走
 ---@field effReplyAtUtc? number 本轮实际交付时刻（补发时重排，不落盘）
+---@field streamSegments? string[] 还没上屏的短句（本轮运行时字段，不落盘）
+---@field streamIndex? integer 已经上屏到第几句
+---@field streamNextAtUtc? number 下一句的权威 UTC 秒（本轮运行时字段，不落盘）
 
 ---@type MsgEntry[]
 local messages_ = {}
@@ -68,6 +89,11 @@ local phase_ = MessageService.PHASE.IDLE
 local draft_ = ""
 ---@type integer 最近一条已排定的计划回复时刻（UTC 秒），用来挡住后发越序
 local lastPlannedAtUtc_ = 0
+--- 正在逐句上屏的回复。必须是列表而不是单条：前一条还剩几句没上屏时，
+--- 后一条消息也可能到点交付，单条槽位会被后一条覆盖，前一条剩下的句子就永远丢了。
+--- 这些回复都已经出队，所以放在这里不影响 queue_ 的 FIFO。
+---@type MsgEntry[]
+local streaming_ = {}
 
 ---@class MessageServiceHooks
 ---@field onPhaseChange? fun(phase: string, head: MsgEntry|nil): nil
@@ -244,11 +270,12 @@ function MessageService.Init(opts)
     nextId_ = 1
     version_ = 0
     lastPlannedAtUtc_ = 0
+    streaming_ = {}
     phase_ = MessageService.PHASE.IDLE
     draft_ = ""
     logInfo(string.format(
-        "初始化完成：FIFO 队列 · sent %.1fs + typing %.1fs + 间隔下限 %ds",
-        SENT_SECONDS, TYPING_SECONDS, RESPONSE_GAP_SECONDS))
+        "初始化完成：FIFO 队列 · sent %.1fs + typing %.1fs + 间隔下限 %ds · 多段间隔 %.1fs",
+        SENT_SECONDS, TYPING_SECONDS, RESPONSE_GAP_SECONDS, SEGMENT_GAP_SECONDS))
 end
 
 ---@param text string
@@ -324,6 +351,49 @@ end
 ---@field phrase? string
 ---@field factId? string
 ---@field factKey? string 送达时刻命中的事件实例（occurrenceKey），补回与重进都引用它
+---@field quote? QuoteRef 本条消息引用的那条（不成立时降级为普通消息，不拒绝发送）
+
+---@class QuoteRef 调用方声明的引用意图，id 指当前会话里的消息
+---@field id integer
+---@field role? string 仅供调用方自洽性检查，最终以查到的消息为准
+---@field text? string 仅供调用方展示，最终以查到的消息为准
+
+--- 引用校验：只认当前会话里真实存在的 user/her 消息。
+--- 任何一条不成立都返回 nil，让这条消息按普通消息发出去——引用是附加信息，
+--- 不该成为「发不出去」的理由（M2-A 规格：失效引用一律降级，不拒绝）。
+---@param quote QuoteRef|nil
+---@return { id: integer, role: string, text: string }|nil
+local function NormalizeQuote(quote)
+    if not quote then
+        return nil
+    end
+    local id = quote.id
+    if type(id) ~= "number" or id ~= math.floor(id) or id <= 0 then
+        return nil
+    end
+    local target
+    for i = 1, #messages_ do
+        if messages_[i].id == id then
+            target = messages_[i]
+            break
+        end
+    end
+    if not target then
+        return nil
+    end
+    if target.role ~= MessageService.ROLE.USER and target.role ~= MessageService.ROLE.HER then
+        return nil
+    end
+    local raw = (target.text or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    if raw == "" then
+        return nil
+    end
+    return {
+        id = target.id,
+        role = target.role,
+        text = ContentService.ClipPreview(raw, QUOTE_PREVIEW_MAX),
+    }
+end
 
 --- 发送一条用户消息：一律入队（M1 起不再拒绝），并当场算好计划回复时刻
 ---@param text string
@@ -359,6 +429,16 @@ function MessageService.Send(text, serverTime, clockText, ctx)
     entry.factId = ctx.factId
     entry.factKey = ctx.factKey
     entry.effReplyAtUtc = entry.planReplyAtUtc
+    local quote = NormalizeQuote(ctx.quote)
+    if ctx.quote and not quote then
+        logInfo(string.format("消息 #%d 的引用不成立（id 不在会话内 / 非 user|her / 内容为空），按普通消息发送",
+            entry.id))
+    end
+    if quote then
+        entry.quotedMessageId = quote.id
+        entry.quotedRole = quote.role
+        entry.quotedTextPreview = quote.text
+    end
     queue_[#queue_ + 1] = entry
 
     logInfo(string.format(
@@ -430,33 +510,6 @@ local function EffectiveReplyAt(head, now)
     return planned
 end
 
---- 推进状态机；由 main.lua 每帧调用，utcNow 为权威 UTC 秒（开发自检可注入）
----@param utcNow number
-function MessageService.Update(utcNow)
-    local head = queue_[1]
-    if not head then
-        return
-    end
-    local now = utcNow
-    head.effReplyAtUtc = EffectiveReplyAt(head, now)
-
-    local target
-    if now - head.serverTime < SENT_SECONDS then
-        target = MessageService.PHASE.SENT
-    elseif now >= head.effReplyAtUtc then
-        Deliver()
-        return
-    elseif head.effReplyAtUtc - now <= TYPING_SECONDS then
-        target = MessageService.PHASE.TYPING
-    elseif head.replyableAtSend then
-        target = MessageService.PHASE.WAITING
-    else
-        target = MessageService.PHASE.QUEUED
-    end
-    EmitPhase(target)
-    SyncQueueStates()
-end
-
 --- 开发预览用：立刻交付队首，走的是同一条生成 + 落库路径，不是伪造气泡。
 --- 队首若还排在不可回复窗口之后，这条日志会写明是开发入口越过了时间窗。
 function MessageService.Skip()
@@ -494,6 +547,114 @@ function MessageService.AppendReply(text, serverTime, factId, clockText, factKey
     return entry
 end
 
+--- 逐句上屏：第 1 句立刻落库（保持「到点即回复」的时序，不额外拖延），
+--- 其余短句按 SEGMENT_GAP_SECONDS 间隔追加进同一条 text。
+--- 走的是 Push + 版本号递增这条与 AppendReply 完全相同的路径，
+--- 所以 FIFO 计数、「一条回复一条记录」、存档字段都不变。
+--- 分段为空或只剩一句时退化成普通 AppendReply，不会卡住队列。
+---@param segments string[]
+---@param serverTime integer
+---@param factId string
+---@param clockText? string
+---@param factKey? string
+---@return MsgEntry|nil
+function MessageService.BeginReplyStream(segments, serverTime, factId, clockText, factKey)
+    ---@type string[]
+    local list = {}
+    ---@type string|nil
+    local head
+    for i = 1, #(segments or {}) do
+        local s = segments[i]
+        if type(s) == "string" and s:gsub("^%s+", ""):gsub("%s+$", "") ~= "" then
+            list[#list + 1] = s
+            head = head or s
+        end
+    end
+    if not head then
+        return nil
+    end
+    local entry = Push(MessageService.ROLE.HER, head, serverTime, clockText)
+    entry.factId = factId
+    entry.factKey = factKey
+    if #list == 1 then
+        logInfo(string.format("若夕回复 #%d fact=%s key=%s 单句，直接上屏",
+            entry.id, tostring(factId), tostring(factKey)))
+        return entry
+    end
+    entry.streamSegments = list
+    entry.streamIndex = 1
+    entry.streamNextAtUtc = serverTime + SEGMENT_GAP_SECONDS
+    streaming_[#streaming_ + 1] = entry
+    logInfo(string.format("若夕回复 #%d 分 %d 句，第 1 句已上屏，其余逐句追加",
+        entry.id, #list))
+    EmitPhase(MessageService.PHASE.TYPING)
+    return entry
+end
+
+--- 追加下一句。队列非空时整体停一拍：还有用户消息时相位归那条消息管，
+--- 否则句子流会把新消息的 sent 相位吞掉，看起来像刚发出去就已经在读回复。
+---@param now number
+local function AdvanceStreaming(now)
+    if queue_[1] or #streaming_ == 0 then
+        return
+    end
+    for i = #streaming_, 1, -1 do
+        local entry = streaming_[i]
+        local segments = entry.streamSegments or {}
+        local idx = (entry.streamIndex or 1) + 1
+        if idx > #segments then
+            entry.streamSegments = nil
+            entry.streamIndex = nil
+            entry.streamNextAtUtc = nil
+            table.remove(streaming_, i)
+            logInfo(string.format("回复 #%d 逐句上屏完成，共 %d 句", entry.id, #segments))
+        elseif now >= (entry.streamNextAtUtc or 0) then
+            entry.text = entry.text .. segments[idx]
+            entry.streamIndex = idx
+            entry.streamNextAtUtc = now + SEGMENT_GAP_SECONDS
+            version_ = version_ + 1
+            logInfo(string.format("回复 #%d 追加第 %d/%d 句", entry.id, idx, #segments))
+            EmitPhase(MessageService.PHASE.TYPING)
+        end
+    end
+    -- 句子全部上屏、手上也没有待回消息时才回到空闲相位
+    if #streaming_ == 0 and phase_ == MessageService.PHASE.TYPING then
+        phase_ = MessageService.PHASE.IDLE
+        if hooks_.onPhaseChange then
+            hooks_.onPhaseChange(phase_, nil)
+        end
+    end
+end
+
+--- 推进状态机；由 main.lua 每帧调用，utcNow 为权威 UTC 秒（开发自检可注入）
+---@param utcNow number
+function MessageService.Update(utcNow)
+    local now = utcNow
+    local head = queue_[1]
+    if head then
+        head.effReplyAtUtc = EffectiveReplyAt(head, now)
+
+        if now - head.serverTime < SENT_SECONDS then
+            EmitPhase(MessageService.PHASE.SENT)
+        elseif now >= head.effReplyAtUtc then
+            -- 这里不能 return：同一帧可能刚开始逐句上屏，得让它接着往下走一拍
+            Deliver()
+        else
+            local target
+            if head.effReplyAtUtc - now <= TYPING_SECONDS then
+                target = MessageService.PHASE.TYPING
+            elseif head.replyableAtSend then
+                target = MessageService.PHASE.WAITING
+            else
+                target = MessageService.PHASE.QUEUED
+            end
+            EmitPhase(target)
+        end
+        SyncQueueStates()
+    end
+    AdvanceStreaming(now)
+end
+
 --- 由 MemoryService 读回的存档重建消息数组与队列（重进不丢记录、不丢排队）
 ---@param entries MsgEntry[]
 ---@return integer restored 恢复的待回复条数
@@ -502,6 +663,7 @@ function MessageService.Restore(entries)
     queue_ = {}
     nextId_ = 1
     lastPlannedAtUtc_ = 0
+    streaming_ = {}
     for i = 1, #entries do
         local entry = entries[i]
         messages_[#messages_ + 1] = entry
@@ -536,6 +698,7 @@ function MessageService.Reset()
     version_ = 0
     nextId_ = 1
     lastPlannedAtUtc_ = 0
+    streaming_ = {}
     phase_ = MessageService.PHASE.IDLE
     draft_ = ""
 end

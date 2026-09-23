@@ -6,7 +6,13 @@
 --   * 场景 I：固定 01:30 / 14:30 / 19:45 三个当地钟点，断言事件实例 id、occurrenceKey、
 --     sceneId、生命周期（upcoming/ongoing/ended）、同日重算的可复现性、下一日期才出新实例；
 --   * 场景 J：断言三个钟点的回复出自各自模板分支、排队补回把已结束事件说成「几点收的」，
---     以及落盘重进后计划来自存档（fromSave=true、生成时刻未变）且实例键不变。
+--     以及落盘重进后计划来自存档（fromSave=true、生成时刻未变）且实例键不变；
+--   * 场景 K/L：引用她自己的消息、引用自己更早的消息，引用字段与回指句都要出现；
+--   * 场景 M：四类失效引用（id 不在本次会话 / 系统消息 / id 非正整数 / 空内容）
+--     一律降级为普通消息——照常发送、不带引用字段、回复里不出回指句；
+--   * 场景 N/O：引用跨过忙碌与睡眠两个排队窗口不丢，排队气泡只写「已送达 / 排队」；
+--   * 场景 P：多段回复按序追加，一次回复仍然只有一条记录，上屏完成后相位回空闲；
+--   * 场景 Q：逐句上屏期间后发消息照常入队，FIFO 与「一对一回复」都不被卡住。
 -- 不 mock 任何被测服务，也不依赖被测服务没有的能力：
 --   * 时间用 TimeState.DevClockOffset 投影（权威时间源不变，只是把 now 拨到某个当地整点）；
 --   * 推进用 MessageService.Update(utcNow) 这个正式入口；
@@ -26,11 +32,13 @@ local DevSelfTest = {}
 local TAG = "[DevSelfTest]"
 local SELFTEST_SAVE = "memory/m1-selftest-la.json"
 local STEP_SECONDS = 1
+-- 逐句上屏的段间隔取 MessageService 的公开常量，自检里不再复制一份秒数
+local SEGMENT_GAP_SECONDS = MessageService.SEGMENT_GAP_SECONDS
 
 ---@class DevSelfTestOptions
 ---@field cityId string
 ---@field idleWaitSeconds number
----@field makeSendContext fun(snap: TimeSnapshot): SendContext
+---@field makeSendContext fun(snap: TimeSnapshot, quote?: QuoteRef): SendContext
 ---@field reinit fun(saveFile: string|nil)
 
 ---@type string
@@ -38,7 +46,7 @@ local cityId_ = "los_angeles"
 ---@type number
 local idleWait_ = 10
 -- 未赋值的函数槽按 AGENTS 规则 #11 标注类型源头，调用点才有推导
----@type fun(snap: TimeSnapshot): SendContext
+---@type fun(snap: TimeSnapshot, quote?: QuoteRef): SendContext
 local makeSendContext_
 ---@type fun(saveFile: string|nil)
 local reinit_
@@ -56,7 +64,7 @@ local bad_ = {}
 local summary_ = "自检未运行"
 
 --- Run 里 runScenario 的调用条数；结论行拿它判断「有没有场景被整批日志丢掉」
-local SCENARIO_TOTAL = 10
+local SCENARIO_TOTAL = 17
 
 local function logInfo(msg)
     print(TAG .. " " .. msg)
@@ -110,11 +118,14 @@ local function goLocalHour(hour, dateKey, minute)
     return TimeState.Snapshot(cityId_, TimeState.NowUtc())
 end
 
+--- 走与界面完全同一条入口：上下文由 main.lua 的 MakeSendContext 造，引用意图作为
+--- 第二个参数交给它。自检不另开旁路，失效引用的降级才会和真机一致。
 ---@param text string
+---@param quote? QuoteRef
 ---@return MsgEntry|nil
-local function sendNow(text)
+local function sendNow(text, quote)
     local snap = TimeState.Snapshot(cityId_, TimeState.NowUtc())
-    return MessageService.Send(text, snap.utcSec, snap.clock, makeSendContext_(snap))
+    return MessageService.Send(text, snap.utcSec, snap.clock, makeSendContext_(snap, quote))
 end
 
 --- 按 STEP_SECONDS 步进推进真实状态机；每一帧都走主循环同一个入口
@@ -721,6 +732,296 @@ local function ScenarioEventReentry(dateKey)
             commuteFact.eventStartUtc, commuteFact.eventEndUtc, commuteFact.eventPhrase))
 end
 
+-- ---------------------------------------------------------------------------
+-- 场景 K：引用她自己的消息 —— 回指句必须出现在回复里，且不许替被引用内容编事实
+-- 注意原文选得比「主干句回显」的 12 字裁剪线长：这样主干里那句「用户原文回显」
+-- 必然被裁成「…」，只有回指句能带上完整预览，两条断言不会互相冒充。
+-- ---------------------------------------------------------------------------
+local function ScenarioQuoteHer(dateKey)
+    logInfo("场景 K 引用若夕的消息（空闲档）")
+    beginScenario()
+    goLocalHour(19, dateKey, 45)
+
+    sendNow("今晚店里人多吗？")
+    local opens = herReplyCount()
+    advance(idleWait_ + 20)
+    local first = lastHerReply()
+    check("K0 先有一条她的回复可引", first ~= nil and herReplyCount() == opens + 1,
+        TextOf(first and first.text))
+    local preview = first and ContentService.ClipPreview(first.text, 24) or ""
+    check("K1 预览按字符数裁过且没有变长", first ~= nil and preview ~= ""
+        and #preview <= #TextOf(first.text),
+        string.format("预览 %d 字 / 原文 %d 字", #preview, #TextOf(first and first.text)))
+
+    local quoted = sendNow("嗯。", { id = first.id, role = "her", text = first.text })
+    check("K2 引用字段落在新消息上且内容以查到的为准", quoted ~= nil
+        and quoted.quotedMessageId == first.id and quoted.quotedRole == MessageService.ROLE.HER
+        and quoted.quotedTextPreview == preview,
+        string.format("id=%s role=%s 预览 %d 字", tostring(quoted and quoted.quotedMessageId),
+            tostring(quoted and quoted.quotedRole), #TextOf(quoted and quoted.quotedTextPreview)))
+
+    advance(idleWait_ + 20)
+    local reply = lastHerReply()
+    local text = TextOf(reply and reply.text)
+    check("K3 回复里带上被引用那句的完整预览", preview ~= "" and text:find(preview, 1, true) ~= nil,
+        string.format("期望含=%s 实际=%s", preview, text))
+    check("K4 回指句只认下那句话，不做事实断言",
+        text:find("我看见了") ~= nil or text:find("这句我记下了") ~= nil, text)
+end
+
+-- ---------------------------------------------------------------------------
+-- 场景 L：引用自己更早发的一句 —— 引用不得影响入队与 FIFO
+-- ---------------------------------------------------------------------------
+local function ScenarioQuoteSelf(dateKey)
+    logInfo("场景 L 引用自己的消息（空闲档）")
+    beginScenario()
+    goLocalHour(19, dateKey, 45)
+
+    local first = sendNow("今晚店里人多吗？")
+    local preview = first and ContentService.ClipPreview(first.text, 24) or ""
+    check("L0 第一条已发出并入队", first ~= nil and MessageService.GetQueueLength() == 1,
+        TextOf(first and first.text))
+
+    local second = sendNow("对了还有一句。", { id = first.id, role = "user", text = first.text })
+    check("L1 引用自己那条也成立", second ~= nil and second.quotedMessageId == first.id
+        and second.quotedRole == MessageService.ROLE.USER and second.quotedTextPreview == preview,
+        string.format("id=%s role=%s 预览 %d 字", tostring(second and second.quotedMessageId),
+            tostring(second and second.quotedRole), #TextOf(second and second.quotedTextPreview)))
+    check("L2 两条都在队列里，引用不影响入队", MessageService.GetQueueLength() == 2)
+
+    local markIndex = #MessageService.GetMessages()
+    advance(idleWait_ * 2 + 20)
+    local replies = herRepliesAfter(markIndex)
+    check("L3 两条都回了，顺序与发送一致", MessageService.GetQueueLength() == 0 and #replies == 2,
+        string.format("回复 %d 条 队列 %d 条", #replies, MessageService.GetQueueLength()))
+    check("L4 第二条的回复里带着被引用那句", preview ~= ""
+        and TextOf(replies[2] and replies[2].text):find(preview, 1, true) ~= nil,
+        TextOf(replies[2] and replies[2].text))
+end
+
+-- ---------------------------------------------------------------------------
+-- 场景 M：失效引用一律降级为普通消息 —— 照常发送、不带引用字段、回复不出回指句
+-- 覆盖四类真实现场：id 不在本次会话（重进后旧 id）、引用系统消息、id 不是正整数、
+-- 以及只有脏存档才造得出的空内容记录。
+-- ---------------------------------------------------------------------------
+local function ScenarioInvalidQuote(dateKey)
+    logInfo("场景 M 失效引用一律降级为普通消息")
+    beginScenario()
+    goLocalHour(19, dateKey, 45)
+
+    local sys = MessageService.AddSystem("系统消息不能被引用",
+        math.floor(TimeState.NowUtc()), TimeState.Snapshot(cityId_, TimeState.NowUtc()).clock)
+    ---@type { id: any, role: string, text: string }[]
+    local badQuotes = {
+        { id = 999999, role = "user", text = "不在本次会话里" },
+        { id = sys.id, role = "user", text = "系统消息" },
+        { id = 0, role = "user", text = "零" },
+        { id = -5, role = "user", text = "负数" },
+        { id = 1.5, role = "user", text = "非整数" },
+        { id = "1", role = "user", text = "字符串 id" },
+    }
+    for i = 1, #badQuotes do
+        local msg = sendNow(string.format("失效引用第 %d 条。", i), badQuotes[i])
+        check(string.format("M%d 失效引用仍照常发送且不带引用字段（%s）", i - 1, badQuotes[i].text),
+            msg ~= nil and msg.quotedMessageId == nil and msg.quotedRole == nil
+            and msg.quotedTextPreview == nil,
+            string.format("quotedMessageId=%s", tostring(msg and msg.quotedMessageId)))
+    end
+    check("M6 六条全部入队，没有一条被拒绝",
+        MessageService.GetQueueLength() == #badQuotes,
+        string.format("队列 %d 条", MessageService.GetQueueLength()))
+
+    -- 空内容：正常入口发不出空消息，只有脏存档里才会有这种 user/her 记录。
+    -- 用 Restore 造一条 state=replied 的，它不进队列，不影响上面的时序判定。
+    beginScenario()
+    goLocalHour(19, dateKey, 45)
+    local blankAt = math.floor(TimeState.NowUtc())
+    MessageService.Restore({
+        { id = 9001, role = "user", text = "   ", serverTime = blankAt,
+          state = "replied", statusText = "", clockText = "" },
+    })
+    local blank = sendNow("这条引用一条空内容。", { id = 9001, role = "user", text = "   " })
+    check("M7 引用空内容同样降级", blank ~= nil and blank.quotedMessageId == nil,
+        string.format("quotedMessageId=%s", tostring(blank and blank.quotedMessageId)))
+
+    advance(idleWait_ + 20)
+    local text = TextOf(lastHerReply() and lastHerReply().text)
+    check("M8 降级后的回复里没有回指句", text:find("我看见了") == nil
+        and text:find("这句我记下了") == nil, text)
+end
+
+-- ---------------------------------------------------------------------------
+-- 场景 N：忙碌排队中的引用 —— 排队不丢引用，状态只写「已送达 / 排队」，绝不写「已读」
+-- 回复要落在空闲档：碎片档走短句池、不带回指句，所以补回时把钟拨到 19:45。
+-- ---------------------------------------------------------------------------
+local function ScenarioQuoteBusyQueue(dateKey)
+    logInfo("场景 N 忙碌排队中的引用与状态文案")
+    beginScenario()
+    local snap = goLocalHour(14, dateKey, 30)
+    check("N0 忙碌档不可即时回复", snap.availability == "busy" and snap.replyable == false,
+        string.format("availability=%s replyable=%s",
+            tostring(snap.availability), tostring(snap.replyable)))
+
+    local first = sendNow("下午在忙什么？")
+    local preview = first and ContentService.ClipPreview(first.text, 24) or ""
+    local queued = sendNow("那先排队吧。", { id = first.id, role = "user", text = first.text })
+    check("N1 忙碌中两条都排队且引用不丢", MessageService.GetQueueLength() == 2
+        and queued ~= nil and queued.quotedMessageId == first.id
+        and queued.quotedTextPreview == preview,
+        string.format("队列 %d 条 quoted=%s", MessageService.GetQueueLength(),
+            tostring(queued and queued.quotedMessageId)))
+
+    advance(30)
+    local status = StatusOf(head())
+    check("N2 忙碌排队只写已送达与排队，绝不写已读",
+        status:find("已送达") ~= nil and status:find("已读") == nil, status)
+
+    local markIndex = #MessageService.GetMessages()
+    goLocalHour(19, dateKey, 45)
+    advance(idleWait_ + 40)
+    local replies = herRepliesAfter(markIndex)
+    check("N3 空闲档按 FIFO 补回两条", MessageService.GetQueueLength() == 0 and #replies == 2,
+        string.format("回复 %d 条 队列 %d 条", #replies, MessageService.GetQueueLength()))
+    check("N4 补回的回复里带上被引用那句", preview ~= ""
+        and TextOf(replies[2] and replies[2].text):find(preview, 1, true) ~= nil,
+        TextOf(replies[2] and replies[2].text))
+end
+
+-- ---------------------------------------------------------------------------
+-- 场景 O：睡眠排队中的引用 —— 跨过整个睡眠窗口，引用与 FIFO 都不许丢
+-- ---------------------------------------------------------------------------
+local function ScenarioQuoteSleepQueue(dateKey)
+    logInfo("场景 O 睡眠排队中的引用与 FIFO")
+    beginScenario()
+    local snap = goLocalHour(3, dateKey)
+    check("O0 睡眠档不可即时回复", snap.availability == "offline" and snap.replyable == false,
+        string.format("availability=%s replyable=%s",
+            tostring(snap.availability), tostring(snap.replyable)))
+
+    local first = sendNow("睡了吗？")
+    local preview = first and ContentService.ClipPreview(first.text, 24) or ""
+    local second = sendNow("那我也排着。", { id = first.id, role = "user", text = first.text })
+    check("O1 睡眠中两条都排队且引用不丢", MessageService.GetQueueLength() == 2
+        and second ~= nil and second.quotedMessageId == first.id
+        and second.quotedTextPreview == preview,
+        string.format("队列 %d 条 quoted=%s", MessageService.GetQueueLength(),
+            tostring(second and second.quotedMessageId)))
+
+    advance(60)
+    local status = StatusOf(head())
+    check("O2 睡眠排队只写已送达与排队，绝不写已读",
+        status:find("已送达") ~= nil and status:find("已读") == nil, status)
+
+    local markIndex = #MessageService.GetMessages()
+    goLocalHour(7, dateKey)
+    advance(90)
+    local replies = herRepliesAfter(markIndex)
+    check("O3 醒来后按 FIFO 补回两条", MessageService.GetQueueLength() == 0 and #replies == 2,
+        string.format("回复 %d 条 队列 %d 条", #replies, MessageService.GetQueueLength()))
+    check("O4 两条回复的顺序与发送顺序一致", #replies == 2
+        and TextOf(replies[1] and replies[1].text):find("睡了吗", 1, true) ~= nil
+        and TextOf(replies[2] and replies[2].text):find("那我也排着", 1, true) ~= nil,
+        string.format("一=%s 二=%s", TextOf(replies[1] and replies[1].text),
+            TextOf(replies[2] and replies[2].text)))
+    check("O5 第二条的回复仍带着被引用那句", preview ~= ""
+        and TextOf(replies[2] and replies[2].text):find(preview, 1, true) ~= nil,
+        TextOf(replies[2] and replies[2].text))
+end
+
+-- ---------------------------------------------------------------------------
+-- 场景 P：逐句上屏的顺序 —— 一次回复仍然只有一条记录，句子按序追加、可中途停在半句
+-- 不断言每句的绝对文本，只断「新文本以旧文本开头」+「长度严格变长」：
+-- 这样既证明了追加顺序，又不把 ContentService 的分句规则焊死在自检里。
+-- ---------------------------------------------------------------------------
+local function ScenarioSegmentOrder(dateKey)
+    logInfo("场景 P 多段回复逐句上屏的顺序")
+    beginScenario()
+    goLocalHour(19, dateKey, 45)
+
+    sendNow("今晚店里天气怎么样？")
+    local opens = herReplyCount()
+    advance(idleWait_)
+    local reply = lastHerReply()
+    check("P0 到点先上屏第一句，且仍只有一条回复记录",
+        MessageService.GetQueueLength() == 0 and reply ~= nil and herReplyCount() == opens + 1,
+        TextOf(reply and reply.text))
+    local firstText = TextOf(reply and reply.text)
+    local segmentCount = #(reply and reply.streamSegments or {})
+    check("P1 这条回复被判成多段", reply ~= nil and segmentCount >= 2,
+        string.format("共 %d 句", segmentCount))
+
+    advance(1)
+    local stillFirst = TextOf(lastHerReply() and lastHerReply().text)
+    check("P2 段间隔内不追加", stillFirst == firstText, string.format("%d 字不变", #stillFirst))
+
+    advance(SEGMENT_GAP_SECONDS + 1)
+    local grown = TextOf(lastHerReply() and lastHerReply().text)
+    check("P3 间隔之后追加下一句", #grown > #firstText and grown:sub(1, #firstText) == firstText,
+        string.format("%d 字 → %d 字", #firstText, #grown))
+
+    advance(SEGMENT_GAP_SECONDS * segmentCount + 10)
+    local done = lastHerReply()
+    local finalText = TextOf(done and done.text)
+    check("P4 全部上屏后仍只有一条记录", herReplyCount() == opens + 1,
+        string.format("回复 %d 条 共 %d 字", herReplyCount() - opens, #finalText))
+    check("P5 追加只往后长，不会改写前面", finalText:sub(1, #firstText) == firstText,
+        string.format("末段 %d 字", #finalText))
+    check("P6 上屏完成后清掉逐句状态并回到空闲相位",
+        done ~= nil and done.streamSegments == nil and done.streamIndex == nil
+        and MessageService.GetPhase() == MessageService.PHASE.IDLE,
+        string.format("segments=%s index=%s 相位=%s",
+            tostring(done and done.streamSegments), tostring(done and done.streamIndex),
+            tostring(MessageService.GetPhase())))
+end
+
+-- ---------------------------------------------------------------------------
+-- 场景 Q：FIFO 与逐句上屏共存 —— 逐句不得卡住队列，后发不得越序，回复仍是一对一
+-- ---------------------------------------------------------------------------
+local function ScenarioStreamingFifo(dateKey)
+    logInfo("场景 Q 逐句上屏期间 FIFO 不被卡住")
+    beginScenario()
+    goLocalHour(19, dateKey, 45)
+    local markIndex = #MessageService.GetMessages()
+
+    sendNow("今晚店里天气怎么样？")
+    local opens = herReplyCount()
+    advance(idleWait_)
+    local firstReply = lastHerReply()
+    check("Q0 第一条已开始逐句上屏", firstReply ~= nil
+        and firstReply.streamSegments ~= nil and MessageService.GetQueueLength() == 0,
+        TextOf(firstReply and firstReply.text))
+    local firstLen = #TextOf(firstReply and firstReply.text)
+
+    -- 趁着第一句还在逐句上屏，立刻再发一条：它必须进队，相位不能被逐句吞掉
+    local second = sendNow("还想问一句。")
+    check("Q1 逐句进行中后发消息照常入队", second ~= nil
+        and MessageService.GetQueueLength() == 1 and second.state == MessageService.PHASE.SENT,
+        StatusOf(second))
+    check("Q2 逐句进行中相位是 sent，不是 typing",
+        MessageService.GetPhase() == MessageService.PHASE.SENT, MessageService.GetPhase())
+
+    advance(idleWait_ * 2 + 60)
+    local replies = herRepliesAfter(markIndex)
+    check("Q3 两条都回完且队列放空", MessageService.GetQueueLength() == 0
+        and herReplyCount() == opens + 2,
+        string.format("回复 %d 条 队列 %d 条", herReplyCount() - opens,
+            MessageService.GetQueueLength()))
+    check("Q4 逐句没有把队列卡死，两条回复都完整落库", #replies == 2
+        and TextOf(replies[1] and replies[1].text):find("今晚店里天气怎么样", 1, true) ~= nil
+        and TextOf(replies[2] and replies[2].text):find("还想问一句", 1, true) ~= nil,
+        string.format("一=%s 二=%s", TextOf(replies[1] and replies[1].text),
+            TextOf(replies[2] and replies[2].text)))
+    -- 关键回归：第一条还剩几句没上屏时第二条就到点交付，先上屏的那条不能把剩下的句子丢掉
+    check("Q5 第一条被中途打断的逐句仍然补完了", firstLen > 0
+        and #TextOf(replies[1] and replies[1].text) > firstLen
+        and replies[1] ~= nil and replies[1].streamSegments == nil,
+        string.format("%d 字 → %d 字", firstLen, #TextOf(replies[1] and replies[1].text)))
+    check("Q6 逐句状态在上屏完成后清空",
+        lastHerReply() ~= nil and lastHerReply().streamSegments == nil
+        and MessageService.GetPhase() == MessageService.PHASE.IDLE,
+        tostring(MessageService.GetPhase()))
+end
+
 --- 一个场景独立跑完再进下一个，并落一行「本场景判定几条」。
 --- 2026-09-22 云端实测：开机那一瞬的突发日志会被管道整批丢掉（suite 只剩 PASS A0…A6，
 --- 同批的 开场事件 / M1 已就绪 一起缺席），而调用点本来就有 pcall，所以不是断言抛出吞掉后续场景。
@@ -799,6 +1100,15 @@ function DevSelfTest.Run(options)
     runScenario("J", ScenarioEventReentry, dateKey)
     runScenario("G", ScenarioAwaySummaryRule, dateKey)
     runScenario("H", ScenarioAwaySummary, dateKey)
+    -- 引用与多段式回复：K/L 走正常引用，M 走四类失效降级，N/O 让引用跨过排队窗口，
+    -- P 验逐句顺序，Q 验逐句与 FIFO 共存
+    runScenario("K", ScenarioQuoteHer, dateKey)
+    runScenario("L", ScenarioQuoteSelf, dateKey)
+    runScenario("M", ScenarioInvalidQuote, dateKey)
+    runScenario("N", ScenarioQuoteBusyQueue, dateKey)
+    runScenario("O", ScenarioQuoteSleepQueue, dateKey)
+    runScenario("P", ScenarioSegmentOrder, dateKey)
+    runScenario("Q", ScenarioStreamingFifo, dateKey)
 
     MemoryService.ClearSavedData()
     summary_ = string.format("自检结论 通过=%d 失败=%d 场景=%d/%d[%s]",
