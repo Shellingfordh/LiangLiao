@@ -63,6 +63,10 @@ local usingPlaceholderCharacter_ = false
 local modelError_ = ""
 ---@type string
 local backgroundError_ = ""
+--- 角色漫反射贴图单独一个槽位：bindCharacterMaterial 是在 tryLoadPrefab/tryLoadModelFile
+--- 里调的，那两条路随后都会把 modelError_ 清空，写进去会被覆盖；贴图失败要单独上屏。
+---@type string
+local characterTextureError_ = ""
 
 ---@type fun()|nil
 local noticesChanged_ = nil
@@ -80,6 +84,84 @@ end
 local function logWarn(msg)
     print(TAG .. " WARN: " .. msg)
     log:Write(LOG_WARNING, TAG .. " " .. msg)
+end
+
+--- 开机那一瞬的整批日志会被日志管道丢掉（2026-09-22 实测：自检只上来 PASS A0…A6，
+--- 同批的尾巴连同 StatusWindow.Init 的资源检查/模型加载/光照分支全部没落盘）。
+--- 这里把初始化事实额外缓冲一份，由本模块自己订阅 Update 在之后几个真实帧里原样重发，
+--- 与 main.lua 里自检结论的重发是同一套办法。异步贴图回填的落点也走这个槽位，
+--- 所以每次重发都要重读，不能缓存成定值。
+---@type string[]
+local bootTrace_ = {}
+---@type string
+local textureState_ = "未开始"
+---@type table|nil
+local bootEcho_ = nil
+
+---@param msg string
+---@param level number|nil
+local function trace(msg, level)
+    bootTrace_[#bootTrace_ + 1] = msg
+    if (level or LOG_INFO) == LOG_ERROR then
+        print(TAG .. " ERROR: " .. msg)
+    elseif level == LOG_WARNING then
+        print(TAG .. " WARN: " .. msg)
+    else
+        print(TAG .. " " .. msg)
+    end
+    log:Write(level or LOG_INFO, TAG .. " " .. msg)
+end
+
+--- 状态窗开机 trace + 漫反射贴图当前落点。日志整批丢时靠它读数。
+---@return string
+function StatusWindow.GetBootTrace()
+    return table.concat(bootTrace_, " | ") .. " | 漫反射=" .. textureState_
+end
+
+---@type fun(eventType: string, eventData: UpdateEventData)|nil
+local bootEchoHandler_ = nil
+---@type boolean
+local bootEchoSubscribed_ = false
+
+--- 全局订阅形式的回调签名是 (eventType, eventData)，与 main.lua 的 HandleUpdate 一致。
+---@param eventType string
+---@param eventData UpdateEventData
+local function HandleBootEchoUpdate(eventType, eventData)
+    -- eventData 一并兜住：这是每帧回调，一旦取不到 TimeStep 就会每帧抛一次 nil 索引，
+    -- 把正要救回来的日志又淹掉。
+    if not bootEcho_ or bootEcho_.left <= 0 or not eventData then
+        return
+    end
+    bootEcho_.elapsed = bootEcho_.elapsed + eventData["TimeStep"]:GetFloat()
+    if bootEcho_.elapsed < 4 then
+        return
+    end
+    bootEcho_.elapsed = 0
+    bootEcho_.left = bootEcho_.left - 1
+    logInfo("[状态窗开机] " .. StatusWindow.GetBootTrace()
+        .. string.format(" 重发%d/3", 3 - bootEcho_.left))
+    if bootEcho_.left <= 0 then
+        bootEcho_ = nil
+    end
+end
+
+--- 启动开机 trace 重发。由 StatusWindow.Init 末尾调用。
+--- 与 main.lua 的自检结论重发一样只退订自己这一轮的 bootEcho_、不反订阅 Update：
+--- 全局 UnsubscribeFromEvent 只有 (eventName) 一种签名，按名退订会把 main.lua 的
+--- HandleUpdate 一起收掉，所以这里让回调自己退休（left 归零后每次进来直接 return）。
+---@param left number 重发次数
+local function startBootEcho(left)
+    bootEcho_ = { left = left, elapsed = 0 }
+    if not bootEchoSubscribed_ then
+        bootEchoHandler_ = HandleBootEchoUpdate
+        SubscribeToEvent("Update", bootEchoHandler_)
+        bootEchoSubscribed_ = true
+    end
+end
+
+--- 取消尚未发完的开机 trace 重发。由 StatusWindow.Shutdown 调用。
+local function stopBootEcho()
+    bootEcho_ = nil
 end
 
 ---@param path string
@@ -223,9 +305,36 @@ local function createLighting(scene)
             zone.fogStart = 40.0
             zone.fogEnd = 120.0
         end
-        logInfo("已加载 LightGroup 预设（黄昏/白天）")
+        trace("光照=LightGroup 预设")
     else
-        logWarn("未找到 LightGroup 预设，使用备用方向光")
+        trace("光照=备用方向光（LightGroup/Dusk.xml 与 Daytime.xml 都不存在）", LOG_WARNING)
+        -- LightGroup 不存在时场景里就没有 Zone，而 Zone 默认 ambientSource 是 AMBIENT_PREBAKED：
+        -- 那种模式下着色器会把 cAmbientColor 硬清零（engine-docs/recipes/rendering.md），
+        -- zone.ambientColor 是空操作。必须显式切到 AMBIENT_COLOR，环境光才真正进得去。
+        -- AMBIENT_COLOR 下漫反射强度固定为 1.0，亮度只由 ambientColor 本身决定。
+        -- 没有这一段时全场景只有两盏硬光，背光面直接纯黑——就是真机上「光影不太好」那一项。
+        -- 已经有一个 Zone 就改它，别另建一个：新建 Zone 默认 priority=0，
+        -- 会顶掉已有那一档（含它的 IBL / SH / Bloom / 雾）。
+        ---@type Zone|nil
+        local zone = (scene:GetComponent("Zone", true) --[[@as Zone|nil]])
+        if not zone then
+            local zoneNode = scene:CreateChild("Zone")
+            zone = (zoneNode:CreateComponent("Zone") --[[@as Zone]])
+            -- boundingBox 必设且要罩住场景，否则这一档照不到角色
+            zone:SetBoundingBox(BoundingBox(Vector3(-8.0, -1.0, -8.0), Vector3(8.0, 8.0, 8.0)))
+            zone.priority = 0
+        end
+        zone.ambientSource = AMBIENT_COLOR
+        -- 室内暖黄为主、掺一点冷调当天光：背光面有层次而不是死黑
+        zone.ambientColor = Color(0.30, 0.27, 0.24)
+        zone.fogColor = Color(0.16, 0.15, 0.16)
+        -- 近景状态窗：与 LightGroup 分支同一组雾距
+        zone.fogStart = 40.0
+        zone.fogEnd = 120.0
+        -- 实际生效值打出来：真机上如果「光影不太好」仍在，这一行决定是改数值还是改别处
+        trace(string.format("环境光=AMBIENT_COLOR rgb=%.2f,%.2f,%.2f 雾=%.0f-%.0f",
+            zone.ambientColor.r, zone.ambientColor.g, zone.ambientColor.b,
+            zone.fogStart, zone.fogEnd))
         local sunNode = scene:CreateChild("Sun")
         sunNode.direction = Vector3(0.4, -0.7, 0.5)
         local sun = sunNode:CreateComponent("Light")
@@ -280,36 +389,65 @@ end
 local function bindCharacterMaterial(node)
     local mat = cache:GetResource("Material", MATERIAL_PATH)
     if not mat then
-        logError("角色材质加载失败: " .. MATERIAL_PATH)
+        trace("角色材质加载失败: " .. MATERIAL_PATH, LOG_ERROR)
         return
     end
     local animated = node:GetComponent("AnimatedModel", true)
     local staticModel = node:GetComponent("StaticModel", true)
     local drawable = animated or staticModel
     if not drawable then
-        logWarn("绑定材质时未找到 StaticModel/AnimatedModel")
+        trace("绑定材质时未找到 StaticModel/AnimatedModel", LOG_WARNING)
         return
     end
     drawable:SetMaterial(mat)
     drawable.castShadows = false
-    logInfo("已绑定角色漫反射材质: " .. MATERIAL_PATH)
+    trace("已绑定角色漫反射材质: " .. MATERIAL_PATH)
 
-    -- 角色漫反射贴图是 DWP 资源：设备冷启动时材质内引用可能是占位（角色偏黑）。
-    -- 显式异步补载并在就绪后回填到材质贴图槽 + 重渲染，仅涉及“加载”，不改 Technique/法线等 M0-1 内容。
-    cache:GetResourceAsync("Texture2D", CHARACTER_DIFFUSE_TEXTURE, function(resource)
-        local tex = resource and (resource --[[@as Texture2D]]) or nil
-        if not tex then
-            logWarn("角色漫反射贴图异步加载失败: " .. CHARACTER_DIFFUSE_TEXTURE)
-            return
+    ---@param tex Texture2D|nil
+    ---@return boolean
+    local function applyDiffuse(tex)
+        if tex then
+            mat:SetTexture(TU_DIFFUSE, tex)
+            if surface_ then
+                surface_:QueueUpdate()
+            end
         end
-        mat:SetTexture(TU_DIFFUSE, tex)
-        logInfo("已回填角色漫反射贴图: " .. CHARACTER_DIFFUSE_TEXTURE)
-        if surface_ then
-            surface_:QueueUpdate()
-        end
+        -- 失败也照样回调：这一句提示得让主界面的 errorLabel 亮起来，不能只在日志里
         if noticesChanged_ then
             noticesChanged_()
         end
+        return tex ~= nil
+    end
+
+    -- 与背景的 PrepareBackground 对齐：先走 cache:Exists 快路，文件已在本地就同步取、
+    -- 立刻回填，完全不进异步竞态。之前只有异步一条路，且失败只 logWarn 就 return——
+    -- 若设备冷启动时 GetResourceAsync 干脆不回调，角色就整会话静默黑着、屏幕上没有任何提示。
+    -- 仅涉及“加载”，不改 Technique/法线等 M0-1 内容。
+    local syncTex = resourceExists(CHARACTER_DIFFUSE_TEXTURE)
+        and (cache:GetResource("Texture2D", CHARACTER_DIFFUSE_TEXTURE) --[[@as Texture2D|nil]])
+        or nil
+    if applyDiffuse(syncTex) then
+        textureState_ = "已回填"
+        characterTextureError_ = ""
+        trace("角色漫反射贴图已在本地，同步回填: " .. CHARACTER_DIFFUSE_TEXTURE)
+        return
+    end
+
+    -- 快路没拿到（DWP 里登记了但还没加载完）就退回异步：这里不报错，
+    -- 报错只留给异步也失败那一次，避免把“还没加载完”误判成资产缺失。
+    textureState_ = "异步等待中"
+    cache:GetResourceAsync("Texture2D", CHARACTER_DIFFUSE_TEXTURE, function(resource)
+        local tex = resource and (resource --[[@as Texture2D]]) or nil
+        if not applyDiffuse(tex) then
+            textureState_ = "异步失败"
+            characterTextureError_ = "角色贴图 " .. CHARACTER_DIFFUSE_TEXTURE
+                .. " 下载失败，人物可能发黑。"
+            trace(characterTextureError_, LOG_WARNING)
+            return
+        end
+        textureState_ = "已回填"
+        characterTextureError_ = ""
+        trace("已回填角色漫反射贴图: " .. CHARACTER_DIFFUSE_TEXTURE)
     end)
 end
 
@@ -321,7 +459,7 @@ local function tryLoadModelFile(mdlPath)
     end
     local model = cache:GetResource("Model", mdlPath)
     if not model then
-        logError("GetResource(Model) 失败: " .. mdlPath)
+        trace("GetResource(Model) 失败: " .. mdlPath, LOG_ERROR)
         return false
     end
 
@@ -335,10 +473,10 @@ local function tryLoadModelFile(mdlPath)
     local drawable
     if boneCount > 0 then
         drawable = characterRoot_:CreateComponent("AnimatedModel")
-        logInfo("模型含骨骼 (" .. tostring(boneCount) .. ")，使用 AnimatedModel 静态站姿（M0-0 不播动画）")
+        trace("模型骨骼=" .. tostring(boneCount) .. "，使用 AnimatedModel")
     else
         drawable = characterRoot_:CreateComponent("StaticModel")
-        logInfo("模型无骨骼，使用 StaticModel")
+        trace("模型骨骼=0，使用 StaticModel")
     end
     drawable:SetModel(model)
     -- 远景移出 3D 场景后场景里没有任何投影接收面，投影贴图白算一遭；真机要帧率
@@ -355,15 +493,15 @@ local function tryLoadPrefab(prefabPath)
     end
     local prefabFile = cache:GetResource("XMLFile", prefabPath)
     if not prefabFile then
-        logError("GetResource(XMLFile) 失败: " .. prefabPath)
+        trace("GetResource(XMLFile) 失败: " .. prefabPath, LOG_ERROR)
         return false
     end
     local ok = characterRoot_:LoadXML(prefabFile:GetRoot())
     if not ok then
-        logError("LoadXML 预制体失败: " .. prefabPath)
+        trace("LoadXML 预制体失败: " .. prefabPath, LOG_ERROR)
         return false
     end
-    logInfo("已加载角色预制体: " .. prefabPath)
+    trace("已加载角色预制体: " .. prefabPath)
     bindCharacterMaterial(characterRoot_)
     return true
 end
@@ -467,8 +605,8 @@ local function loadCharacter()
     local mdlPath = findFirstExisting(MODEL_CANDIDATES)
     local glbExists = resourceExists(GLB_PATH)
 
-    logInfo("资源检查 GLB=" .. tostring(glbExists) .. " path=" .. GLB_PATH)
-    logInfo("资源检查 prefab=" .. tostring(prefabPath) .. " mdl=" .. tostring(mdlPath))
+    trace("资源检查 GLB=" .. tostring(glbExists) .. " path=" .. GLB_PATH)
+    trace("资源检查 prefab=" .. tostring(prefabPath) .. " mdl=" .. tostring(mdlPath))
 
     local loaded = false
     if prefabPath then
@@ -491,7 +629,7 @@ local function loadCharacter()
         modelLoaded_ = true
         usingPlaceholderCharacter_ = false
         normalizeCharacterScale()
-        logInfo("若夕 3D 模型加载成功")
+        trace("若夕 3D 模型加载成功")
     else
         modelLoaded_ = false
         if glbExists then
@@ -499,7 +637,7 @@ local function loadCharacter()
         else
             modelError_ = "未找到角色模型。请将最终 GLB 放到 assets/models/characters/lin-ruoxi/lin-ruoxi.glb，并导入为 Meshes/lin-ruoxi.mdl。"
         end
-        logError(modelError_)
+        trace(modelError_, LOG_ERROR)
         createPlaceholderCharacter(characterRoot_)
     end
 end
@@ -669,6 +807,8 @@ function StatusWindow.Init()
     createRenderTarget()
     -- 状态窗 RenderTarget 走 NanoVG 采样，关闭 HDR 避免贴图被当成乱码 atlas
     renderer.hdrRendering = false
+
+    startBootEcho(3)
 end
 
 function StatusWindow.IsModelLoaded()
@@ -679,7 +819,13 @@ function StatusWindow.IsUsingPlaceholderCharacter()
     return usingPlaceholderCharacter_
 end
 
+---@return string
 function StatusWindow.GetModelError()
+    -- 贴图失败比“缺模型”更具体：bindCharacterMaterial 只在模型已加载时才会跑，
+    -- 两者不会同时成立，所以这里优先返回贴图那一句。
+    if characterTextureError_ ~= "" then
+        return characterTextureError_
+    end
     return modelError_
 end
 
@@ -735,6 +881,7 @@ function StatusWindow.Draw(nvg, x, y, w, h)
 end
 
 function StatusWindow.Shutdown()
+    stopBootEcho()
     if nvgImage_ ~= 0 and nvgImageCtx_ then
         nvgDeleteVideo(nvgImageCtx_, nvgImage_)
     end

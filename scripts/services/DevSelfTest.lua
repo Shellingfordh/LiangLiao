@@ -49,6 +49,9 @@ local passed_ = 0
 local failed_ = 0
 ---@type string[]
 local done_ = {}
+--- 判定失败（含整条场景抛出）的场景名，结论行靠它指到该看哪一段断言
+---@type string[]
+local bad_ = {}
 ---@type string
 local summary_ = "自检未运行"
 
@@ -727,12 +730,17 @@ end
 ---@param dateKey string
 local function runScenario(name, fn, dateKey)
     local before = passed_ + failed_
+    local failedBefore = failed_
     local ok, err = pcall(fn, dateKey)
     if not ok then
         failed_ = failed_ + 1
         logError(string.format("场景 %s 抛出，该场景剩余断言未执行：%s", name, tostring(err)))
     end
     done_[#done_ + 1] = name
+    local scenarioFailed = failed_ - failedBefore
+    if scenarioFailed > 0 then
+        bad_[#bad_ + 1] = string.format("%s×%d", name, scenarioFailed)
+    end
     logInfo(string.format("场景 %s 结束：本场景判定 %d 条（累计 通过=%d 失败=%d）",
         name, passed_ + failed_ - before, passed_, failed_))
 end
@@ -753,6 +761,13 @@ function DevSelfTest.Result()
     return passed_, failed_, #done_, SCENARIO_TOTAL
 end
 
+--- 哪几条场景没过（`I×1` = 场景 I 有 1 条判定失败）。日志被截断时，
+--- 结论行只能告诉我有失败，这个告诉该去翻哪一段断言。
+---@return string
+function DevSelfTest.BadScenarios()
+    return table.concat(bad_, " ")
+end
+
 --- 跑一次完整自检。调用前 main.lua 已经用自检存档 InitServices 过一遍。
 ---@param options DevSelfTestOptions
 ---@return boolean allPassed
@@ -764,6 +779,7 @@ function DevSelfTest.Run(options)
     passed_ = 0
     failed_ = 0
     done_ = {}
+    bad_ = {}
     summary_ = "自检未产出结论"
 
     local cleared = MemoryService.ClearSavedData()
@@ -787,6 +803,9 @@ function DevSelfTest.Run(options)
     MemoryService.ClearSavedData()
     summary_ = string.format("自检结论 通过=%d 失败=%d 场景=%d/%d[%s]",
         passed_, failed_, #done_, SCENARIO_TOTAL, table.concat(done_, " "))
+    if #bad_ > 0 then
+        summary_ = summary_ .. string.format(" 需看=%s", table.concat(bad_, " "))
+    end
     if failed_ == 0 and #done_ == SCENARIO_TOTAL then
         logInfo(summary_ .. " 全部通过")
         return true

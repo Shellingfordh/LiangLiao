@@ -57,6 +57,44 @@
 - **同一份证据也上屏**（开机突发会被日志管道整批丢掉，见 §14.5）：面板那行每次点档显示
   `事件标题/状态 · sceneId · 计划=存档|当场`，开机后先挂自检结论 `自检 通过=N 失败=M 场景=N/10`
   并跟着重发刷新。这样条件 (a) 的三向一致与条件 (b) 的「不重算」都能肉眼读，不再只依赖日志。
+- **真机扫码后暴露的状态窗黑屏/光影问题，先补的是取证而不是猜修**（2026-09-22）。用户回报「脸和衣服
+  目前都是黑色，光影搞得不是太好」，但启动日志里 `初始化 3D 状态窗场景`、`资源检查`、
+  `若夕 3D 模型加载成功`、`已绑定角色漫反射材质`、两个 LightGroup 分支、贴图回填的两种落点
+  **命中数全是 0**——开机那一瞬的整批日志被管道丢掉（§14.5），所以「哪里出错」当时根本读不到。
+  已把 StatusWindow 初始化路径上的这些事实改成 `trace()`：额外缓冲一份，由本模块自己订阅 `Update`
+  在之后每个 4 秒原样重发、共 3 次，与 `main.lua` 里自检结论的重发是同一套办法。
+  异步贴图回填的落点（`未开始 / 异步等待中 / 已回填 / 异步失败`）不缓存成定值，每次重发重读，
+  所以三行可能给出不同值——那正是要的。重发用 `bootEcho_.left` 归零后自己退休，
+  **不反订阅 Update**：全局 `UnsubscribeFromEvent` 只有 `(eventName)` 一种签名，
+  按名退订会把 `main.lua` 的 `HandleUpdate` 一起收掉。`main.lua` 本次零改动。
+  已定位的两条候选根因（待上面这轮日志证实，不先动手改）：① 贴图回填与背景
+  `PrepareBackground` 不对称——后者有 `cache:Exists` 快路和显式 `onFail`，前者没有，
+  若 DWP 资源未就绪时 `GetResourceAsync` 不回调，角色就静默留在黑帧；
+  ② `LightGroup/Dusk.xml` 与 `Daytime.xml` 在整个工程里都不存在，`createLighting` 永远走
+  「一盏 3.2 方向光 + 一盏 1.6 补光」的兜底，没有 Zone、没有环境光。
+
+### Fixed
+
+- **角色发黑：补上与背景对称的同步快路**（2026-09-22）。`bindCharacterMaterial` 之前只有
+  `cache:GetResourceAsync` 一条路，且失败只 `logWarn` 就 `return`——若设备冷启动时 DWP 资源未就绪、
+  异步干脆不回调，角色就整会话静默留在黑帧。现在先按 `PrepareBackground` 的同款写法走
+  `resourceExists` 快路：文件已在本地就同步 `cache:GetResource` 并立刻 `mat:SetTexture(TU_DIFFUSE, …)` +
+  `surface_:QueueUpdate()`，完全不进异步竞态；快路没拿到（登记了但还没加载完）才退回异步，
+  不把它误判成资产缺失。报错只留异步失败那一次，写进新的 `characterTextureError_`
+  （**不能复用 `modelError_`**：`bindCharacterMaterial` 是在 `tryLoadPrefab`/`tryLoadModelFile` 里调的，
+  那两条路随后都会把 `modelError_` 清空，写进去会被覆盖），由 `GetModelError()` 优先返回，
+  于是主界面那条 `errorLabel` 不改一行 `main.lua` 就能亮起来。失败时也照样回调
+  `noticesChanged_()`——提示不能只落在日志里。`main.lua` 本次零改动。
+- **光影差：兜底分支补上 Zone 常量环境光**（2026-09-22）。`LightGroup/Dusk.xml` 与 `Daytime.xml`
+  在工程里都不存在，所以 `createLighting` 永远走兜底；而兜底分支只有两盏硬光、**没有 Zone**，
+  背光面直接纯黑。Zone 默认 `ambientSource` 是 `AMBIENT_PREBAKED`，那种模式下着色器会把
+  `cAmbientColor` 硬清零（`engine-docs/recipes/rendering.md`），`zone.ambientColor` 是空操作——
+  所以必须显式切 `AMBIENT_COLOR`（该模式下漫反射强度固定 1.0，亮度只由 `ambientColor` 本身决定）。
+  取值 `Color(0.30, 0.27, 0.24)`：室内暖黄为主、掺一点冷调当天光。同时 `SetBoundingBox` 罩住场景
+  必设、雾距与 LightGroup 分支对齐成 40–120。**只改兜底分支**：新建 Zone 默认 `priority=0`，
+  会顶掉 LightGroup 那一档（连它的 IBL / SH / Bloom / 雾一起）。另外场景里已有 Zone 就直接改它、
+  不另建。实际生效值由 `环境光=AMBIENT_COLOR rgb=… 雾=…` 一行打出来，跟着开机 trace 重发 3 次——
+  真机上如果「光影不太好」仍在，这一行决定是继续调数值还是问题在别处。
 
 ### Built
 
@@ -80,18 +118,49 @@
 `送达态=ended 送达=02:45 隔 42255 秒`，回复正文长度 264（恢复分支），主链路层面「不把已结束说成未开始」成立；
 全日志 0 条 ERROR、无任何用户原文。
 
-仍缺三项，全部需要再跑一次预览：
+上一轮「仍缺三项」已全部补齐（2026-09-22 21:18 结束、104,687 字节的同一次 `runtime.log`，
+全程 0 条 ERROR / 0 条 WARN）：
 
-1. 自检 suite 只打了 `PASS A0…A6` 就没了后续，也没有 `自检结束` 汇总行，所以 **I（计划覆盖）/ J（重进）
-   一行都没进日志**。「断言抛出把后面场景吞掉」这条**已排除**——调用点本来就有 `pcall` +
-   `logError("开发自检异常退出…")`，而那行同样没出现。同批该有却同样缺席的还有 `开场事件` 与
-   `M1 已就绪`，可 UI 之后完全能用 → 真实原因是**开机瞬间的突发日志被管道整批丢弃**（见 §14.5）。
-   已改为逐场景 `pcall` + `场景 X 结束：判定 N 条` + 一行式结论
-   `自检结论 通过=N 失败=M 场景=10/10[A B C D E F I J G H]`，结论再由 `HandleUpdate` 每 4 秒重发 3 次，
-   落进后面的抓取窗口。**取证判据改成结论行的 `场景=N/10`，不再数 PASS 条数。**
-2. 面板 `19:45`（开放麦）这一档本轮没点。
-3. 会话只冷启动一次，`接管存档事件计划 0 天` + `fromSave=false` 只证明「同进程不重算」；
-   同一日期**重进**后 `fromSave=true` 且实例键不变（条件 b）还缺第二次进入的证据。
+1. **I / J 已拿到结论行。** 根因确认为开机突发日志被整批丢弃（见 §14.5），已改为逐场景 `pcall` +
+   `场景 X 结束：判定 N 条` + 一行式结论 `自检结论 通过=N 失败=M 场景=10/10[A B C D E F I J G H]`，
+   并由 `HandleUpdate` 每 4 秒重发 3 次落进后面的抓取窗口。实测该行出现 3 次且一致，
+   取证判据因此改成结论行的 `场景=N/10`，不再数 PASS 条数（单条 PASS 行仍可能被丢）。
+2. **面板 19:45（开放麦）已点。** 四档全部命中：
+   `01:30 → la_apartment_night_rest`、`14:30 → la_studio_zine_layout`、`12:30 → la_cafe_midday`、
+   `19:45 → la_cafe_open_mic`，四档 `状态` 都是 `ongoing`，场景落到三个不同静帧文件——
+   `la_studio → la-studio-dev-placeholder.png`、`la_cafe → la-cafe-4x3.png`、
+   `la_apartment → la-apartment-dev-placeholder.png`。**「不同当地时段 → 不同状态 + 不同场景」因此是实测，
+   不再是推断。**
+3. **同进程内的事件计划不重算已实测；「存档往返」仍未验证。** 开机 trace
+   `plan=生成 8 个事件（种子=los_angeles|2026-09-22|m1-events-v1）` 在本次会话只出现一次，
+   随后实时刷新循环里 `fromSave=true` 且 `occurrenceKey` 与首算完全一致——但这只证明**同一次进程内**
+   复用已生成的计划。真机扫码那一次的启动日志是 `没有本地存档，使用初始内存状态` +
+   `接管存档事件计划 0 天`，因为 `DevSelfTest` 在每次 `Run()` 的首尾都调
+   `MemoryService.ClearSavedData()`，所以**写盘→重启→读回这条链路在当前构建上结构性地测不到**。
+   要拿这个证据必须有一轮不清存档的构建，本轮没有。
+
+**M1 通过条件（规格 §9：同一条用户消息在不同角色当地时段会得到不同的状态、场景和回复时机）逐项已闭：**
+
+- *状态 + 场景*：见上第 2 条，四档各自命中不同事件与静帧。
+- *回复时机*：排队补回链路打通，`跳过等待：从 sent 直接推进到 replied` 与
+  `从 waiting 直接推进到 replied` 两条分支都实测走过（正式 10 秒链路与开发跳过走同一个 `Deliver()`）。
+- *可解释回复*：回复 #43/#44/#45 全部 `事实=la_cafe_open_mic / 场景=la_cafe`（送达时进行中的事件），
+  而各自的 `送达key` 分别是 `la_apartment_morning_inbox` 与 `la_apartment_night_rest`，
+  且 `送达态=ended`。即「发送时的事件已收场」这个分支真的触发并如实登记，回复引用的是**送达时**的事件
+  而非发送时的事件；正文长度 117/198/209 说明按事件事实走了不同模板而非同一句复读。
+
+仍需真机确认（不阻塞上述结论）：移动端中文 IME 行为、资产单文件大小上限、`clientCloud` 单值大小上限，
+以及 M0-1 遗留的资产预修项 ①–⑥（`StatusWindow.lua:783` 仍是 `SURFACE_UPDATEALWAYS` 每帧重渲、
+`Shutdown()` 未还原全局 `hdrRendering`、`lin-ruoxi.mdl.bak` 未清、MDL 内骨骼命中 0、法线贴图孤儿、
+metallicRoughness 未导出、14,298 面 / 3×4096² 超预算）。
+
+**2026-09-22 真机扫码新增的三条待办**（用户回报）：
+1. ~~**角色脸与衣服在设备上呈黑色、光影不佳**~~——本轮只补了取证，两轮日志回来才定位改哪；
+   **根因已定位并修复**（见上面 Fixed 两条），待下一轮真机扫码确认。
+2. **重启后时间仍是测试值**——`DevTestPanel.lua:3` 明写测试时间只作用于本次运行、不写存档，
+   所以这不是 bug；但 `DevSelfTest` 每次 `Run()` 首尾都 `ClearSavedData()`，
+   「重启后时间/事件是否照存档恢复」在当前构建上测不到，需要一轮不清存档的构建。
+3. **时间面板多点了一次**——只影响开发入口的计数，未在日志里留下可判读痕迹。
 
 ## 2026-09-21 — M0-1 聊天竖切片（陌生网友 × 洛杉矶）与 M0-0 真机定案
 

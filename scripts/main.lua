@@ -245,9 +245,12 @@ function Start()
         -- 让它落进别的抓取窗口。判据是结论行里的 场景=N/10。
         -- 屏上也挂一份短结论（面板那行 nowrap，长文本会被裁）：日志整批丢了也能肉眼读数。
         local p, f, d, total = DevSelfTest.Result()
+        -- 全绿时面板那行不变长；只有真没过才多挂一段名字，避免 nowrap 那行被裁
+        local bad = DevSelfTest.BadScenarios()
         selfTestEcho_ = {
             text = DevSelfTest.Summary(),
-            panel = string.format("自检 通过=%d 失败=%d 场景=%d/%d", p, f, d, total),
+            panel = string.format("自检 通过=%d 失败=%d 场景=%d/%d%s",
+                p, f, d, total, bad == "" and "" or (" 需看=" .. bad)),
             left = 3,
             elapsed = 0,
         }
