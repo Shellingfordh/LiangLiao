@@ -8,6 +8,8 @@
 -- 它没有任何入口能改写事实——可用性/事件/时刻一律来自 EventService 的 fact。
 -- ============================================================================
 
+local ProfileService = require("ProfileService")
+
 local ContentService = {}
 
 -- 关键词 → 话题，用于记忆与模板分支
@@ -58,6 +60,123 @@ local EVENT_LINES = {
         "{event}，现在终于能安静坐一会儿。",
         "{event}，我把最后一张便签压在杯子下面了。",
     },
+
+    -- ===== 上海（sha）=====
+    sha_apartment_night_rest = {
+        "{event}，有什么睡起来再说。",
+        "{event}，灯已经关了。",
+    },
+    sha_apartment_morning_balcony = {
+        "{event}，一天的字从这儿开头。",
+        "{event}，浇完花我就出门。",
+    },
+    sha_commute_rush = {
+        "{event}，到站再说。",
+        "{event}，我先顾着下车。",
+    },
+    sha_office_topic_meeting = {
+        "{event}，稿子的事散会再讲。",
+        "{event}，到{ends}前多半都在会议室。",
+    },
+    sha_cafe_midday = {
+        "{event}，下午还得回版房。",
+        "{event}，这顿吃得快。",
+    },
+    sha_office_layout = {
+        "{event}，眼睛快对不上了。",
+        "{event}，等付印前我再过一遍。",
+    },
+    sha_commute_market = {
+        "{event}，顺手的事，说完就去。",
+        "{event}，一会儿到家再细说。",
+    },
+    sha_bookstore_evening = {
+        "{event}，你要来也来得及。",
+        "{event}，{weather}的天，店里更安静。",
+    },
+    sha_apartment_reread = {
+        "{event}，改完这段就休息。",
+        "{event}，一天到这里差不多收口了。",
+    },
+
+    -- ===== 成都（cdu）=====
+    cdu_apartment_night_rest = {
+        "{event}，有事明天再说。",
+        "{event}，灯早关了。",
+    },
+    cdu_apartment_morning_water = {
+        "{event}，不急，今天节奏慢。",
+        "{event}，上午的茶还没凉。",
+    },
+    cdu_studio_morning_ink = {
+        "{event}，画完这一批再喘口气。",
+        "{event}，今天{weather}，光线正好。",
+    },
+    cdu_cafe_midday = {
+        "{event}，茶馆就这样，热闹。",
+        "{event}，吃完这碗再回去。",
+    },
+    cdu_studio_color = {
+        "{event}，这批交完就松了。",
+        "{event}，颜色差一点都是事。",
+    },
+    cdu_commute_supplies = {
+        "{event}，回来再聊。",
+        "{event}，一趟不容易，边走边看。",
+    },
+    cdu_nightmarket_supper = {
+        "{event}，你要是在就一起吃口。",
+        "{event}，{weather}，摊子上坐得下去。",
+    },
+    cdu_apartment_letters = {
+        "{event}，写完这张就收工。",
+        "{event}，今晚的话留到纸上。",
+    },
+
+    -- ===== 伦敦（lon）=====
+    lon_apartment_night_rest = {
+        "{event}，有事明天说。",
+        "{event}，工程挂着明早导出。",
+    },
+    lon_apartment_morning_tea = {
+        "{event}，今天{weather}，伞在门口。",
+        "{event}，早课前的这点时间是完整的。",
+    },
+    lon_commute_early_train = {
+        "{event}，到站再找你。",
+        "{event}，消息断了我先都发着。",
+    },
+    lon_campus_lecture = {
+        "{event}，笔记还记着呢。",
+        "{event}，散场我再看手机。",
+    },
+    lon_cafe_midday = {
+        "{event}，下午的录音不能迟到。",
+        "{event}，三明治凉了，边吃边说。",
+    },
+    lon_studio_field_recording = {
+        "{event}，这段收完就安静了。",
+        "{event}，到{ends}前我都得戴着耳机。",
+    },
+    lon_commute_dark = {
+        "{event}，到家再打长字。",
+        "{event}，{weather}，我把领子竖起来了。",
+    },
+    lon_recordshop_shift = {
+        "{event}，你要什么唱片我帮你翻。",
+        "{event}，班守到{ends}。",
+    },
+    lon_apartment_mixdown = {
+        "{event}，推子一收今天就完。",
+        "{event}，最后一遍，不添话了。",
+    },
+}
+
+-- 查无此事件的最后兜底：只复述事实，不借别城的句子（四城池已全，正常走不到这里）
+---@type string[]
+local GENERIC_LINES = {
+    "{event}。",
+    "{event}，就这些。",
 }
 
 -- 碎片时间档：规格 §5.2 要求「回复较短」，所以另开一组短句且不带话题后缀
@@ -215,7 +334,7 @@ local function BuildSegments(fact, userText, turnIndex, quote)
     if briefReply then
         pool = BRIEF_LINES
     else
-        pool = EVENT_LINES[fact.id] or EVENT_LINES.la_cafe_open_mic
+        pool = EVENT_LINES[fact.id] or GENERIC_LINES
     end
     local quoteText = quote and quote.text or ""
     local seed = (userText or "") .. "|" .. fact.id .. "|" .. tostring(turnIndex)
@@ -259,10 +378,21 @@ local function BuildSegments(fact, userText, turnIndex, quote)
     -- 第三段：原文（连同被引用那句）里出现某个话题时追加的半句
     local topics = ContentService.DetectTopics((userText or "") .. " " .. quoteText)
     local suffixTpl = topics[1] and TOPIC_SUFFIX[topics[1]]
+    local suffixAdded = false
     if suffixTpl and suffixTpl ~= "" then
         local suffix = fill(suffixTpl, vars)
         if suffix ~= "" then
             segments[#segments + 1] = suffix
+            suffixAdded = true
+        end
+    end
+
+    -- 关系风味段：本轮没有话题后缀时补一段，让关系本身进正文而不只是开场。
+    -- 只在段数还没到 3 时补——多段上限不因 M3 放宽。
+    if not suffixAdded and #segments < 3 then
+        local flavor = ProfileService.RelationFlavor(seed .. "|" .. tostring(#segments))
+        if flavor and flavor ~= "" then
+            segments[#segments + 1] = flavor
         end
     end
 
@@ -291,14 +421,18 @@ end
 
 --- 重进时唯一一条「离开期间」摘要。只报客观间隔与两头的作息原话，
 --- 不按小时铺开她做了什么（规格 §5.3：每次离线重入只交付一条最有意义的摘要）。
+--- 城市标签与「那会儿她…」的措辞都取自当前档案；洛杉矶 × 陌生网友的输出与 M2 逐字一致。
 ---@param gapSeconds integer 上次落盘时刻 → 现在
 ---@param thenPhrase string 上次离开时她那档的原话
 ---@param nowPhrase string 现在她那档的原话
 ---@param pendingCount integer 还有几条排队待回
+---@param cityLabel? string 省略则取当前档案城市
 ---@return string
-function ContentService.AwaySummary(gapSeconds, thenPhrase, nowPhrase, pendingCount)
-    local line = string.format("离开期间 · 洛杉矶过了 %s · 那会儿她%s，现在她%s",
-        ContentService.FormatGap(gapSeconds), thenPhrase, nowPhrase)
+function ContentService.AwaySummary(gapSeconds, thenPhrase, nowPhrase, pendingCount, cityLabel)
+    local thenText, nowText = ProfileService.AwayPhrases(thenPhrase, nowPhrase)
+    local line = string.format("离开期间 · %s过了 %s · %s，%s",
+        cityLabel or ProfileService.Get().cityLabel,
+        ContentService.FormatGap(gapSeconds), thenText, nowText)
     if pendingCount and pendingCount > 0 then
         line = line .. string.format(" · 还有 %d 条在等她回", pendingCount)
     end
@@ -310,12 +444,6 @@ end
 ---@return string
 function ContentService.OpeningLine(fact)
     return fill("我在{place}，{event}。你可以随便说点什么。", varsOf(fact))
-end
-
---- 首条默认草稿（任务书指定的那句原文）
----@return string
-function ContentService.DefaultDraft()
-    return "你那边是不是快傍晚了？今天的活动还顺利吗？"
 end
 
 return ContentService

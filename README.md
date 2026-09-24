@@ -18,6 +18,8 @@ Tripothon S1 原创参赛项目：一位生活在另一座城市、与你共处�
 | [平台能力与资产规格](docs/platform-capabilities.md) | Tripo、Marble、TapTap Maker 的用法、格式和限制 |
 | [3D 场景与角色移动分层方案](docs/3d-scene-character-movement.md) | 固定镜头 + 预设移动等五层方案的实测证据、Tripo/Marble 本地可操作性、3D 体量预算 |
 | [Maker 平台假设验证报告](docs/maker-lua-api-verification.md) | 时区 / 运行时 LLM / GLB→MDL / clientCloud / 全景 的逐项核实结论 |
+| [M2-B LLM 润色网关设计](docs/2026-09-23-m2b-llm-gateway-design.md) | 外部润色的契约、鉴权、限流、回落与实施状态（§12：S1 代码就位、未部署未接线） |
+| [UrhoX Lua 开发指南](docs/urhox-lua-development-guide.md) | 引擎规则、示例索引、任务到文档的映射与故障速查（自主工程 `AGENTS.md` 迁出） |
 | [角色资产溯源与实测数据](docs/asset-provenance.md) | 资产唯一真源表、GLB/MDL 实测差异、重导入命令与阻塞项 |
 | [赛事规则](docs/demand.md) | Tripothon S1 赛道、提交物与评审规则 |
 | [变更记录](CHANGELOG.md) | 当前阶段与历史决策 |
@@ -25,8 +27,13 @@ Tripothon S1 原创参赛项目：一位生活在另一座城市、与你共处�
 ## 实施顺序
 
 M0-0（真机可见状态窗）与 M0-1（聊天情绪化垂直切片）均已在 Maker 云端跑通：M0-0 于 2026-09-21 真机验收，
-M0-1 于同日完成「发送 → 等待 → 输入中 → 回复」闭环的云端实测。再往后是规格 §9 的 M1（多时段状态与消息排队）
-与 M2（关系记忆落到云变量）。
+M0-1 于同日完成「发送 → 等待 → 输入中 → 回复」闭环的云端实测。M1（每日事件计划 + 忙碌/睡眠排队 +
+落盘重进）于 2026-09-22 完成并连续通过云端构建；M2-A（消息引用、逐句多段本地回复、状态窗三点布光）
+已于 2026-09-23 提交（`721aaeb`）。M2-B（外部 LLM 润色）当前只完成 **S1：网关与客户端适配层代码就位、
+未部署未接线**——`GatewayEnabled=false` 时游戏行为与 M2-A 一致、零外发；部署位置、路径 A（Maker 联机
+中转 + TapTap URL 白名单）与模型选型待确认，见设计文档 §11/§12 与 `CHANGELOG.md` 2026-09-24 条目。
+M3（四城初始化与关系档案：上海/成都/洛杉矶/伦敦 × 四种关系 + 可复现随机、存档 v5）代码与本地验证
+已完成于 2026-09-24，**未经云端构建与真机验证**，见 `CHANGELOG.md` 同日 M3 条目。
 
 ## 怎么跑起来
 
@@ -67,6 +74,20 @@ UrhoXRuntime.exe <entry.lua> -tapcode_dir=<source> -skip_login -p=Res -w -width=
   `scripts/services/MessageService.lua`（消息与阶段状态机）、`EventService.lua`（从时间快照派生事件事实）、
   `ContentService.lua`（纯模板 + `{token}` 替换）、`MemoryService.lua`（本地文件存档，clientCloud 只留异步接口），
   前端 `scripts/ui/ChatPanel.lua`。跨会话记忆已实测由本地文件读回。
+- **M1 → M2-A 聊天层（已提交，构建链最新为 `721aaeb`）**：`EventService` 按「城市+当地日期+定种」生成
+  每日 8 个事件实例；忙碌/睡眠时消息 FIFO 排队、重进恢复；回复支持引用与逐句多段上屏
+  （`MessageService.BeginReplyStream`）。开发自检扩到 20 场景（结论行判据 `场景=N/20`）。
+- **M2-B S1（代码就位、未接线）**：`gateway/`（独立零依赖 Node 润色网关，本地 `node --test` 19/19）+
+  `scripts/services/PolishService.lua`（白名单 payload、严格校验镜像、事实词表守卫、8 秒预算 FIFO 回落）。
+  **网关未部署、客户端真实 transport 未接线，运行时文字回复仍是纯 Lua 模板**；环境变量表与本地跑法见
+  `gateway/README.md`，全貌见 [M2-B 设计文档](docs/2026-09-23-m2b-llm-gateway-design.md) §12。
+- **M3 四城初始化与关系档案（代码就位，未经云端构建）**：`scripts/ProfileService.lua` 是城市×关系档案真源
+  （四城各绑生活身份 / 关系起点 / ≥2 场景词汇 / 日程表；随机入口按创建 UTC 秒定种、可复现、落盘不再掷）；
+  `scripts/ui/ProfileOverlay.lua` 提供首次初始化与换档选择；`TimeState.SCHEDULE_BY_CITY` 四城分表，
+  事件/场景/文案全随城市。存档升 **v5**：v1–v4 旧档迁移为「洛杉矶 × 陌生网友」，记录、引用、
+  事件计划与待回复队列不丢。开发自检扩到 26 场景（新增 U–Z，结论行判据 `场景=N/26`）；
+  时区/DST/随机常量另有 Node 独立对照（`node tools/m3-node-crosscheck.js`，29/29）。
+  四城背景为渐变占位图（16 组），真实美术待确认。
 - **3D 场景与角色移动**：分层方案已出（T1–T5）。**首选 T1＝固定镜头完全不动 + 角色沿预设路径移动并转向，
   全程无玩家输入**——不需要任何新资产、约 60 行，已在本机用真实项目资产跑出 3 张渲染截图（镜头三次逐像素一致）。
   T2（角色有 idle/walk）有两条独立阻塞项：`import-gltf` 丢了源 GLB 的 65 关节 skin，且源 GLB 本身不含动画数据。

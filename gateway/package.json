@@ -1,0 +1,14 @@
+{
+  "name": "m2b-polish-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "description": "M2-B 最小 LLM 润色网关：白名单上下文进、严格 JSON 出，任何失败由客户端回落本地模板。",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test \"test/*.test.js\""
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

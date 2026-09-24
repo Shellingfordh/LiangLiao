@@ -12,7 +12,22 @@
 --     一律降级为普通消息——照常发送、不带引用字段、回复里不出回指句；
 --   * 场景 N/O：引用跨过忙碌与睡眠两个排队窗口不丢，排队气泡只写「已送达 / 排队」；
 --   * 场景 P：多段回复按序追加，一次回复仍然只有一条记录，上屏完成后相位回空闲；
---   * 场景 Q：逐句上屏期间后发消息照常入队，FIFO 与「一对一回复」都不被卡住。
+--   * 场景 Q：逐句上屏期间后发消息照常入队，FIFO 与「一对一回复」都不被卡住；
+--   * 场景 R：M2-B 润色适配层的严格契约与全量回落（非法 JSON、额外字段、空数组、
+--     超长句、错引用 id、401/429/502/503、抛异常、词表守卫、brief 档）——假 transport，零外发；
+--   * 场景 S：润色在途 FIFO 与 8 秒预算（后发不越序、队头超预算必回落、迟到结果作废）；
+--   * 场景 T：润色开启态下走真实队列链路（main.lua 的 HandleDeliver），FIFO、
+--     逐句上屏与「事实仍全部由 Lua 给」在开启态下一条不破；
+--   * 场景 U：四城时区表 —— 同一权威 UTC 秒在四城各得正确的当地钟点/日期，
+--     含夏令冬令与跨日；U10 反查 UtcAtLocal↔Snapshot 互为逆，证设备时区无从掺入。
+--   * 场景 V/W：洛杉矶与伦敦的 DST 收尾边界 —— 「回拨的那一小时」当地钟点相同
+--     而 UTC 不同，排队窗口不得回退到已过期或重复的那一小时；
+--   * 场景 X：随机入口 —— 定种派生可复现、16 个固定秒覆盖四城分布、
+--     首次结果落盘重进后不重抽（存档 → InitServices → ProfileService 同一条链）；
+--   * 场景 Y：四城切换核心链路不回归 —— 每城各跑一遍作息自洽、档案/场景/事件同源、
+--     睡眠排队 FIFO、引用她的回复、落盘重进（与洛杉矶用的完全是同一套 helper，不另开旁路）；
+--   * 场景 Z：v4 旧档迁移 —— 缺 profile 按「洛杉矶×陌生网友·已初始化」迁移，
+--     transcript 更名 messages，引用字段/排队计划/事件计划一条不丢、不弹初始化界面。
 -- 不 mock 任何被测服务，也不依赖被测服务没有的能力：
 --   * 时间用 TimeState.DevClockOffset 投影（权威时间源不变，只是把 now 拨到某个当地整点）；
 --   * 推进用 MessageService.Update(utcNow) 这个正式入口；
@@ -22,10 +37,12 @@
 -- ============================================================================
 
 local TimeState = require("TimeState")
+local ProfileService = require("ProfileService")
 local MessageService = require("services.MessageService")
 local ContentService = require("services.ContentService")
 local MemoryService = require("services.MemoryService")
 local EventService = require("services.EventService")
+local PolishService = require("services.PolishService")
 
 local DevSelfTest = {}
 
@@ -64,7 +81,7 @@ local bad_ = {}
 local summary_ = "自检未运行"
 
 --- Run 里 runScenario 的调用条数；结论行拿它判断「有没有场景被整批日志丢掉」
-local SCENARIO_TOTAL = 17
+local SCENARIO_TOTAL = 26
 
 local function logInfo(msg)
     print(TAG .. " " .. msg)
@@ -203,6 +220,106 @@ end
 local function beginScenario()
     MemoryService.ClearSavedData()
     reinit_(SELFTEST_SAVE)
+end
+
+-- ---------------------------------------------------------------------------
+-- M2-B 辅助：按白名单契约造交付时刻的事实与消息，用假 transport 驱动
+-- PolishService —— S1 阶段网关未部署，这些场景全程零外发。
+-- ---------------------------------------------------------------------------
+
+local POLISH_BASE_UTC = 1700000000
+
+---@param overrides? table
+---@return EventFact
+local function polishFact(overrides)
+    ---@type any
+    local fact = {
+        -- 刻意用真实模板之外的事件名：润色句里出现任何真事件名都该被守卫拦下
+        eventTitle = "今晚这一场",
+        eventSummary = "店里人不多，她在角落整理物料。",
+        placeLabel = "小场地",
+        clock = "19:45",
+        weather = "晴",
+        availabilityLabel = "空闲",
+        eventEndsAt = "22:00",
+        eventState = "ongoing",
+        queued = false,
+        phrase = "正整理着物料",
+        availability = "idle",
+        -- 城市名取自当前档案：M3 之后自检会切城，守卫判定不能钉死在洛杉矶
+        cityLabel = ProfileService.Get().cityLabel,
+        brief = false,
+    }
+    if overrides then
+        for k, v in pairs(overrides) do
+            fact[k] = v
+        end
+    end
+    return fact
+end
+
+---@param overrides? table
+---@return MsgEntry
+local function polishPending(overrides)
+    ---@type any
+    local pending = { id = 4001, text = "那边现在安静吗？" }
+    if overrides then
+        for k, v in pairs(overrides) do
+            pending[k] = v
+        end
+    end
+    return pending
+end
+
+---@param segmentsJson string
+---@param quoteJson? string
+---@return string
+local function polishBody(segmentsJson, quoteJson)
+    return string.format('{"segments":[%s],"replyToQuotedMessageId":%s}',
+        segmentsJson, quoteJson or "null")
+end
+
+---@param segText string
+---@return PolishTransportResult
+local function okResponse(segText)
+    return { ok = true, status = 200, bodyText = polishBody('"' .. segText .. '"') }
+end
+
+--- 在当前已配置的 transport 上发一条润色（不重下配置，用于连续调用）
+---@param fact? EventFact
+---@param pending? MsgEntry
+---@param nowUtc? number
+---@return string[]|nil segments
+---@return string category
+local function polishNow(fact, pending, nowUtc)
+    local out, reason
+    PolishService.Polish({
+        fact = fact or polishFact(),
+        pending = pending or polishPending(),
+        nowUtc = nowUtc or POLISH_BASE_UTC,
+    }, function(segments, category)
+        out, reason = segments, category
+    end)
+    return out, reason
+end
+
+--- 用假同步 transport 跑一条润色，返回段、结果类别与抓到的出站 payload
+---@param result PolishTransportResult
+---@param fact? EventFact
+---@param pending? MsgEntry
+---@return string[]|nil segments
+---@return string category
+---@return table? payload
+local function polishOnce(result, fact, pending)
+    local captured = nil
+    PolishService.Configure({ enabled = true, transport = {
+        request = function(payload, callback)
+            captured = payload
+            callback(result)
+        end,
+    } })
+    local out, reason = polishNow(fact, pending)
+    return out, reason, captured
 end
 
 -- ---------------------------------------------------------------------------
@@ -531,7 +648,7 @@ local function ScenarioEventPlan(dateKey)
     beginScenario()
 
     local plan = EventService.PlanFor(cityId_, dateKey)
-    local rows = TimeState.SCHEDULE
+    local rows = TimeState.ScheduleFor(cityId_)
     check("I0 计划逐行覆盖作息表，不多不少", #plan.occurrences == #rows,
         string.format("事件 %d 个 / 作息 %d 档", #plan.occurrences, #rows))
     local contiguous = true
@@ -1022,6 +1139,666 @@ local function ScenarioStreamingFifo(dateKey)
         tostring(MessageService.GetPhase()))
 end
 
+-- ---------------------------------------------------------------------------
+-- 场景 R：M2-B 润色契约与全量回落 —— 假 transport 驱动 PolishService，零外发。
+-- 覆盖测试矩阵：非法 JSON / 额外字段 / 空数组 / 超长句 / 错误引用 id /
+-- 401·429·5xx / 超时（见 S）/ 模型不可用（503 冷却）/ 词表守卫 / brief 档。
+-- ---------------------------------------------------------------------------
+local function ScenarioPolishContract()
+    logInfo("场景 R LLM 润色契约与回落（假 transport，零外发）")
+
+    -- R0 关闭态：回调在 Polish 返回前就同步完成 —— main.lua 靠这条保证与 M2-A 一字不差
+    local r0Seg, r0Cat
+    PolishService.Configure({ enabled = false })
+    PolishService.Polish({ fact = polishFact(), pending = polishPending(), nowUtc = POLISH_BASE_UTC },
+        function(segments, category)
+            r0Seg, r0Cat = segments, category
+        end)
+    check("R0 关闭态同步回落 disabled，不留在途槽位",
+        r0Seg == nil and r0Cat == "disabled" and PolishService.GetPendingCount() == 0,
+        tostring(r0Cat))
+
+    local segs2, cat2, payload2 = polishOnce(
+        { ok = true, status = 200, bodyText = polishBody('"好的呀。","稍等一下。"') })
+    check("R1 合法两段通过（llm）", segs2 ~= nil and #segs2 == 2 and cat2 == "llm",
+        string.format("段数=%s 结果=%s", tostring(segs2 and #segs2), tostring(cat2)))
+    check("R2 白名单 payload：quote 缺省也显式为 null，core/事实齐备",
+        payload2 ~= nil and payload2.v == 1 and payload2.quote == cjson.null
+        and payload2.core ~= nil and payload2.core.characterId == "lin_ruoxi"
+        and payload2.deliveryFact ~= nil and payload2.sendFact ~= nil,
+        string.format("quote=%s", tostring(payload2 and payload2.quote)))
+
+    local _, _, clipped = polishOnce(okResponse("好。"), nil,
+        polishPending({ text = string.rep("话", 350) }))
+    check("R3 用户原文超 300 码点出站前裁到 300", clipped ~= nil
+        and PolishService.RuneLenForTest(clipped.userMessage) == 300,
+        string.format("实裁 %d 码点",
+            clipped and PolishService.RuneLenForTest(clipped.userMessage) or -1))
+
+    local _, c4 = polishOnce({ ok = true, status = 200, bodyText = "{这不是 json" })
+    check("R4 非法 JSON → schema_json", c4 == "schema_json", tostring(c4))
+
+    local _, c5 = polishOnce({ ok = true, status = 200,
+        bodyText = '{"segments":["好。"],"replyToQuotedMessageId":null,"source":"llm"}' })
+    check("R5 额外字段 → schema_key_set", c5 == "schema_key_set", tostring(c5))
+
+    local _, c6 = polishOnce({ ok = true, status = 200, bodyText = polishBody("") })
+    check("R6 空数组 → schema_segments_count", c6 == "schema_segments_count", tostring(c6))
+
+    local _, c7 = polishOnce(okResponse(string.rep("长", 45)))
+    check("R7 单句超 40 字 → schema_segment_long", c7 == "schema_segment_long", tostring(c7))
+
+    ---@type any
+    local quotedPending = { id = 4002, text = "再说说那句。",
+        quotedMessageId = 77, quotedRole = "user", quotedTextPreview = "那句想再听听" }
+    local _, c8 = polishOnce({ ok = true, status = 200,
+        bodyText = polishBody('"好。"', "88") }, nil, quotedPending)
+    check("R8 引用 id 与本次允许值不符 → schema_quote_id", c8 == "schema_quote_id", tostring(c8))
+    local segs9, cat9 = polishOnce({ ok = true, status = 200,
+        bodyText = polishBody('"好。"', "77") }, nil, quotedPending)
+    check("R8b 引用 id 与允许值一致 → 通过", segs9 ~= nil and cat9 == "llm", tostring(cat9))
+    local _, c8c = polishOnce({ ok = true, status = 200,
+        bodyText = polishBody('"好。"', "77") })
+    check("R8c 无引用请求里出数字 id → schema_quote_id", c8c == "schema_quote_id", tostring(c8c))
+
+    local _, c10 = polishOnce(okResponse("   "))
+    check("R10 纯空白句 trim 后为空 → schema_segment_empty",
+        c10 == "schema_segment_empty", tostring(c10))
+    local _, c11 = polishOnce(okResponse("好的`嗯"))
+    check("R11 含反引号 → schema_segment_char", c11 == "schema_segment_char", tostring(c11))
+
+    -- 401：回落一次并熔断本会话 —— 连续两条在同一次配置下才测得出「第二条不再外发」
+    PolishService.Configure({ enabled = true, transport = { request = function(_, callback)
+        callback({ ok = false, status = 401 })
+    end } })
+    local _, c12 = polishNow()
+    local _, c12b = polishNow()
+    check("R12 401 → http_401 且本会话熔断（下一条直接 disabled，不再出站）",
+        c12 == "http_401" and c12b == "disabled" and PolishService.IsEnabled() == false,
+        string.format("首=%s 次=%s", tostring(c12), tostring(c12b)))
+
+    local _, c13 = polishOnce({ ok = false, status = 429 })
+    check("R13 429 → http_429", c13 == "http_429", tostring(c13))
+    local _, c14 = polishOnce({ ok = false, status = 502 })
+    check("R14 5xx → http_502", c14 == "http_502", tostring(c14))
+
+    -- 503 → 会话级冷却：同一次配置里连发两条，第二条必须不出站
+    local hits503 = 0
+    PolishService.Configure({ enabled = true, transport = { request = function(_, callback)
+        hits503 = hits503 + 1
+        callback({ ok = false, status = 503 })
+    end } })
+    local _, c15 = polishNow()
+    local _, c15b = polishNow()
+    check("R15 503（预算/模型不可用）→ http_503 并进冷却：600 秒内第二条不出站",
+        c15 == "http_503" and c15b == "cooldown" and hits503 == 1,
+        string.format("首=%s 次=%s 出站=%d", tostring(c15), tostring(c15b), hits503))
+
+    PolishService.Configure({ enabled = true, transport = { request = function()
+        error("transport 炸了")
+    end } })
+    local _, c16 = polishNow()
+    check("R16 transport 抛异常 → transport_error（不崩调用方）",
+        c16 == "transport_error", tostring(c16))
+
+    -- 事实词表守卫（设计 §2 客户端最后一道）
+    local otherCity = nil
+    local homeCityLabel = ProfileService.Get().cityLabel
+    for _, city in pairs(TimeState.CITIES) do
+        if city.label ~= homeCityLabel then
+            otherCity = city.label
+            break
+        end
+    end
+    local _, g1 = polishOnce(okResponse((otherCity or "别的城") .. "的晚高峰刚过。"))
+    check("R17 润色句带别的城市 → guard_city", g1 == "guard_city", tostring(g1))
+
+    local otherTitle = nil
+    for _, title in ipairs(EventService.KnownEventTitles()) do
+        if title ~= "今晚这一场" then
+            otherTitle = title
+            break
+        end
+    end
+    local _, g2 = polishOnce(okResponse("刚看完" .. (otherTitle or "?") .. "的现场。"))
+    check("R18 润色句带白名单外的事件名 → guard_event", g2 == "guard_event", tostring(g2))
+
+    local _, g3 = polishOnce(okResponse("明天 23:30 才收工。"))
+    check("R19 润色句带白名单外钟点 → guard_time", g3 == "guard_time", tostring(g3))
+    local segs20, cat20 = polishOnce(okResponse("19:45 还在收尾。"))
+    check("R20 请求事实里已有的钟点放行", segs20 ~= nil and cat20 == "llm", tostring(cat20))
+
+    local _, b1 = polishOnce({ ok = true, status = 200, bodyText = polishBody('"好的。","马上。"') },
+        polishFact({ brief = true }))
+    check("R21 碎片档出两句 → schema_brief_multi", b1 == "schema_brief_multi", tostring(b1))
+    local segs22, cat22 = polishOnce(okResponse("好的。"), polishFact({ brief = true }))
+    check("R22 碎片档一句短回复通过", segs22 ~= nil and cat22 == "llm", tostring(cat22))
+
+    PolishService.Configure({ enabled = false })
+end
+
+-- ---------------------------------------------------------------------------
+-- 场景 S：润色在途的 FIFO 与 8 秒预算 —— 后发不越序、队头超预算必回落、迟到作废
+-- ---------------------------------------------------------------------------
+local function ScenarioPolishFifo()
+    logInfo("场景 S 润色在途 FIFO 与预算：不越序、不阻塞、迟到作废")
+
+    local callbacks = {}
+    PolishService.Configure({ enabled = true, transport = { request = function(_, callback)
+        callbacks[#callbacks + 1] = callback
+    end } })
+    local order = {}
+    PolishService.Polish({ fact = polishFact(), pending = polishPending({ id = 501 }),
+        nowUtc = POLISH_BASE_UTC }, function(s)
+        order[#order + 1] = s and "A" or "A!"
+    end)
+    PolishService.Polish({ fact = polishFact(), pending = polishPending({ id = 502 }),
+        nowUtc = POLISH_BASE_UTC }, function(s)
+        order[#order + 1] = s and "B" or "B!"
+    end)
+    check("S0 两条都在途排队", #callbacks == 2 and PolishService.GetPendingCount() == 2,
+        string.format("回调 %d 个 槽位 %d", #callbacks, PolishService.GetPendingCount()))
+
+    callbacks[2](okResponse("B 句。"))
+    check("S1 后发的结果先回来也不越序：一条都不交付", #order == 0,
+        table.concat(order, ","))
+    callbacks[1](okResponse("A 句。"))
+    check("S2 队头落地后按发起顺序连发（A 先 B 后）",
+        #order == 2 and order[1] == "A" and order[2] == "B"
+        and PolishService.GetPendingCount() == 0,
+        table.concat(order, ","))
+
+    -- 预算：transport 从不调回调（违约），到点必须回落；迟到结果作废
+    local lateCb = nil
+    PolishService.Configure({ enabled = true, transport = { request = function(_, callback)
+        lateCb = callback
+    end } })
+    local hits = 0
+    PolishService.Polish({ fact = polishFact(), pending = polishPending({ id = 503 }),
+        nowUtc = POLISH_BASE_UTC }, function()
+        hits = hits + 1
+    end)
+    check("S3 预算内不提前交付", hits == 0 and PolishService.GetPendingCount() == 1)
+    PolishService.Update(POLISH_BASE_UTC + 9)
+    check("S4 超 8 秒预算必回落（队列不无限等）",
+        hits == 1 and PolishService.GetPendingCount() == 0,
+        string.format("回调 %d 次 槽位 %d", hits, PolishService.GetPendingCount()))
+    lateCb(okResponse("迟到的句子。"))
+    check("S5 预算回落后迟到的结果作废：不二次交付", hits == 1,
+        string.format("回调 %d 次", hits))
+
+    PolishService.Configure({ enabled = false })
+end
+
+-- ---------------------------------------------------------------------------
+-- 场景 T：润色开启态走真实队列链路 —— onDeliver 钩子是 main.lua 的 HandleDeliver，
+-- 只是 transport 换成假的。FIFO、逐句上屏与「事实由 Lua 给」在开启态一条不破。
+-- ---------------------------------------------------------------------------
+local function ScenarioPolishQueueFlow(dateKey)
+    logInfo("场景 T 润色开启态下队列连续发送（真实 HandleDeliver 链路）")
+    beginScenario()
+    goLocalHour(19, dateKey, 45)
+    -- reinit_ 把配置放回 GatewayEnabled=false；本场景注入假 transport 进入开启态
+    PolishService.Configure({ enabled = true, transport = { request = function(payload, callback)
+        local mark = payload.userMessage:find("第一条", 1, true) and "甲" or "乙"
+        callback({ ok = true, status = 200,
+            bodyText = polishBody('"' .. mark .. '一。","' .. mark .. '二。"') })
+    end } })
+
+    sendNow("第一条。")
+    sendNow("第二条。")
+    local opens = herReplyCount()
+    local markIndex = #MessageService.GetMessages()
+    advance(idleWait_ * 2 + 60)
+    local replies = herRepliesAfter(markIndex)
+    check("T1 两条都回完且队列放空（润色开启不卡队列）",
+        MessageService.GetQueueLength() == 0 and herReplyCount() == opens + 2,
+        string.format("回复增量 %d 队列 %d", herReplyCount() - opens,
+            MessageService.GetQueueLength()))
+    check("T2 回复按送达顺序 FIFO：第一条落甲句、第二条落乙句", #replies == 2
+        and TextOf(replies[1] and replies[1].text):find("甲一", 1, true) ~= nil
+        and TextOf(replies[2] and replies[2].text):find("乙一", 1, true) ~= nil,
+        string.format("一=%s 二=%s", TextOf(replies[1] and replies[1].text),
+            TextOf(replies[2] and replies[2].text)))
+    check("T3 润色文本逐句上屏后完整落库，一次回复仍只有一条记录", #replies == 2
+        and replies[1] ~= nil and replies[1].text == "甲一。甲二。"
+        and replies[1].streamSegments == nil,
+        TextOf(replies[1] and replies[1].text))
+    check("T4 回复记录的送达事实照常由 Lua 带上（LLM 不碰事实）",
+        replies[1] ~= nil and replies[1].factId ~= nil and replies[1].factKey ~= nil,
+        string.format("fact=%s key=%s", tostring(replies[1] and replies[1].factId),
+            tostring(replies[1] and replies[1].factKey)))
+
+    PolishService.Configure({ enabled = false })
+end
+
+-- ---------------------------------------------------------------------------
+-- M3 辅助：DST / 时区断言的期望常量全部手算自日历（2026-11-01、2026-10-25
+-- 都是周日；美国 11 月第一个周日 02:00 本地回拨、英国 10 月最后一个周日
+-- 02:00 本地回拨），不经任何被测代码，才算独立判据。
+-- ---------------------------------------------------------------------------
+
+local SUMMER_UTC = 1784116800   -- 2026-07-15 12:00 UTC（夏令时中段）
+local WINTER_UTC = 1796126400   -- 2026-12-01 12:00 UTC（冬令时中段）
+local CROSS_UTC = 1796144400    -- 2026-12-01 17:00 UTC（上海已跨日，洛杉矶还在当日上午）
+
+local LA_DST_PRE = 1793521800   -- 2026-11-01 08:30Z，当地 01:30 PDT（切换前）
+local LA_DST_POST = 1793525400  -- 同日 09:30Z，当地 01:30 PST（切换后：同钟点，UTC 晚一小时）
+local LA_MORNING_UTC = 1793541600 -- 同日 14:00Z = 当地 06:00 PST，醒来的第一档 idle
+
+local LON_DST_PRE = 1792888200  -- 2026-10-25 00:30Z，当地 01:30 BST（切换前）
+local LON_DST_POST = 1792891800 -- 同日 01:30Z，当地 01:30 GMT（切换后：同一个 01:30）
+local LON_MORNING_UTC = 1792908000 -- 同日 06:00Z = 当地 06:00 GMT，醒来的第一档 idle
+
+-- 随机派生的固定创作秒：与 ProfileService.RandomPick 同一算法（无 math.random），
+-- X1 的两个期望组合在实施时用独立实现逐位对拍过。
+local RANDOM_SEC_0 = 1789600000
+local RANDOM_STEP = 7919
+local RANDOM_SAMPLES = 16
+
+---@param label string
+---@param cityId string
+---@param utcSec number
+---@param wantClock string
+---@param wantDateKey string
+---@param wantOffsetHours integer
+---@param wantDst boolean
+local function checkClock(label, cityId, utcSec, wantClock, wantDateKey, wantOffsetHours, wantDst)
+    local snap = TimeState.Snapshot(cityId, utcSec)
+    check(label, snap.clock == wantClock and snap.dateKey == wantDateKey
+        and snap.offsetSeconds == wantOffsetHours * 3600 and snap.isDst == wantDst,
+        string.format("实际=%s %s off=%ds dst=%s", snap.dateKey, snap.clock,
+            snap.offsetSeconds, tostring(snap.isDst)))
+end
+
+-- ---------------------------------------------------------------------------
+-- 场景 U：四城时区表 —— 同一权威 UTC 在四城各得正确的当地钟点与日期
+-- ---------------------------------------------------------------------------
+local function ScenarioFourCityTime()
+    logInfo("场景 U 四城时区：夏冬令、跨日、同一 UTC 恒得同一结果")
+    checkClock("U1 夏令·洛杉矶 12:00Z → 05:00 PDT(-7)", "los_angeles", SUMMER_UTC, "05:00", "2026-07-15", -7, true)
+    checkClock("U2 夏令·伦敦 12:00Z → 13:00 BST(+1)", "london", SUMMER_UTC, "13:00", "2026-07-15", 1, true)
+    checkClock("U3 夏令·上海 12:00Z → 20:00(+8 无 DST)", "shanghai", SUMMER_UTC, "20:00", "2026-07-15", 8, false)
+    checkClock("U4 夏令·成都 12:00Z → 20:00(+8 无 DST)", "chengdu", SUMMER_UTC, "20:00", "2026-07-15", 8, false)
+    checkClock("U5 冬令·洛杉矶 12:00Z → 04:00 PST(-8)", "los_angeles", WINTER_UTC, "04:00", "2026-12-01", -8, false)
+    checkClock("U6 冬令·伦敦 12:00Z → 12:00 GMT(+0)", "london", WINTER_UTC, "12:00", "2026-12-01", 0, false)
+    checkClock("U7 冬令·上海 12:00Z → 20:00(+8)", "shanghai", WINTER_UTC, "20:00", "2026-12-01", 8, false)
+    checkClock("U8 跨日·上海 17:00Z → 次日 01:00", "shanghai", CROSS_UTC, "01:00", "2026-12-02", 8, false)
+    checkClock("U9 跨日·同一 UTC 洛杉矶仍是当日 09:00", "los_angeles", CROSS_UTC, "09:00", "2026-12-01", -8, false)
+    -- 反查互逆：UtcAtLocal 与 Snapshot 读同一张偏移表。整条链只碰 os.date("!")，
+    -- 设备时区无从参与 —— 同一 UTC 秒在任何机器上算出的当地钟点都一样。
+    check("U10 UtcAtLocal 与 Snapshot 互为逆（设备时区无从掺入）",
+        TimeState.UtcAtLocal("los_angeles", "2026-12-01", 9) == CROSS_UTC
+        and TimeState.UtcAtLocal("shanghai", "2026-12-02", 1) == CROSS_UTC,
+        string.format("la=%d sha=%d 期望=%d",
+            TimeState.UtcAtLocal("los_angeles", "2026-12-01", 9),
+            TimeState.UtcAtLocal("shanghai", "2026-12-02", 1), CROSS_UTC))
+end
+
+-- ---------------------------------------------------------------------------
+-- 场景 V：洛杉矶 DST 收尾边界 —— 「回拨的那一小时」不得把窗口回退到过期区间
+-- ---------------------------------------------------------------------------
+local function ScenarioLaDstBoundary()
+    logInfo("场景 V 洛杉矶 DST 边界：同钟点不同偏移，窗口不回退")
+    checkClock("V1 切换前 08:30Z → 01:30 PDT(-7)", "los_angeles", LA_DST_PRE, "01:30", "2026-11-01", -7, true)
+    checkClock("V2 切换后 09:30Z → 01:30 PST(-8)（当地重复的那一小时）", "los_angeles", LA_DST_POST, "01:30", "2026-11-01", -8, false)
+    local prePlan = TimeState.ReplyPlanFor("los_angeles", LA_DST_PRE)
+    check("V3 切换前凌晨送达 → 排到 06:00 PST，只往前走不回退进重复小时",
+        prePlan.replyable == false and prePlan.windowStartUtc == LA_MORNING_UTC
+        and prePlan.replyAtUtc == LA_MORNING_UTC + prePlan.delaySeconds
+        and prePlan.replyAtUtc > LA_DST_PRE,
+        string.format("window=%s replyAt=%s", tostring(prePlan.windowStartUtc), tostring(prePlan.replyAtUtc)))
+    local postNext = TimeState.NextReplyableUtc("los_angeles", LA_DST_POST)
+    check("V4 切换后同钟点 → 仍是同一个 06:00 PST 窗口（结果只由 UTC 秒决定）",
+        postNext == LA_MORNING_UTC, tostring(postNext))
+end
+
+-- ---------------------------------------------------------------------------
+-- 场景 W：伦敦 DST 收尾边界 —— 与洛杉矶同判据，证第二张偏移表独立成立
+-- ---------------------------------------------------------------------------
+local function ScenarioLondonDstBoundary()
+    logInfo("场景 W 伦敦 DST 边界：钟点回拨、窗口不回拨")
+    checkClock("W1 切换前 00:30Z → 01:30 BST(+1)", "london", LON_DST_PRE, "01:30", "2026-10-25", 1, true)
+    checkClock("W2 切换后 01:30Z → 01:30 GMT(+0)（当地重复的那一小时）", "london", LON_DST_POST, "01:30", "2026-10-25", 0, false)
+    local nextWin = TimeState.NextReplyableUtc("london", LON_DST_PRE)
+    check("W3 钟点回拨但窗口不回拨：06:00 GMT 才是第一个 idle 档",
+        nextWin == LON_MORNING_UTC and nextWin > LON_DST_PRE, tostring(nextWin))
+    local plan = TimeState.ReplyPlanFor("london", LON_DST_PRE)
+    check("W4 伦敦睡眠排队计划 = 窗口 + 反应时间（策略与洛杉矶同源）",
+        plan.replyable == false and plan.windowStartUtc == LON_MORNING_UTC
+        and plan.replyAtUtc == LON_MORNING_UTC + plan.delaySeconds,
+        string.format("window=%s delay=%s", tostring(plan.windowStartUtc), tostring(plan.delaySeconds)))
+    local postNext = TimeState.NextReplyableUtc("london", LON_DST_POST)
+    check("W5 切换后同钟点 → 同一个 06:00 GMT 窗口", postNext == LON_MORNING_UTC, tostring(postNext))
+end
+
+-- ---------------------------------------------------------------------------
+-- 场景 X：随机入口 —— 定种派生可复现，首次结果落盘后重进不重抽
+-- ---------------------------------------------------------------------------
+local function ScenarioRandomPersistence()
+    logInfo("场景 X 随机入口：可复现、跨重启固化")
+    beginScenario()
+
+    local first = ProfileService.RandomPick(RANDOM_SEC_0)
+    local second = ProfileService.RandomPick(RANDOM_SEC_0 + RANDOM_STEP)
+    check("X1 盐值钉死组合：1789600000→上海×陌生网友，+7919→洛杉矶×前同事",
+        first.cityId == "shanghai" and first.relationId == "stranger"
+        and second.cityId == "los_angeles" and second.relationId == "ex_colleague",
+        string.format("%s×%s | %s×%s", first.cityId, first.relationId, second.cityId, second.relationId))
+    local repicked = ProfileService.RandomPick(RANDOM_SEC_0)
+    check("X2 同一创作秒重复抽取逐字相同（定种派生，无 math.random）",
+        repicked.cityId == first.cityId and repicked.relationId == first.relationId
+        and repicked.seedText == first.seedText, repicked.seedText)
+
+    local seenCities, seenRelations = {}, {}
+    for i = 0, RANDOM_SAMPLES - 1 do
+        local picked = ProfileService.RandomPick(RANDOM_SEC_0 + i * RANDOM_STEP)
+        seenCities[picked.cityId] = true
+        seenRelations[picked.relationId] = true
+    end
+    local covered = true
+    for _, id in ipairs(ProfileService.CITY_ORDER) do
+        if not seenCities[id] then
+            covered = false
+        end
+    end
+    local relCount = 0
+    for _ in pairs(seenRelations) do
+        relCount = relCount + 1
+    end
+    check("X3 连续 16 个秒覆盖四城且关系不塌缩（分布可用）", covered and relCount >= 3,
+        string.format("关系种数=%d", relCount))
+
+    local p = ProfileService.ApplyRandom(RANDOM_SEC_0)
+    check("X4 ApplyRandom 落到完整随机档案（isRandom/initialized/seedText 齐备）",
+        p.isRandom == true and p.initialized == true and p.seedText ~= ""
+        and p.cityId == first.cityId and p.relationId == first.relationId, p.seedText)
+
+    MemoryService.SetProfile({
+        cityId = p.cityId, relationId = p.relationId, seedText = p.seedText,
+        isRandom = p.isRandom, initialized = p.initialized,
+    })
+    MemoryService.Persist(MessageService.GetMessages())
+    reinit_(SELFTEST_SAVE)
+    local back = MemoryService.GetProfile()
+    local active = ProfileService.Get()
+    check("X5 落盘重进后随机结果原样使用、不重抽（存档→InitServices→ProfileService）",
+        back ~= nil and back.cityId == p.cityId and back.relationId == p.relationId
+        and back.isRandom == true and back.seedText == p.seedText
+        and active.cityId == p.cityId and active.relationId == p.relationId
+        and active.isRandom == true,
+        string.format("存档=%s×%s 运行时=%s×%s", tostring(back and back.cityId),
+            tostring(back and back.relationId), active.cityId, active.relationId))
+end
+
+-- ---------------------------------------------------------------------------
+-- 场景 Y：四城切换核心链路不回归 —— 每城跑与洛杉矶完全同一套 helper：
+-- 排队 FIFO、引用她的回复、落盘重进，外加档案/作息/场景/事件四层同源断言。
+-- ---------------------------------------------------------------------------
+local function ScenarioCityConsistency(dateKey)
+    logInfo("场景 Y 四城切换：作息-场景-事件-回复-排队-存档同源不回归")
+    for _, city in ipairs(ProfileService.CITY_ORDER) do
+        beginScenario()
+        cityId_ = city
+        local cityProf = ProfileService.CityFor(city)
+        ProfileService.Set(city, cityProf.defaultRelation, { initialized = true })
+        local prefix = TimeState.CITIES[city].scenePrefix
+
+        local rows = TimeState.ScheduleFor(city)
+        local seamless = rows[1].from == 0 and rows[#rows].to == 24
+        local kinds = {}
+        local ownEvents = true
+        for i = 1, #rows do
+            if i > 1 and rows[i].from ~= rows[i - 1].to then
+                seamless = false
+            end
+            kinds[rows[i].availability] = true
+            if rows[i].event:sub(1, #prefix + 1) ~= prefix .. "_" then
+                ownEvents = false
+            end
+        end
+        local kindCount = 0
+        for _ in pairs(kinds) do
+            kindCount = kindCount + 1
+        end
+        check(city .. " Y1 作息无缝覆盖 00–24 且可用性档 ≥3 种", seamless and kindCount >= 3,
+            string.format("段=%d 可用性=%d", #rows, kindCount))
+        check(city .. " Y2 每档事件 id 都是本城前缀（作息表没混进别城的行）", ownEvents)
+        check(city .. " Y3 档案身份齐备且状态窗场景词汇 ≥2",
+            #cityProf.sceneVocab >= 2 and cityProf.identity ~= "",
+            string.format("场景词 %d 条", #cityProf.sceneVocab))
+        local narrated = true
+        for i = 1, #rows do
+            if not ProfileService.EventNarration(city, rows[i].event) then
+                narrated = false
+            end
+        end
+        check(city .. " Y4 档案叙事覆盖作息每一档（换城不缺叙事）", narrated)
+
+        goLocalHour(1, dateKey)
+        local snap = TimeState.Snapshot(city, TimeState.NowUtc())
+        local plan = EventService.PlanFor(city, snap.dateKey)
+        local fact = EventService.FactFor(city, snap.utcSec)
+        local q = EventService.QueryAt(city, snap.utcSec)
+        check(city .. " Y5 事件计划逐行覆盖作息表", #plan.occurrences == #rows,
+            string.format("事件 %d / 作息 %d", #plan.occurrences, #rows))
+        check(city .. " Y6 当地 01:00 睡眠·公寓，快照/事件/查询三方场景一致",
+            snap.availability == "offline" and snap.place == "apartment"
+            and snap.sceneId == prefix .. "_apartment"
+            and fact.sceneId == snap.sceneId and fact.eventState == "ongoing"
+            and q.allStates[fact.id] == "ongoing",
+            string.format("scene=%s event=%s", snap.sceneId, fact.id))
+
+        local first = sendNow("你那边现在冷吗？")
+        local second = sendNow("再说一句。")
+        local markIndex = #MessageService.GetMessages()
+        check(city .. " Y7 睡眠档两条消息排队不即时回复、计划先后有序",
+            MessageService.GetQueueLength() == 2 and first ~= nil and second ~= nil
+            and second.planReplyAtUtc > first.planReplyAtUtc,
+            string.format("队列 %d", MessageService.GetQueueLength()))
+        goLocalHour(7, dateKey)
+        advance(60)
+        local replies = herRepliesAfter(markIndex)
+        check(city .. " Y8 醒后两条按 FIFO 回完且各带本城送达事实",
+            MessageService.GetQueueLength() == 0 and #replies == 2
+            and replies[1] ~= nil and replies[1].factId ~= nil
+            and replies[2] ~= nil and replies[2].factId ~= nil,
+            string.format("回复 %d 队列剩 %d", #replies, MessageService.GetQueueLength()))
+        local preview = replies[1] and ContentService.ClipPreview(replies[1].text, 24) or ""
+        local quoted = sendNow("这句再说一遍。",
+            replies[1] and { id = replies[1].id, role = "her", text = replies[1].text } or nil)
+        check(city .. " Y9 引用她刚回的句：引用字段照常落在新消息上", quoted ~= nil
+            and quoted.quotedMessageId == replies[1].id
+            and quoted.quotedRole == MessageService.ROLE.HER and preview ~= "",
+            string.format("id=%s", tostring(quoted and quoted.quotedMessageId)))
+        advance(idleWait_ + 20)
+        local quoteReply = lastHerReply()
+        local qText = TextOf(quoteReply and quoteReply.text)
+        check(city .. " Y10 被引句在本城回复里被完整带出（引用链路跨城可用）",
+            quoteReply ~= nil and quoteReply ~= replies[1]
+            and qText:find(preview, 1, true) ~= nil, qText)
+
+        local totalBefore = #MessageService.GetMessages()
+        local stampBefore = nil
+        for i = totalBefore, 1, -1 do
+            if MessageService.GetMessages()[i].role == MessageService.ROLE.USER then
+                stampBefore = MessageService.GetMessages()[i].cityIdAtSend
+                break
+            end
+        end
+        MemoryService.SetProfile({
+            cityId = city, relationId = cityProf.defaultRelation,
+            seedText = "", isRandom = false, initialized = true,
+        })
+        MemoryService.Persist(MessageService.GetMessages())
+        reinit_(SELFTEST_SAVE)
+        local backProf = MemoryService.GetProfile()
+        local reopened = MessageService.Restore(MemoryService.GetRestoredMessages())
+        local msgsAfter = MessageService.GetMessages()
+        local stampAfter = nil
+        for i = #msgsAfter, 1, -1 do
+            if msgsAfter[i].role == MessageService.ROLE.USER then
+                stampAfter = msgsAfter[i].cityIdAtSend
+                break
+            end
+        end
+        check(city .. " Y11 落盘重进：档案是本城、记录一条不丢、已回完的不重回",
+            backProf ~= nil and backProf.cityId == city
+            and backProf.relationId == cityProf.defaultRelation
+            and reopened == 0 and #msgsAfter == totalBefore,
+            string.format("档案=%s×%s 记录 %d/%d",
+                tostring(backProf and backProf.cityId), tostring(backProf and backProf.relationId),
+                #msgsAfter, totalBefore))
+        check(city .. " Y12 城市戳随消息落盘重进不漂移（发送城=读回城=本城）",
+            stampBefore == city and stampAfter == city,
+            string.format("发送=%s 读回=%s", tostring(stampBefore), tostring(stampAfter)))
+    end
+    -- 气泡城市戳取消息自带的城；缺字段（旧档）或未知城才回落当前档案
+    ProfileService.Set("los_angeles", "stranger", { initialized = true })
+    check("Y13 城市戳优先取消息自带城市，缺省/未知回落当前档案",
+        ProfileService.MessageSuffix(true, "shanghai"):find("上海", 1, true) ~= nil
+        and ProfileService.MessageSuffix(true, nil):find("洛杉矶", 1, true) ~= nil
+        and ProfileService.MessageSuffix(true, "no_such_city"):find("洛杉矶", 1, true) ~= nil)
+    cityId_ = "los_angeles"
+end
+
+-- ---------------------------------------------------------------------------
+-- 场景 Z：v4 旧档迁移 —— 缺 profile 按明确规则补齐，历史一条不丢、不弹初始化
+-- ---------------------------------------------------------------------------
+
+--- 只给本场景造旧版本夹具用：正常路径一律走 MemoryService.Save
+---@param path string
+---@param tbl table
+---@return integer bytes
+local function writeRawSave(path, tbl)
+    local encoded = cjson.encode(tbl)
+    local file = File(path, FILE_WRITE)
+    if not file:IsOpen() then
+        error("无法写入夹具存档: " .. path)
+    end
+    file:WriteString(encoded)
+    file:Close()
+    file:Dispose()
+    return #encoded
+end
+
+local function ScenarioV4Migration()
+    logInfo("场景 Z v4 旧档迁移：不弹初始化、记录/引用/队列/计划不丢")
+    beginScenario()
+
+    ---@type any
+    local fixture = {
+        version = 4,
+        cityId = "los_angeles",
+        turns = 7,
+        firstServerTime = 1796000000,
+        lastServerTime = 1796003600,
+        lastFactId = "la_cafe_open_mic",
+        topics = { "书店" },
+        transcript = {
+            { id = 9001, role = "user", text = "今晚店里人多吗？", serverTime = 1796000000,
+                state = "replied", statusText = "已送达", clockText = "19:45",
+                factId = "la_cafe_open_mic", availabilityAtSend = "idle",
+                quotedMessageId = 9000, quotedRole = "her", quotedTextPreview = "人不多。" },
+            { id = 9002, role = "her", text = "人不多，在整理物料。", serverTime = 1796000010,
+                state = "delivered", clockText = "19:45", factId = "la_cafe_open_mic" },
+            { id = 9003, role = "user", text = "明早想去你那逛逛。", serverTime = 1796003600,
+                state = "queued", statusText = "排队中", clockText = "04:00",
+                availabilityAtSend = "offline", replyableAtSend = false,
+                planReplyAtUtc = 1796047210, planWindowStartUtc = 1796047200 },
+        },
+        eventLedger = {
+            { key = "los_angeles/2026-11-30/la_apartment_night_rest", eventId = "la_apartment_night_rest",
+                title = "凌晨在公寓睡下", sceneId = "la_apartment",
+                startUtc = 1796025600, endUtc = 1796047200,
+                lastEventState = "ongoing", lastServerTime = 1796030000 },
+        },
+        eventPlans = {
+            {
+                cityId = "los_angeles",
+                dateKey = "2026-11-30",
+                seedText = "fixture",
+                generatedAtUtc = 1796000000,
+                occurrences = {
+                    { occurrenceKey = "los_angeles/2026-11-30/la_apartment_night_rest",
+                        templateId = "la_apartment_night_rest", variantIndex = 1,
+                        startUtc = 1796025600, endUtc = 1796047200,
+                        place = "apartment", availability = "offline" },
+                },
+            },
+        },
+    }
+    local bytes = writeRawSave(SELFTEST_SAVE, fixture)
+    reinit_(SELFTEST_SAVE)
+
+    local prof = MemoryService.GetProfile()
+    check("Z1 v4 缺档案迁移为洛杉矶×陌生网友且已初始化（不弹初始化界面）",
+        prof ~= nil and prof.cityId == "los_angeles" and prof.relationId == "stranger"
+        and prof.isRandom == false and prof.initialized == true
+        and ProfileService.Get().cityId == "los_angeles"
+        and ProfileService.Get().initialized == true,
+        string.format("profile=%s×%s init=%s 夹具 %d 字节",
+            tostring(prof and prof.cityId), tostring(prof and prof.relationId),
+            tostring(prof and prof.initialized), bytes))
+    check("Z2 迁移后内存版本抬到 v5", MemoryService.Get().version == 5,
+        tostring(MemoryService.Get().version))
+    local reopened = MessageService.Restore(MemoryService.GetRestoredMessages())
+    local msgs = MessageService.GetMessages()
+    check("Z3 transcript 三条全部迁为 messages（一条不丢、待回复的仍算排队）",
+        #msgs == 3 and reopened == 1, string.format("记录 %d 待回复 %d", #msgs, reopened))
+    local quotedEntry = msgs[1]
+    check("Z4 引用字段原样迁移（quotedMessageId/role/preview 都在）",
+        quotedEntry ~= nil and quotedEntry.quotedMessageId == 9000
+        and quotedEntry.quotedRole == "her"
+        and TextOf(quotedEntry.quotedTextPreview) == "人不多。",
+        string.format("id=%s role=%s", tostring(quotedEntry and quotedEntry.quotedMessageId),
+            tostring(quotedEntry and quotedEntry.quotedRole)))
+    local queued = head()
+    check("Z5 待回复消息带着原计划时刻回来（不会读档即提前回复）",
+        queued ~= nil and queued.id == 9003 and queued.planReplyAtUtc == 1796047210
+        and queued.availabilityAtSend == "offline",
+        string.format("id=%s plan=%s", tostring(queued and queued.id),
+            tostring(queued and queued.planReplyAtUtc)))
+    local plan = EventService.PeekPlan("los_angeles", "2026-11-30")
+    check("Z6 事件计划由存档接管：fromSave=true 且 occurrenceKey 不变",
+        plan ~= nil and plan.fromSave == true and plan.occurrences[1] ~= nil
+        and plan.occurrences[1].occurrenceKey == "los_angeles/2026-11-30/la_apartment_night_rest"
+        and plan.occurrences[1].templateId == "la_apartment_night_rest",
+        string.format("plan=%s", plan and plan.occurrences[1].occurrenceKey or "nil"))
+
+    -- v5 带记录却缺 profile：只可能是初始化前被强杀的脏写半截，按 LA×陌生网友兜底；
+    -- 真正没记录的新档（Load 无文件 / 空 messages）才留给初始化界面
+    ---@type any
+    local fixture5 = {
+        version = 5,
+        cityId = "los_angeles",
+        turns = 2,
+        firstServerTime = 1796000000,
+        lastServerTime = 1796000010,
+        lastFactId = "la_cafe_open_mic",
+        topics = {},
+        messages = {
+            { id = 8100, role = "user", text = "在吗？", serverTime = 1796000000,
+                state = "replied", clockText = "19:45", cityIdAtSend = "shanghai" },
+            { id = 8101, role = "her", text = "在的。", serverTime = 1796000010,
+                state = "replied", clockText = "19:45" },
+        },
+    }
+    writeRawSave(SELFTEST_SAVE, fixture5)
+    reinit_(SELFTEST_SAVE)
+    local prof5 = MemoryService.GetProfile()
+    local back5 = MessageService.GetMessages()
+    check("Z7 v5 半截脏档（带记录缺 profile）兜底为 LA×陌生网友已初始化，不弹初始化",
+        prof5 ~= nil and prof5.cityId == "los_angeles" and prof5.relationId == "stranger"
+        and prof5.initialized == true and ProfileService.Get().initialized == true
+        and #back5 == 2,
+        string.format("profile=%s×%s 记录 %d",
+            tostring(prof5 and prof5.cityId), tostring(prof5 and prof5.relationId), #back5))
+    check("Z8 消息城市戳穿存档往返（上海时期发的消息重进仍带上海）",
+        back5[1] ~= nil and back5[1].cityIdAtSend == "shanghai",
+        tostring(back5[1] and back5[1].cityIdAtSend))
+end
+
 --- 一个场景独立跑完再进下一个，并落一行「本场景判定几条」。
 --- 2026-09-22 云端实测：开机那一瞬的突发日志会被管道整批丢掉（suite 只剩 PASS A0…A6，
 --- 同批的 开场事件 / M1 已就绪 一起缺席），而调用点本来就有 pcall，所以不是断言抛出吞掉后续场景。
@@ -1109,6 +1886,20 @@ function DevSelfTest.Run(options)
     runScenario("O", ScenarioQuoteSleepQueue, dateKey)
     runScenario("P", ScenarioSegmentOrder, dateKey)
     runScenario("Q", ScenarioStreamingFifo, dateKey)
+    -- M2-B 润色：R 验适配层契约与全量回落（假 transport），S 验在途 FIFO 与预算，
+    -- T 验开启态下真实队列链路（HandleDeliver）与 M2-A 时序不冲突
+    runScenario("R", ScenarioPolishContract, dateKey)
+    runScenario("S", ScenarioPolishFifo, dateKey)
+    runScenario("T", ScenarioPolishQueueFlow, dateKey)
+    -- M3 四城与档案：U 时区表、V/W 两个 DST 边界（纯函数，不动服务状态），
+    -- X 随机入口持久化，Y 四城核心链路（排队/引用/落盘重进）逐城跑，Z v4 旧档迁移。
+    -- Z 放最后：它往自检存档写 v4 夹具，跑完 Run 收尾的 ClearSavedData 会一并清掉。
+    runScenario("U", ScenarioFourCityTime, dateKey)
+    runScenario("V", ScenarioLaDstBoundary, dateKey)
+    runScenario("W", ScenarioLondonDstBoundary, dateKey)
+    runScenario("X", ScenarioRandomPersistence, dateKey)
+    runScenario("Y", ScenarioCityConsistency, dateKey)
+    runScenario("Z", ScenarioV4Migration, dateKey)
 
     MemoryService.ClearSavedData()
     summary_ = string.format("自检结论 通过=%d 失败=%d 场景=%d/%d[%s]",

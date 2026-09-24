@@ -723,7 +723,7 @@ WebGL 与原生 Android 上都不成立**，本项目代码里的 `nvgRotate(mat
    「自检结论只在开机说过一次」这件事本身就不可取证。已改为：① 逐场景 `pcall` +
    `场景 X 结束：判定 N 条`；② 一行式结论 `自检结论 通过=N 失败=M 场景=10/10[A B C D E F I J G H]`；
    ③ 该结论由 `HandleUpdate` 每 4 秒原样重发、共 3 次，落进后面的抓取窗口。
-   **判据改成看结论行的 `场景=N/10`，不再数 PASS 条数。**
+   **判据改成看结论行的 `场景=N/总数`（写作为 10；M2-B 起为 20，总数 = `DevSelfTest.SCENARIO_TOTAL`），不再数 PASS 条数。**
    再补一层：结论行现在带 `需看=I×1 J×2`（每条场景各自的失败数，`DevSelfTest.BadScenarios()`），
    面板那行只在全绿之外的情况下才追加这一段——否则一轮 reload 只知道「有红的」，还得再来一轮才知道翻哪段。
    想靠「本地跑一遍真 Lua」绕开 reload 也已堵死：`engine-docs/recipes/procedural-lua-headless.md`

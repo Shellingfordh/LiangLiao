@@ -711,6 +711,23 @@ local SCENE_BACKGROUNDS = {
     -- 开发测试用原创占位图；正式资产替换后只需改这里的路径，不改状态机。
     la_apartment = "Textures/backgrounds/la-apartment-dev-placeholder.png",
     la_studio = "Textures/backgrounds/la-studio-dev-placeholder.png",
+    -- M3 四城场景：先以同规格占位图落 pipeline，真图生成单独等确认（设计 §8.3）。
+    sha_apartment = "Textures/backgrounds/sha-apartment-dev-placeholder.png",
+    sha_commute = "Textures/backgrounds/sha-commute-dev-placeholder.png",
+    sha_office = "Textures/backgrounds/sha-office-dev-placeholder.png",
+    sha_cafe = "Textures/backgrounds/sha-cafe-dev-placeholder.png",
+    sha_bookstore = "Textures/backgrounds/sha-bookstore-dev-placeholder.png",
+    cdu_apartment = "Textures/backgrounds/cdu-apartment-dev-placeholder.png",
+    cdu_studio = "Textures/backgrounds/cdu-studio-dev-placeholder.png",
+    cdu_cafe = "Textures/backgrounds/cdu-cafe-dev-placeholder.png",
+    cdu_commute = "Textures/backgrounds/cdu-commute-dev-placeholder.png",
+    cdu_nightmarket = "Textures/backgrounds/cdu-nightmarket-dev-placeholder.png",
+    lon_apartment = "Textures/backgrounds/lon-apartment-dev-placeholder.png",
+    lon_commute = "Textures/backgrounds/lon-commute-dev-placeholder.png",
+    lon_campus = "Textures/backgrounds/lon-campus-dev-placeholder.png",
+    lon_cafe = "Textures/backgrounds/lon-cafe-dev-placeholder.png",
+    lon_studio = "Textures/backgrounds/lon-studio-dev-placeholder.png",
+    lon_recordshop = "Textures/backgrounds/lon-recordshop-dev-placeholder.png",
 }
 
 ---@type string
@@ -739,7 +756,7 @@ function StatusWindow.RequestScene(sceneId, onApplied)
     local path = SCENE_BACKGROUNDS[sceneId]
     currentSceneId_ = sceneId
     if not path then
-        sceneNotice_ = "场景 " .. sceneId .. " 暂无原创静帧，状态窗沿用咖啡馆画面"
+        sceneNotice_ = "场景 " .. sceneId .. " 暂无原创静帧，状态窗沿用当前画面"
         logWarn("场景未切换（缺资产）: " .. sceneId)
         if noticesChanged_ then
             noticesChanged_()

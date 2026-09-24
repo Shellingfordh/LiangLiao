@@ -6,6 +6,9 @@
 --     事件事实 id 与事件实例键（factKey）、送达时的作息事实，重进时由 main.lua 交给 MessageService.Restore。
 --   * v4 起存档额外带走「每日事件计划」（EventService 生成的那批事件实例）：
 --     重启后由 main.lua 交给 EventService.Restore 接管，不重新生成同日事件。
+--   * v5 起存档带走「城市 × 关系档案」（profile）：随机入口的首次结果必须在这里固定，
+--     重进不重抽。v1–v4 没有该字段 → 按「存档里的 cityId × 陌生网友、已初始化」迁移，
+--     不弹初始化界面，聊天记录/引用/事件计划/排队一条不丢。
 --   * v1 存档（只有 transcript 摘要）与 v2/v3（无事件计划）仍可读，读回时迁移为当前版本。
 --   * clientCloud 只暴露异步接口，且按轮次节流（不逐条消息写云）。
 --   * 预览是否成功不依赖云存储：云回调只打日志，不驱动任何 UI 状态。
@@ -19,7 +22,7 @@ local CLOUD_KEY = "companion_memory_la"
 local CLOUD_FLUSH_EVERY_TURNS = 5
 -- 落盘的消息条数上限：只裁「已回复」的旧记录，任何未回复的排队消息都不会被裁掉
 local MESSAGE_CAP = 120
-local SAVE_VERSION = 4
+local SAVE_VERSION = 5
 local EVENT_LEDGER_CAP = 40
 -- 落盘的事件计划天数：与 EventService 的窗口一致，跨日补回要看昨天。
 local EVENT_PLAN_CAP = 4
@@ -37,6 +40,13 @@ local EVENT_PLAN_CAP = 4
 --- 事件计划的落盘结构就是 EventService 的 EventPlan（同名同形，不再造第二个类型）：
 --- 计划只有一处定义，存档读写与运行时查询说的是同一份事实。
 
+---@class SavedProfile
+---@field cityId string
+---@field relationId string
+---@field seedText string 随机入口的派生种子（手动选择时为「城市|关系」组合串）
+---@field isRandom boolean
+---@field initialized boolean 初始化界面是否已经完成过（旧档迁移即视为完成）
+
 ---@class CompanionMemory
 ---@field version integer
 ---@field cityId string
@@ -48,6 +58,8 @@ local EVENT_PLAN_CAP = 4
 ---@field messages MsgEntry[]
 ---@field eventLedger EventLedgerEntry[]
 ---@field eventPlans EventPlan[]
+---@field profile? SavedProfile v5 起有；nil = 从未初始化（新玩家要进初始化界面）。
+---   v5 档带记录却缺此字段（脏写半截）→ 读回时按 LA×陌生网友补齐并 WARN，不重弹初始化
 
 ---@type CompanionMemory
 local mem_ = {
@@ -61,6 +73,7 @@ local mem_ = {
     messages = {},
     eventLedger = {},
     eventPlans = {},
+    profile = nil,
 }
 
 local source_ = "memory"
@@ -159,6 +172,7 @@ local function sanitizeMessage(raw)
         availabilityLabelAtSend = asString(raw.availabilityLabelAtSend),
         placeAtSend = asString(raw.placeAtSend),
         sceneIdAtSend = asString(raw.sceneIdAtSend),
+        cityIdAtSend = asString(raw.cityIdAtSend),
         phraseAtSend = asString(raw.phraseAtSend),
         factKey = asString(raw.factKey),
         quotedMessageId = asInteger(raw.quotedMessageId),
@@ -266,6 +280,28 @@ local function readEventPlans(rawPlans)
     return out
 end
 
+--- 读回落盘的档案。缺 cityId/relationId 任一即视为「没有档案」，
+--- 由 Load 的迁移规则接管，绝不拿半截档案去覆盖当前 ProfileService。
+---@param raw any
+---@return SavedProfile?
+local function readProfile(raw)
+    if type(raw) ~= "table" then
+        return nil
+    end
+    local cityId = asString(raw.cityId)
+    local relationId = asString(raw.relationId)
+    if not cityId or not relationId then
+        return nil
+    end
+    return {
+        cityId = cityId,
+        relationId = relationId,
+        seedText = asString(raw.seedText) or "",
+        isRandom = asBoolean(raw.isRandom) == true,
+        initialized = asBoolean(raw.initialized) ~= false,
+    }
+end
+
 ---@class MemoryInitOptions
 ---@field cityId? string
 ---@field cloud? CloudAdapter
@@ -324,11 +360,29 @@ function MemoryService.Load()
         mem_.messages = readMessages(migrated and data.transcript or data.messages)
         mem_.eventLedger = readEventLedger(data.eventLedger)
         mem_.eventPlans = readEventPlans(data.eventPlans)
+        mem_.profile = readProfile(data.profile)
+        if not mem_.profile and (migrated or #mem_.messages > 0) then
+            -- v1–v4 只有洛杉矶一条线：缺档案就是「洛杉矶 × 陌生网友、已初始化」，
+            -- 不弹初始化界面，历史原样保留。v5 带记录却缺 profile 只可能是脏写半截，
+            -- 走同一兜底但打 WARN；没记录的新档留给初始化界面（设计 §4）
+            mem_.profile = {
+                cityId = mem_.cityId,
+                relationId = "stranger",
+                seedText = "",
+                isRandom = false,
+                initialized = true,
+            }
+            if not migrated then
+                logWarn("v5 存档带 " .. tostring(#mem_.messages)
+                    .. " 条记录却缺 profile（脏写半截），按洛杉矶×陌生网友补齐，不弹初始化")
+            end
+        end
         if migrated then
             mem_.version = SAVE_VERSION
             logInfo("读到 v" .. tostring(asInteger(data.version) or 1) .. " 存档，已迁移为 v"
                 .. tostring(SAVE_VERSION) .. "（消息 " .. tostring(#mem_.messages)
-                .. " 条，事件计划 " .. tostring(#mem_.eventPlans) .. " 天）")
+                .. " 条，事件计划 " .. tostring(#mem_.eventPlans) .. " 天，档案 "
+                .. mem_.profile.cityId .. "×" .. mem_.profile.relationId .. "）")
         end
         source_ = "file"
         local pending = 0
@@ -365,6 +419,7 @@ function MemoryService.Save()
         local encoded = cjson.encode({
             version = mem_.version,
             cityId = mem_.cityId,
+            profile = mem_.profile,
             turns = mem_.turns,
             firstServerTime = mem_.firstServerTime,
             lastServerTime = mem_.lastServerTime,
@@ -415,6 +470,7 @@ local function toSaved(entry)
         availabilityLabelAtSend = entry.availabilityLabelAtSend,
         placeAtSend = entry.placeAtSend,
         sceneIdAtSend = entry.sceneIdAtSend,
+        cityIdAtSend = entry.cityIdAtSend,
         phraseAtSend = entry.phraseAtSend,
         factKey = entry.factKey,
         quotedMessageId = entry.quotedMessageId,
@@ -509,6 +565,27 @@ function MemoryService.GetEventPlans()
     return mem_.eventPlans
 end
 
+--- 收当前档案进存档（初始化完成、换档案、随机落定后都要调）。只改内存，是否写盘由调用方决定。
+--- 顶层 cityId 与档案同步，保证万一被旧版本代码读回，城市字段仍然可信。
+---@param p SavedProfile | CompanionProfile 传运行时完整档案也行，落盘只留 SavedProfile 那五个字段
+---@return boolean accepted
+function MemoryService.SetProfile(p)
+    local clean = readProfile(p)
+    if not clean then
+        logWarn("档案缺 cityId/relationId，未写入")
+        return false
+    end
+    mem_.profile = clean
+    mem_.cityId = clean.cityId
+    cloudDirty_ = true
+    return true
+end
+
+---@return SavedProfile?
+function MemoryService.GetProfile()
+    return mem_.profile
+end
+
 --- 收一份事件计划进存档。只改内存，是否写盘由调用方决定（见 main.lua 的落盘回调）。
 ---@param plans EventPlan[]
 function MemoryService.SetEventPlans(plans)
@@ -571,6 +648,8 @@ end
 
 function MemoryService.ResetInMemory()
     mem_.version = SAVE_VERSION
+    mem_.cityId = "los_angeles"
+    mem_.profile = nil
     mem_.turns = 0
     mem_.firstServerTime = 0
     mem_.lastServerTime = 0

@@ -8,6 +8,7 @@
 
 local UI = require("urhox-libs/UI")
 local ContentService = require("services.ContentService")
+local ProfileService = require("ProfileService")
 
 local ChatPanel = {}
 
@@ -57,6 +58,8 @@ local scroller_ = nil
 local statusLabel_ = nil
 ---@type Label|nil
 local memoryLabel_ = nil
+---@type Label|nil
+local profileLabel_ = nil
 ---@type TextField|nil
 local inputField_ = nil
 ---@type Button|nil
@@ -102,6 +105,8 @@ local onSkip_ = function() end
 local onDraftChange_ = function() end
 ---@type fun(msg: MsgEntry): nil
 local onQuote_ = function() end
+---@type fun(): nil
+local onProfileEntry_ = function() end
 ---@type fun(): MsgEntry[]
 local messagesProvider_ = function()
     return {}
@@ -155,8 +160,38 @@ end
 ---@field onSkip? fun() 点击跳过等待
 ---@field onDraftChange? fun(text: string) 输入变化，回写草稿
 ---@field onQuote? fun(msg: MsgEntry) 点击某条气泡上的「引用」
+---@field onProfileEntry? fun() 点击顶栏「换档案」
 ---@field getMessages? fun(): MsgEntry[]
 ---@field getVersion? fun(): integer
+
+--- 顶栏「换档案」入口：换城市/关系不销毁聊天流，只是重挂一份档案（设计 §7）。
+--- 与发送/引用同一条按钮链路：focusable=false + OnPointerDown 直接回调，
+--- 避免「失焦收键盘 → 布局位移 → OnClick 静默丢失」（AGENTS 实测坑）。
+---@return Widget
+local function MakeProfileEntryButton()
+    local btn = UI.Button {
+        id = "chatProfileEntry",
+        text = "换档案",
+        variant = "secondary",
+        fontSize = 9,
+        height = 20,
+        width = 48,
+        paddingLeft = 0,
+        paddingRight = 0,
+        focusable = false,
+    }
+    btn.focusable = false
+    function btn:OnPointerDown(event)
+        if not event or not event:IsPrimaryAction() then
+            return
+        end
+        self:SetState({ pressed = true })
+        self:TransitionToStateBgColor()
+        logInfo("换档案入口按下")
+        onProfileEntry_()
+    end
+    return btn
+end
 
 ---@param msg MsgEntry
 ---@return Widget
@@ -181,7 +216,7 @@ local function MakeBubbleRow(msg)
         }
     end
 
-    local metaText = (msg.clockText or "") .. (isUser and " · 洛杉矶 · 你" or " · 若夕")
+    local metaText = (msg.clockText or "") .. ProfileService.MessageSuffix(isUser, msg.cityIdAtSend)
     local statusText = isUser and (msg.statusText or "") or ""
     local quotePreview = msg.quotedTextPreview or ""
     local bodyW = estTextWidth(msg.text, 13)
@@ -330,6 +365,7 @@ function ChatPanel.Build(opts)
     onSkip_ = opts.onSkip or onSkip_
     onDraftChange_ = opts.onDraftChange or onDraftChange_
     onQuote_ = opts.onQuote or onQuote_
+    onProfileEntry_ = opts.onProfileEntry or onProfileEntry_
     messagesProvider_ = opts.getMessages or messagesProvider_
     versionProvider_ = opts.getVersion or versionProvider_
     phase_ = "idle"
@@ -346,6 +382,14 @@ function ChatPanel.Build(opts)
         id = "chatMemoryLine",
         text = "记忆读取中…",
         fontSize = 10,
+        fontColor = COLORS.dimText,
+        whiteSpace = "nowrap",
+    }
+
+    profileLabel_ = UI.Label {
+        id = "chatProfileLine",
+        text = ProfileService.ProfileLine(),
+        fontSize = 11,
         fontColor = COLORS.dimText,
         whiteSpace = "nowrap",
     }
@@ -532,11 +576,14 @@ function ChatPanel.Build(opts)
                 justifyContent = "space-between",
                 alignItems = "center",
                 children = {
-                    UI.Label {
-                        text = "陌生网友 · 洛杉矶",
-                        fontSize = 11,
-                        fontColor = COLORS.dimText,
-                        whiteSpace = "nowrap",
+                    UI.Row {
+                        alignItems = "center",
+                        gap = 6,
+                        flexShrink = 1,
+                        children = {
+                            profileLabel_,
+                            MakeProfileEntryButton(),
+                        },
                     },
                     memoryLabel_,
                 },
@@ -727,6 +774,14 @@ function ChatPanel.SetMemoryLine(line)
     end
 end
 
+--- 换档案后刷新顶栏「关系 · 城市」一行（历史气泡不重建，旧城市戳保留原样）
+---@param line string
+function ChatPanel.SetProfileLine(line)
+    if profileLabel_ then
+        profileLabel_:SetText(line)
+    end
+end
+
 --- 记下准备随下一条消息发出的引用。quote 传 nil 等于取消。
 --- 只存 id / role / text 三样，不碰 TimeState 与 EventService 的任何事实。
 ---@param quote? { id: integer, role: string, text: string }
@@ -788,6 +843,7 @@ function ChatPanel.Shutdown()
     scroller_ = nil
     statusLabel_ = nil
     memoryLabel_ = nil
+    profileLabel_ = nil
     inputField_ = nil
     sendButton_ = nil
     skipButton_ = nil

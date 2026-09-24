@@ -1,7 +1,8 @@
 -- ============================================================================
 -- 《送给你这个回来的人》M1 首个可玩闭环（建在已验收的 M0-1 竖切片之上）
 -- 竖屏手机：固定镜头 4:3 状态窗 + 真实时间驱动的生活状态 + 会排队的聊天闭环。
--- 后端 = 同工程内的 Lua 服务（消息/事件/内容/记忆/开发自检），无外部服务、无 LLM。
+-- 后端 = 同工程内的 Lua 服务（消息/事件/内容/记忆/润色适配/开发自检）。M2-B：LLM 网关
+-- 在独立的 gateway/ 目录且未部署；GatewayEnabled=false 时运行时零外发，回复仍是本地模板。
 -- M1 新增：忙碌与睡眠时消息按 FIFO 排队到下一个可回复窗口；重进恢复完整记录与队列；
 -- 回复只引用「送达时刻」与「交付时刻」两个确定时间快照里的事实。
 -- 日志前缀仍留 [M0-1]：AGENTS.md 把它当作「已进入 Lua」的判据字符串。
@@ -14,19 +15,26 @@ local MessageService = require("services.MessageService")
 local EventService = require("services.EventService")
 local ContentService = require("services.ContentService")
 local MemoryService = require("services.MemoryService")
+local PolishService = require("services.PolishService")
 local DevSelfTest = require("services.DevSelfTest")
 local ChatPanel = require("ui.ChatPanel")
 local DevTestPanel = require("ui.DevTestPanel")
+local ProfileService = require("ProfileService")
+local ProfileOverlay = require("ui.ProfileOverlay")
 
----@type {Title: string, City: string, ReplyWaitSeconds: integer, DevTools: boolean, UseCloudMemory: boolean, DevSelfTest: boolean, AwaySummaryMinSeconds: integer}
+---@type {Title: string, City: string, ReplyWaitSeconds: integer, DevTools: boolean, UseCloudMemory: boolean, DevSelfTest: boolean, AwaySummaryMinSeconds: integer, GatewayEnabled: boolean}
 local CONFIG = {
     Title = "送给你这个回来的人",
-    City = "los_angeles",
+    City = "los_angeles",        -- 干净安装的初始城市；存档/换档案后的城市走 ProfileService
     ReplyWaitSeconds = 10,   -- 空闲档的固定等待（M0-1 验收过的那条链路）
     DevTools = true,         -- 开发预览：显示「跳过等待」
     UseCloudMemory = false,  -- 预览不绑定云存储，只保留异步接口
     DevSelfTest = true,      -- 启动时跑一次真实服务自检（busy/offline/idle + FIFO + 重进）
     AwaySummaryMinSeconds = 60, -- 离开超过这个时长才给一条「离开期间」摘要
+    -- M2-B S1：网关与适配层已就位，但客户端 HTTP 被平台屏蔽（引擎文档 http.md），
+    -- 真正接入要等「Maker 多人房服务端中转 + TapTap URL 白名单」这条路径被确认。
+    -- 置 false 时 HandleDeliver 的行为与 M2-A 完全一致（同步模板回复）。
+    GatewayEnabled = false,
 }
 
 --- 事件实例的生命周期上屏文案：状态窗注释行与回复共用同一套说法
@@ -50,6 +58,8 @@ local infoPlaceLabel_ = nil
 ---@type Label|nil
 local infoStateLabel_ = nil
 ---@type Label|nil
+local infoRelationLabel_ = nil
+---@type Label|nil
 local errorLabel_ = nil
 ---@type Label|nil
 local noteLabel_ = nil
@@ -64,7 +74,7 @@ local clockElapsed_ = 0
 local pendingQuote_ = nil
 
 ---@class SelfTestEcho
----@field text string 落日志的完整结论（判据：场景=N/10）
+---@field text string 落日志的完整结论（判据：场景=N/总数，总数由 DevSelfTest.SCENARIO_TOTAL 给出）
 ---@field panel string 面板用的短结论（那行 nowrap，长文本会被裁掉）
 ---@field left integer
 ---@field elapsed number
@@ -93,11 +103,18 @@ local function NowUtc()
     return TimeState.NowUtc()
 end
 
+--- 当前玩法城市的唯一入口：以 profile 为准。CONFIG.City 只是干净安装的初始城市，
+--- 存档带回来的、或玩家换档案后的城市都从这里走，不再直接读配置。
+---@return string
+local function City()
+    return ProfileService.GetCityId()
+end
+
 --- 刷新时间快照，并保证 lastFact_ 与它同源：事实来自当天的事件计划，不是现挑模板
 local function RefreshSnapshot()
-    local snap = TimeState.Snapshot(CONFIG.City, NowUtc())
+    local snap = TimeState.Snapshot(City(), NowUtc())
     lastSnap_ = snap
-    lastFact_ = EventService.FactFor(CONFIG.City, snap.utcSec)
+    lastFact_ = EventService.FactFor(City(), snap.utcSec)
     return snap
 end
 
@@ -124,7 +141,7 @@ local function FormatClock(utcSec)
     if key == clockCacheKey_ then
         return clockCacheVal_
     end
-    local clock = TimeState.Snapshot(CONFIG.City, key * 60).clock
+    local clock = TimeState.Snapshot(City(), key * 60).clock
     clockCacheKey_ = key
     clockCacheVal_ = clock
     return clock
@@ -139,14 +156,15 @@ local function MakeSendContext(snap, quote)
     -- 与当前快照同一 UTC 时复用已刷新的那一份事实；否则现查，
     -- 保证开发自检在没有走 RefreshSnapshot 的路径上也不会带上上一场景的旧实例键
     local fact = (lastFact_ and lastFact_.serverTime == snap.utcSec and lastFact_)
-        or EventService.FactFor(CONFIG.City, snap.utcSec)
+        or EventService.FactFor(City(), snap.utcSec)
     lastFact_ = fact
     return {
-        plan = TimeState.ReplyPlanFor(CONFIG.City, snap.utcSec),
+        plan = TimeState.ReplyPlanFor(City(), snap.utcSec),
         availability = snap.availability,
         availabilityLabel = snap.availabilityLabel,
         place = snap.place,
         sceneId = snap.sceneId,
+        cityId = snap.cityId,
         phrase = snap.phrase,
         factId = fact.id,
         -- 送达瞬间命中的事件实例：补回与重进都引用同一个键
@@ -220,13 +238,16 @@ function HandleSkip()
 end
 
 --- 状态机到点后的回复生成：送达时刻与交付时刻两个快照 + 用户原文 → 模板
+--- M2-B：先问 PolishService（网关关闭态同步回调，行为与 M2-A 完全一致；
+--- 开启态等润色结果或 8 秒预算到点，任何失败都回落到同一条模板路径）。
 ---@param pending MsgEntry
 function HandleDeliver(pending)
     local snap = RefreshSnapshot()
     -- 送达时刻的那一个事件实例由 EventService 按 UTC 查出来：它现在多半已经收了
-    local fact = EventService.FactFor(CONFIG.City, snap.utcSec, pending.serverTime)
+    local fact = EventService.FactFor(City(), snap.utcSec, pending.serverTime)
     lastFact_ = fact
     turnIndex_ = turnIndex_ + 1
+    local turn = turnIndex_
 
     -- 引用只作为被回指的宾语与话题词输入，可用性/事件/时刻仍全部来自 fact
     local quote = pending.quotedMessageId and {
@@ -234,30 +255,44 @@ function HandleDeliver(pending)
         text = pending.quotedTextPreview or "",
     } or nil
 
-    ---@type MsgEntry|nil
-    local reply = nil
-    local okStream = pcall(function()
-        local segments = ContentService.ReplySegments(fact, pending.text, turnIndex_, quote)
-        reply = MessageService.BeginReplyStream(
-            segments, snap.utcSec, fact.id, snap.clock, fact.occurrenceKey)
-    end)
-    -- 多段上屏是纯增强：任何异常都退回既有的单串模板，绝不让队列卡在这一条上
-    if not okStream or not reply then
-        logError("多段回复失败，退回单串模板（队列不中断）")
-        reply = MessageService.AppendReply(
-            ContentService.Reply(fact, pending.text, turnIndex_),
-            snap.utcSec, fact.id, snap.clock, fact.occurrenceKey)
+    --- 交付一条回复：segments 来源可以是 LLM 或模板，后续上屏、落库、日志同一条路
+    ---@param segments string[]
+    ---@param source string
+    local function finish(segments, source)
+        ---@type MsgEntry|nil
+        local reply = nil
+        local okStream = pcall(function()
+            reply = MessageService.BeginReplyStream(
+                segments, snap.utcSec, fact.id, snap.clock, fact.occurrenceKey)
+        end)
+        -- 多段上屏是纯增强：任何异常都退回既有的单串模板，绝不让队列卡在这一条上
+        if not okStream or not reply then
+            logError("多段回复失败，退回单串模板（队列不中断）")
+            reply = MessageService.AppendReply(
+                table.concat(segments, ""),
+                snap.utcSec, fact.id, snap.clock, fact.occurrenceKey)
+        end
+
+        local topics = ContentService.DetectTopics(pending.text)
+        MemoryService.RecordTurn(pending, reply, fact, topics, MessageService.GetMessages())
+        ChatPanel.SetMemoryLine(MemoryService.GetSummaryLine())
+
+        -- 只记事实、来源与长度：回复正文会带上用户原文片段，不整条进运行日志
+        logInfo(string.format("回复 #%d → replied 来源=%s 事实=%s key=%s 状态=%s 场景=%s 送达key=%s 送达态=%s 正文长度=%d 引用=%s",
+            pending.id, source, fact.id, fact.occurrenceKey, fact.eventState, fact.sceneId,
+            tostring(pending.factKey or fact.sentOccurrenceKey), tostring(fact.sentEventState),
+            #reply.text, tostring(pending.quotedMessageId or 0)))
     end
 
-    local topics = ContentService.DetectTopics(pending.text)
-    MemoryService.RecordTurn(pending, reply, fact, topics, MessageService.GetMessages())
-    ChatPanel.SetMemoryLine(MemoryService.GetSummaryLine())
-
-    -- 只记事实与长度：回复正文会带上用户原文片段，不整条进运行日志
-    logInfo(string.format("回复 #%d → replied 事实=%s key=%s 状态=%s 场景=%s 送达key=%s 送达态=%s 正文长度=%d 引用=%s",
-        pending.id, fact.id, fact.occurrenceKey, fact.eventState, fact.sceneId,
-        tostring(pending.factKey or fact.sentOccurrenceKey), tostring(fact.sentEventState),
-        #reply.text, tostring(pending.quotedMessageId or 0)))
+    PolishService.Polish({ fact = fact, pending = pending, nowUtc = snap.utcSec },
+        function(segments, reason)
+            if segments then
+                finish(segments, "llm")
+            else
+                finish(ContentService.ReplySegments(fact, pending.text, turn, quote),
+                    "template:" .. tostring(reason or "fallback"))
+            end
+        end)
 end
 
 function Start()
@@ -294,7 +329,7 @@ function Start()
         end
         -- 开机那一瞬的整批日志会被日志管道丢掉（2026-09-22 实测：自检只上来 PASS A0…A6，
         -- 同批的尾巴连同 M1 已就绪 一起没落盘），所以结论行要在之后几个真实帧里原样重发，
-        -- 让它落进别的抓取窗口。判据是结论行里的 场景=N/10。
+        -- 让它落进别的抓取窗口。判据是结论行里的 场景=N/总数（当前 26，含 M3 的 U–Z）。
         -- 屏上也挂一份短结论（面板那行 nowrap，长文本会被裁）：日志整批丢了也能肉眼读数。
         local p, f, d, total = DevSelfTest.Result()
         -- 全绿时面板那行不变长；只有真没过才多挂一段名字，避免 nowrap 那行被裁
@@ -334,6 +369,7 @@ end
 function Stop()
     MemoryService.FlushCloud()
     DevTestPanel.Shutdown()
+    ProfileOverlay.Shutdown()
     ChatPanel.Shutdown()
     StatusWindow.Shutdown()
     UI.Shutdown()
@@ -344,7 +380,7 @@ end
 ---@param label string
 ---@param minute? integer
 function HandleDevPreset(hour, label, minute)
-    local snap = TimeState.SetDevLocalHour(CONFIG.City, hour, minute)
+    local snap = TimeState.SetDevLocalHour(City(), hour, minute)
     logInfo("开发测试切换：" .. label .. " → " .. snap.clock .. " " .. snap.availability)
     RefreshStatusLine(true)
     PushChatPhase()
@@ -394,6 +430,9 @@ end
 ---@param saveFile? string 独立存档路径（开发自检用），省略则用玩家的历史
 function InitServices(saveFile)
     TimeState.SetReplyDelay("idle", CONFIG.ReplyWaitSeconds)
+    -- M2-B S1：GatewayEnabled=false 时 PolishService 全程同步回落，不产生任何外发。
+    -- 真正开启要等中转路径确认后再注入 transport（网关 URL + 共享密钥走服务端配置）。
+    PolishService.Configure({ enabled = CONFIG.GatewayEnabled })
     MessageService.Init({
         hooks = {
             onPhaseChange = function()
@@ -411,15 +450,33 @@ function InitServices(saveFile)
     MemoryService.Init({ cityId = CONFIG.City, cloud = adapter, saveFile = saveFile })
     local _, source = MemoryService.Load()
     logInfo("记忆装载来源: " .. source)
+    -- 档案在记忆之后、事件层之前接：存档带 profile 就原样恢复；v1–v4 旧档由
+    -- MemoryService 迁移成 LA×陌生网友（initialized=true，不弹初始化）；
+    -- 干净安装没有 profile → 标为未初始化，等 BootChat 弹首次选择。
+    local saved = MemoryService.GetProfile()
+    if saved then
+        ProfileService.Set(saved.cityId, saved.relationId, {
+            seedText = saved.seedText,
+            isRandom = saved.isRandom,
+            initialized = saved.initialized,
+        })
+    else
+        ProfileService.Set(CONFIG.City, "stranger", { initialized = false })
+    end
+    logInfo(string.format("档案: 城市=%s 关系=%s 随机=%s 已初始化=%s",
+        saved and saved.cityId or CONFIG.City, saved and saved.relationId or "stranger",
+        tostring(saved and saved.isRandom or false),
+        tostring(saved and saved.initialized or false)))
     -- 事件层在记忆之后接：存档里已有当天的计划就直接接管，不重新生成同日事件
-    EventService.Init({ cityId = CONFIG.City, onPlansChanged = PublishEventPlans })
+    EventService.Init({ cityId = City(), onPlansChanged = PublishEventPlans })
     local restoredPlans = EventService.Restore(MemoryService.GetEventPlans())
     logInfo(string.format("事件计划接管：存档 %d 天（记忆来源 %s）", restoredPlans, source))
     turnIndex_ = MemoryService.Get().turns
     MemoryService.CloudLoadAsync()
 end
 
---- 会话开场：恢复历史与队列，必要时补一条「离开期间」摘要，再决定是否发开场白
+--- 会话开场：恢复历史与队列；新档先等首次初始化，旧档直接开场。
+--- 「离开期间」摘要与开场白的判定都在下面两个小函数里，BootChat 只管先后顺序。
 function BootChat()
     local fact = lastFact_
     local snap = lastSnap_
@@ -430,39 +487,131 @@ function BootChat()
 
     local pendingCount = MessageService.Restore(MemoryService.GetRestoredMessages())
     ChatPanel.SetMemoryLine(MemoryService.GetSummaryLine())
+    ChatPanel.SetProfileLine(ProfileService.ProfileLine())
     -- 开场就报一次事件实例的键与生命周期，并说明它是不是从存档接管的
     logInfo(string.format("开场事件 key=%s 模板=%s 状态=%s 场景=%s 计划来源=%s",
         fact.occurrenceKey, fact.id, fact.eventState, fact.sceneId,
         fact.planFromSave and "存档" or "当场生成"))
 
-    if #MessageService.GetMessages() == 0 then
-        MessageService.AddSystem(
-            "陌生网友 × 洛杉矶 · 她按当地时间生活，在忙或在睡时你的消息会排队",
-            snap.utcSec, snap.clock)
-        logInfo("开场白（非回复链路）: " .. ContentService.OpeningLine(fact))
-        MessageService.AppendReply(ContentService.OpeningLine(fact), snap.utcSec, fact.id, snap.clock,
-            fact.occurrenceKey)
-        -- 首次开场也要把当天的计划留在存档里，否则重进时只能重算
-        PublishEventPlans()
-    else
-        logInfo(string.format("已恢复 %d 条历史记录（其中 %d 条待回复），不再重复开场白",
-            #MessageService.GetMessages(), pendingCount))
+    if not ProfileService.Get().initialized then
+        -- 干净安装：开场白要等玩家选完城市与关系再写，不然会把默认 LA 的话先钉进历史。
+        -- 这里不落盘，profile 只在内存里标着未初始化。
+        logInfo("档案未初始化：等待首次城市与关系选择")
+        ProfileOverlay.Show({ mode = "init", onConfirm = HandleProfileInit })
+        PushChatPhase()
+        return
     end
 
-    -- 离开期间到点的排队消息不丢：由状态机按 FIFO 逐条补发，这里只补一句摘要。
-    -- 「要不要补」的判定在 MemoryService.AwayGap（自检场景 H 直接断言它，包括
-    -- 补发完再重进时不再补第二次），BootChat 只负责把它写成一条系统消息。
+    WriteBootGreeting(pendingCount)
+    WriteAwaySummary()
+    PushChatPhase()
+end
+
+--- 空历史才写开场：系统行说「关系 × 城市」，第一句回复由城市事件 × 关系语气壳共同生成
+---@param pendingCount integer 读档恢复的待回复条数（仅日志用）
+function WriteBootGreeting(pendingCount)
+    local fact = lastFact_
+    local snap = lastSnap_
+    if not fact or not snap then
+        return
+    end
+    if #MessageService.GetMessages() > 0 then
+        logInfo(string.format("已恢复 %d 条历史记录（其中 %d 条待回复），不再重复开场白",
+            #MessageService.GetMessages(), pendingCount or 0))
+        return
+    end
+    local p = ProfileService.Get()
+    MessageService.AddSystem(ProfileService.RelationCityLine(), snap.utcSec, snap.clock)
+    local narration = ProfileService.EventNarration(p.cityId, fact.id) or snap.phrase
+    local opening = ProfileService.OpeningLine(p.cityId, p.relationId, narration)
+    logInfo("开场白（非回复链路）: " .. opening)
+    MessageService.AppendReply(opening, snap.utcSec, fact.id, snap.clock,
+        fact.occurrenceKey)
+    -- 首次开场也要把当天的计划留在存档里，否则重进时只能重算
+    PublishEventPlans()
+end
+
+--- 离开期间到点的排队消息不丢：由状态机按 FIFO 逐条补发，这里只补一句摘要。
+--- 「要不要补」的判定在 MemoryService.AwayGap（自检场景 H 直接断言它，包括
+--- 补发完再重进时不再补第二次），这里只负责把它写成一条系统消息。
+function WriteAwaySummary()
+    local fact = lastFact_
+    local snap = lastSnap_
+    if not fact or not snap then
+        return
+    end
     local dueCount = MessageService.GetDueCount(snap.utcSec)
     local gap, shouldSummarize, thenUtc =
         MemoryService.AwayGap(snap.utcSec, dueCount, CONFIG.AwaySummaryMinSeconds)
     if shouldSummarize then
-        local thenSnap = TimeState.Snapshot(CONFIG.City, thenUtc)
+        local thenSnap = TimeState.Snapshot(City(), thenUtc)
         MessageService.AddSystem(
             ContentService.AwaySummary(gap, thenSnap.phrase, snap.phrase, dueCount),
             snap.utcSec, snap.clock)
         MemoryService.Persist(MessageService.GetMessages())
     end
+end
+
+--- 统一的换档案入口：首次初始化与中途「换档案」走同一条路（设计 §7）。
+--- 队列与 FIFO 一律不动：排队中的消息到点按新城事实回复（她人在新城）；
+--- 已上屏的历史不重建行，旧城市戳原样保留。
+---@param cityId string
+---@param relationId string
+---@param opts? { isRandom?: boolean, firstTime?: boolean }
+function ApplyProfile(cityId, relationId, opts)
+    opts = opts or {}
+    local oldLabel = ProfileService.Get().cityLabel
+    local p
+    if opts.isRandom then
+        p = ProfileService.ApplyRandom(NowUtc())
+    else
+        p = ProfileService.Set(cityId, relationId, { initialized = true })
+    end
+
+    MemoryService.SetProfile(p)
+    MemoryService.Save()
+    EventService.SetCity(p.cityId)
+    clockCacheKey_ = nil -- 城市换了，钟点缓存整格作废
+    RefreshSnapshot()
+
+    if not opts.firstTime then
+        MessageService.AddSystem(
+            string.format("档案更新 · 她搬去了 %s，你们的最新消息从这里继续", p.cityLabel),
+            NowUtc(), lastSnap_ and lastSnap_.clock or "")
+        ChatPanel.SetDraft(ProfileService.DefaultDraft(p.cityId))
+        MemoryService.Persist(MessageService.GetMessages())
+    end
+
+    ChatPanel.SetProfileLine(ProfileService.ProfileLine())
+    RefreshStatusLine(true)
+    PublishEventPlans()
     PushChatPhase()
+    -- 只记 id 与长度：档案文本会进聊天流，日志不带玩家原文
+    logInfo(string.format("换档案 城市=%s 关系=%s 随机=%s 旧城=%s 消息=%d 条",
+        p.cityId, p.relationId, tostring(p.isRandom), oldLabel,
+        #MessageService.GetMessages()))
+end
+
+--- 首次初始化确认：写开场白与计划，之后与正常会话同一条链路
+function HandleProfileInit(cityId, relationId, isRandom)
+    ProfileOverlay.Hide()
+    ApplyProfile(cityId, relationId, { isRandom = isRandom, firstTime = true })
+    WriteBootGreeting(0)
+    ChatPanel.SetDraft(ProfileService.DefaultDraft())
+end
+
+--- 顶栏「换档案」：重开覆盖层（switch 模式带取消；随机只在首次给）
+function HandleProfileEntry()
+    ProfileOverlay.Show({
+        mode = "switch",
+        onConfirm = function(cityId, relationId, isRandom)
+            ProfileOverlay.Hide()
+            ApplyProfile(cityId, relationId, { isRandom = isRandom })
+        end,
+        onCancel = function()
+            logInfo("换档案已取消，档案保持 " .. ProfileService.GetCityId())
+        end,
+    })
 end
 
 function InitUI()
@@ -508,6 +657,16 @@ function CreatePage()
         whiteSpace = "normal",
         wordBreak = "break-word",
     }
+    -- 「关系 · 身份」行：城市 × 关系共同决定的档案，换档后立即重挂。
+    -- 长文案用 normal 换行（自检面板 642836d 的窄屏拆行教训）。
+    infoRelationLabel_ = UI.Label {
+        id = "infoRelation",
+        text = "",
+        fontSize = 10,
+        fontColor = { 200, 162, 122, 235 },
+        whiteSpace = "normal",
+        wordBreak = "break-word",
+    }
 
     local infoCard = UI.Panel {
         id = "statusInfoCard",
@@ -531,6 +690,7 @@ function CreatePage()
                 flexWrap = "wrap",
                 children = { infoClockLabel_, infoCityLabel_ },
             },
+            infoRelationLabel_,
             infoPlaceLabel_,
             infoStateLabel_,
         },
@@ -586,13 +746,14 @@ function CreatePage()
 
     local chat = ChatPanel.Build({
         devTools = CONFIG.DevTools,
-        initialDraft = ContentService.DefaultDraft(),
+        initialDraft = ProfileService.DefaultDraft(),
         minHeight = 190,
         outerWidth = chatOuterWidth,
         onSend = HandleSend,
         onSkip = HandleSkip,
         onDraftChange = MessageService.SetDraft,
         onQuote = HandleQuote,
+        onProfileEntry = HandleProfileEntry,
         getMessages = MessageService.GetMessages,
         getVersion = MessageService.GetVersion,
     })
@@ -604,7 +765,7 @@ function CreatePage()
             onAdvance = HandleDevAdvance,
         })
         -- 自检跑在 Build 之前，那时 SetSummary 还没有 label 可写；这里补挂一次，
-        -- 让 场景=N/10 从开机起就在画面上，不依赖会被整批丢掉的日志。
+        -- 让结论行那串 场景=N/总数 从开机起就在画面上，不依赖会被整批丢掉的日志。
         if selfTestEcho_ then
             DevTestPanel.SetSummary(selfTestEcho_.panel)
         end
@@ -651,6 +812,8 @@ function CreatePage()
                 },
             },
             devTestPanel_,
+            -- 初始化/换档案覆盖层：绝对定位铺满整页，默认不可见，最后挂保证压在一切之上
+            ProfileOverlay.Build(),
         },
     }
 
@@ -746,6 +909,10 @@ function RefreshStatusLine(force)
         if infoStateLabel_ then
             infoStateLabel_:SetText(snap.phrase)
         end
+        if infoRelationLabel_ then
+            local p = ProfileService.Get()
+            infoRelationLabel_:SetText(p.relationLabel .. " · " .. p.identityShort)
+        end
         ApplyScene()
     end
 end
@@ -760,8 +927,10 @@ end
 function HandleUpdate(eventType, eventData)
     local timeStep = eventData["TimeStep"]:GetFloat()
 
-    -- 消息队列用权威 UTC 绝对时刻推进；这就是「她什么时候能回」的唯一计时处
+    -- 消息队列用权威 UTC 绝对时刻推进；这就是「她什么时候回」的唯一计时处
     MessageService.Update(NowUtc())
+    -- M2-B：润色槽位的 8 秒预算与到点回落在同一权威时钟上逐帧推进
+    PolishService.Update(NowUtc())
     ChatPanel.Tick(timeStep)
 
     -- 自检结论重发：每 4 秒一次、共 3 次，把它挪出开机那一批

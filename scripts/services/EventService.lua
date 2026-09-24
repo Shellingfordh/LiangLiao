@@ -28,7 +28,7 @@ local PLAN_DATE_CAP = 4
 ---@field sceneId string 固定原创静帧 id，不做地图
 ---@field variants EventTemplateVariant[] 日期变体，按下标定种选取
 
---- 一天的事件窗口不在这里声明：TimeState.SCHEDULE 逐行给出 from/to/place/event，
+--- 一天的事件窗口不在这里声明：TimeState.SCHEDULE_BY_CITY[cityId] 逐行给出 from/to/place/event，
 --- 模板只管「那件事叫什么、什么情绪、在哪一幕」。改钟点只需要动作息表那一个地方，
 --- 不会出现「人说在上课、事写着校样」的两套真相。
 ---@type table<string, EventTemplate>
@@ -169,6 +169,194 @@ local EVENT_TEMPLATES = {
             },
         },
     },
+
+    -- ===== 上海（sha）：专栏编辑 + 旧书店志愿。sceneId 与作息表 place 同源 =====
+    sha_apartment_night_rest = {
+        id = "sha_apartment_night_rest", sceneId = "sha_apartment",
+        variants = {
+            { title = "凌晨的选题草稿", summary = "凌晨在公寓睡着，明天专栏的选题草稿还摊着", emotion = "安静、低沉", phrase = "我在公寓睡下了，明天的选题草稿还摊在桌上" },
+            { title = "凌晨的稿子梦", summary = "凌晨休息，梦里还在理顺明天的稿", emotion = "疲惫、松弛", phrase = "刚睡下，梦里还在理顺明天的那篇稿" },
+        },
+    },
+    sha_apartment_morning_balcony = {
+        id = "sha_apartment_morning_balcony", sceneId = "sha_apartment",
+        variants = {
+            { title = "清晨的阳台", summary = "清晨在阳台浇花，顺手过一遍要交的字", emotion = "清醒、有条理", phrase = "我在阳台浇花，顺手把要交的字过了一遍" },
+            { title = "清晨的头一遍读", summary = "咖啡温着，把稿子开头读了遍", emotion = "安静、专注", phrase = "咖啡温着，我在阳台把那篇稿的开头读了遍" },
+        },
+    },
+    sha_commute_rush = {
+        id = "sha_commute_rush", sceneId = "sha_commute",
+        variants = {
+            { title = "早高峰的地铁", summary = "在早高峰的地铁里通勤", emotion = "拥挤、简短", phrase = "在早高峰的地铁里，字打不长" },
+            { title = "换乘路上", summary = "车厢很挤，等下车再看", emotion = "零散、期待", phrase = "车厢很挤，等下了车我再仔细看" },
+        },
+    },
+    sha_office_topic_meeting = {
+        id = "sha_office_topic_meeting", sceneId = "sha_office",
+        variants = {
+            { title = "选题会", summary = "报社在开选题会，一上午没停", emotion = "忙碌、专注", phrase = "报社在开选题会，一上午没停" },
+            { title = "会中速记", summary = "在记会议要点，回得慢", emotion = "忙、略赶", phrase = "手在记会议要点，回得慢一点" },
+        },
+    },
+    sha_cafe_midday = {
+        id = "sha_cafe_midday", sceneId = "sha_cafe",
+        variants = {
+            { title = "午间版面", summary = "中午在楼下咖啡馆边吃边看版面", emotion = "松弛、简短", phrase = "中午在楼下咖啡馆，边吃边看版面" },
+            { title = "午间小憩", summary = "扒完两口就要回版房", emotion = "有点赶", phrase = "扒完两口就要回版房" },
+        },
+    },
+    sha_office_layout = {
+        id = "sha_office_layout", sceneId = "sha_office",
+        variants = {
+            { title = "盯排版", summary = "下午在版房盯这一期的排版", emotion = "专注、略紧张", phrase = "下午在版房盯这一期的排版" },
+            { title = "页码对齐", summary = "这版页码还差一点对齐", emotion = "沉浸、有点赶", phrase = "这一版的页码还差一点没对齐" },
+        },
+    },
+    sha_commute_market = {
+        id = "sha_commute_market", sceneId = "sha_commute",
+        variants = {
+            { title = "绕菜场", summary = "绕到菜场给屋里添点吃的", emotion = "生活气、零散", phrase = "绕到菜场给屋里添点吃的" },
+            { title = "拎着菜", summary = "拎着菜，晚点再说", emotion = "短暂、轻快", phrase = "拎着菜呢，晚点再和你说" },
+        },
+    },
+    sha_bookstore_evening = {
+        id = "sha_bookstore_evening", sceneId = "sha_bookstore",
+        variants = {
+            { title = "旧书店夜班", summary = "在旧书店值夜班的台，安静得很", emotion = "安静、松弛", phrase = "我在旧书店值夜班的台，店里安静得很" },
+            { title = "靠窗的书台", summary = "店里客人不多，能多说两句", emotion = "平和、有空", phrase = "店里客人不多，我能多和你说两句" },
+        },
+    },
+    sha_apartment_reread = {
+        id = "sha_apartment_reread", sceneId = "sha_apartment",
+        variants = {
+            { title = "灯下改稿", summary = "回公寓把明天的稿子又读了一遍", emotion = "踏实、收束", phrase = "我回公寓了，把明天的稿子又读了一遍" },
+            { title = "最后几行", summary = "灯下改最后几行，快收了", emotion = "专注、平静", phrase = "灯下改最后几行，一会儿就收" },
+        },
+    },
+
+    -- ===== 成都（cdu）：自由插画师 + 夜市。整体节奏更慢、夜间更长 =====
+    cdu_apartment_night_rest = {
+        id = "cdu_apartment_night_rest", sceneId = "cdu_apartment",
+        variants = {
+            { title = "凌晨的明信片", summary = "凌晨在公寓睡下，桌上一叠没干的明信片", emotion = "安静、低沉", phrase = "我在公寓睡下了，桌上一叠明信片还没干" },
+            { title = "颜料味的梦", summary = "睡了，颜料味还没散", emotion = "疲惫、松弛", phrase = "刚睡下，屋里颜料味还没散" },
+        },
+    },
+    cdu_apartment_morning_water = {
+        id = "cdu_apartment_morning_water", sceneId = "cdu_apartment",
+        variants = {
+            { title = "清晨浇花", summary = "早上给阳台的花浇水，还没开工", emotion = "松弛、清醒", phrase = "早上给阳台的花浇了水，还没开工" },
+            { title = "等会儿动笔", summary = "泡了盏茶，等会儿再动笔", emotion = "安静、有条理", phrase = "泡了盏茶，等会儿再动笔" },
+        },
+    },
+    cdu_studio_morning_ink = {
+        id = "cdu_studio_morning_ink", sceneId = "cdu_studio",
+        variants = {
+            { title = "勾线上色", summary = "上午在画室给一批明信片勾线上色", emotion = "专注、沉浸", phrase = "上午在画室给一批明信片勾线上色" },
+            { title = "描屋檐", summary = "正描一条街的屋檐，别催", emotion = "沉浸、略赶", phrase = "正描着一条街的屋檐，先别催我" },
+        },
+    },
+    cdu_cafe_midday = {
+        id = "cdu_cafe_midday", sceneId = "cdu_cafe",
+        variants = {
+            { title = "茶馆午饭", summary = "中午在茶馆吃面，顺便看别人的稿", emotion = "松弛、简短", phrase = "中午在茶馆吃碗面，顺便看看别人的稿" },
+            { title = "人多说短点", summary = "茶馆人多，我说短点", emotion = "热闹、零散", phrase = "茶馆人多，我先把话说短点" },
+        },
+    },
+    cdu_studio_color = {
+        id = "cdu_studio_color", sceneId = "cdu_studio",
+        variants = {
+            { title = "调颜色", summary = "下午在工作台把这批颜色调完", emotion = "专注、略紧张", phrase = "下午在工作台把今天这批颜色调完" },
+            { title = "手有点忙", summary = "在调色，手有点忙", emotion = "沉浸、有点赶", phrase = "在调色呢，手有点忙" },
+        },
+    },
+    cdu_commute_supplies = {
+        id = "cdu_commute_supplies", sceneId = "cdu_commute",
+        variants = {
+            { title = "买颜料纸", summary = "出去买颜料和纸，一趟要走一会儿", emotion = "零散、轻快", phrase = "出去买颜料和纸，一趟要走一会儿" },
+            { title = "在路上", summary = "在路上，到店里再聊", emotion = "短暂、期待", phrase = "在路上，等我到店里再和你说" },
+        },
+    },
+    cdu_nightmarket_supper = {
+        id = "cdu_nightmarket_supper", sceneId = "cdu_nightmarket",
+        variants = {
+            { title = "夜市收摊", summary = "在夜市摆摊收工，顺便吃了口夜宵", emotion = "松弛、踏实", phrase = "在夜市摆摊收工，顺便吃了口夜宵" },
+            { title = "路边缓会儿", summary = "摊子刚收，坐在路边缓会儿", emotion = "疲惫、平静", phrase = "摊子刚收，我坐在路边缓一会儿" },
+        },
+    },
+    cdu_apartment_letters = {
+        id = "cdu_apartment_letters", sceneId = "cdu_apartment",
+        variants = {
+            { title = "写明信片地址", summary = "回公寓把寄出去的明信片写地址", emotion = "安静、专注", phrase = "回公寓了，在给寄出去的明信片写地址" },
+            { title = "灯下收尾", summary = "灯下写地址，快写完了", emotion = "收束、平静", phrase = "灯下写地址，快写完了" },
+        },
+    },
+
+    -- ===== 伦敦（lon）：声音设计研究生 + 唱片行当值。课在上午、棚在下午、店在夜里 =====
+    lon_apartment_night_rest = {
+        id = "lon_apartment_night_rest", sceneId = "lon_apartment",
+        variants = {
+            { title = "凌晨的混音", summary = "凌晨在公寓睡了，混音工程还没导出", emotion = "安静、低沉", phrase = "我在公寓睡下了，混音工程还没导出" },
+            { title = "摊着的耳机", summary = "睡了，耳机还摊在桌上", emotion = "疲惫、松弛", phrase = "刚睡下，耳机还摊在桌上" },
+        },
+    },
+    lon_apartment_morning_tea = {
+        id = "lon_apartment_morning_tea", sceneId = "lon_apartment",
+        variants = {
+            { title = "晨间课表", summary = "早上煮了茶，翻了翻今天的课表", emotion = "清醒、有条理", phrase = "早上煮了茶，翻了翻今天的课表" },
+            { title = "热茶与时序", summary = "茶还热，我在看时间安排", emotion = "安静、专注", phrase = "茶还热着，我在看今天的时间安排" },
+        },
+    },
+    lon_commute_early_train = {
+        id = "lon_commute_early_train", sceneId = "lon_commute",
+        variants = {
+            { title = "一早的火车", summary = "赶一早的火车，信号断断续续", emotion = "零散、略赶", phrase = "在赶一早的火车，信号断断续续" },
+            { title = "车上没网", summary = "在车上，等下可能又没网", emotion = "短暂、期待", phrase = "在车上，等下可能又没网了" },
+        },
+    },
+    lon_campus_lecture = {
+        id = "lon_campus_lecture", sceneId = "lon_campus",
+        variants = {
+            { title = "声音设计讲座", summary = "学院里有声音设计的讲座，走不开", emotion = "专注、忙碌", phrase = "学院里有场声音设计的讲座，走不开" },
+            { title = "讲座中", summary = "在听讲座，晚点回", emotion = "忙、略赶", phrase = "讲座进行中，我晚点回你" },
+        },
+    },
+    lon_cafe_midday = {
+        id = "lon_cafe_midday", sceneId = "lon_cafe",
+        variants = {
+            { title = "午间三明治", summary = "中午在咖啡馆吃三明治，赶下午的棚", emotion = "简短、有点赶", phrase = "中午在咖啡馆吃个三明治，赶下午的棚" },
+            { title = "啃完就走", summary = "吃完就要去录音", emotion = "忙、零散", phrase = "啃完两口就要去录音" },
+        },
+    },
+    lon_studio_field_recording = {
+        id = "lon_studio_field_recording", sceneId = "lon_studio",
+        variants = {
+            { title = "田野录音", summary = "录音棚里采集一段田野录音", emotion = "专注、沉浸", phrase = "在录音棚里采集一段田野录音" },
+            { title = "戴着监听", summary = "戴着监听，回得慢", emotion = "沉浸、略忙", phrase = "戴着监听呢，回得会慢一点" },
+        },
+    },
+    lon_commute_dark = {
+        id = "lon_commute_dark", sceneId = "lon_commute",
+        variants = {
+            { title = "天黑路上", summary = "天已经黑了，路上人多走得慢", emotion = "零散、疲惫", phrase = "天已经黑了，路上人多走得慢" },
+            { title = "回家路上", summary = "在回家路上，风有点大", emotion = "短暂、低沉", phrase = "在回家路上，今天风有点大" },
+        },
+    },
+    lon_recordshop_shift = {
+        id = "lon_recordshop_shift", sceneId = "lon_recordshop",
+        variants = {
+            { title = "唱片行当值", summary = "在老唱片行当值，帮人找一张难找的唱片", emotion = "松弛、专注", phrase = "在老唱片行当值，正帮人找一张难找的唱片" },
+            { title = "守着台", summary = "店里放着一张老唱片，我守着台", emotion = "安静、平和", phrase = "店里在放一张老唱片，我守着台" },
+        },
+    },
+    lon_apartment_mixdown = {
+        id = "lon_apartment_mixdown", sceneId = "lon_apartment",
+        variants = {
+            { title = "混音收尾", summary = "回公寓把今天的混音收到最后", emotion = "踏实、收束", phrase = "我回公寓了，把今天的混音收到最后" },
+            { title = "灯下最后", summary = "灯下收尾，一会儿就弄完", emotion = "专注、平静", phrase = "灯下收尾，一会儿就弄完了" },
+        },
+    },
 }
 
 ---@type table<string, string>
@@ -178,6 +366,18 @@ local PLACE_LABEL = {
     campus = "学校",
     studio = "工作室",
     commute = "路上",
+    office = "办公室",
+    bookstore = "书店",
+    nightmarket = "夜市",
+    recordshop = "唱片行",
+}
+
+-- 当前城日程无命中时的兜底事件（消息缺事实才走到这里）：各城傍晚空闲档。
+local FALLBACK_EVENT = {
+    shanghai = "sha_bookstore_evening",
+    chengdu = "cdu_nightmarket_supper",
+    los_angeles = "la_cafe_open_mic",
+    london = "lon_recordshop_shift",
 }
 
 ---@class EventOccurrence
@@ -260,6 +460,13 @@ end
 ---@return string
 function EventService.GetCityId()
     return cityId_
+end
+
+--- 换当前城市但不清计划缓存：各城计划按 cityId@dateKey 分开存，
+--- 换档案不丢弃已生成日期，旧城队列补回时仍能查到自己那天的事实。
+---@param cityId string
+function EventService.SetCity(cityId)
+    cityId_ = cityId
 end
 
 --- 从存档接管已生成的计划。读回来的实例一律按存档内容使用，不重算，
@@ -359,7 +566,7 @@ function EventService.PlanFor(cityId, dateKey)
 
     ---@type EventOccurrence[]
     local occurrences = {}
-    local rows = TimeState.SCHEDULE
+    local rows = TimeState.ScheduleFor(cityId)
     for i = 1, #rows do
         local row = rows[i]
         local template = EVENT_TEMPLATES[row.event]
@@ -600,6 +807,20 @@ function EventService.TemplateFor(templateId)
     return EVENT_TEMPLATES[templateId]
 end
 
+--- 全量事件标题（M2-B 事实词表守卫用：润色句里出现「不是今天那件事」的模板标题即回落）。
+---@return string[]
+function EventService.KnownEventTitles()
+    local titles = {}
+    for _, template in pairs(EVENT_TEMPLATES) do
+        for _, variant in ipairs(template.variants or {}) do
+            if variant.title then
+                titles[#titles + 1] = variant.title
+            end
+        end
+    end
+    return titles
+end
+
 --- 当前正在发生的事件模板 id（消息缺事实时的兜底值）。
 ---@return string
 function EventService.GetEventId()
@@ -607,7 +828,7 @@ function EventService.GetEventId()
     if query then
         return query.occurrence.templateId
     end
-    return "la_cafe_open_mic"
+    return FALLBACK_EVENT[cityId_] or FALLBACK_EVENT.los_angeles
 end
 
 return EventService

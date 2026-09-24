@@ -1,5 +1,91 @@
 # Changelog
 
+## 2026-09-24 — M3：四城初始化与关系档案（上海 / 成都 / 洛杉矶 / 伦敦 × 四种关系 + 随机）
+
+### Added
+
+- `scripts/ProfileService.lua`：城市 × 关系档案的真源。四城各绑一套原创生活身份、关系起点、
+  场景词汇（每城 ≥2 种）与默认关系（洛杉矶=陌生网友、上海=高中同学、成都=前同事、伦敦=久未联系的朋友）；
+  `EventNarration(cityId, templateId)` 按城市说同一事件。随机入口可复现：
+  `RandomPick(creationUtcSec)` 用 `fnv1a("<salt>|<秒>")` 选城市、`fnv1a(seed.."#rel")` 选关系，
+  盐固定 `m3-random-v1`，seedText 随档案落盘，重进只读回不再掷。
+- `scripts/ui/ProfileOverlay.lua`：紧凑的城市/关系选择层（首次初始化 `mode="init"`、换档
+  `mode="switch"`），不遮挡聊天与状态窗主体；全部按钮 `focusable = false`。
+- `TimeState` 四城日程：`SCHEDULE_BY_CITY` + `ScheduleFor(cityId)`，每城 8 档事件覆盖 00–24，
+  各自至少命中早晨 / 碎片 / 傍晚或深夜中两种以上可见差异；伦敦、上海、成都的作息与 LA 不同源不同表。
+- `DevSelfTest` 场景 U–Z（共 26 场景）：U=四城时钟与 UTC↔当地互逆；V/W=洛杉矶、伦敦 DST 前后边界
+  的时钟、偏移与可回复计划；X=随机组合锚定、可复现、覆盖度与持久化往返；Y=四城各自完整链
+  （事件前缀、场景一致、离线排队、醒来 FIFO、引用、存档往返不丢记录）；
+  Z=v4→v5 迁移（记录/引用/排队消息/事件计划逐项存活）。
+
+### Changed
+
+- **存档升到 v5**：新增 `profile`（cityId/relationId/seedText/isRandom/initialized）。v1–v4 旧档按明确规则
+  迁移为「洛杉矶 × 陌生网友、`initialized=true`」，不弹初始化、不丢聊天记录、引用、事件计划或待回复队列；
+  只有干净安装才进首次选择。`MemoryService.SetProfile/GetProfile` 承接落盘。
+- `main.lua`：`InitServices` 在记忆之后、事件层之前接档案；旧 LA 档原样恢复，脏档案由 `BootChat`
+  弹 `ProfileOverlay` 首次选择，确认后才写开场白。城市切换走同一初始化链，状态窗场景词汇、
+  日程事件、模板回复、润色事实（`polishFact.cityLabel`）全部跟着 `ProfileService.Get()` 同源。
+- `StatusWindow` 场景背景按 `sceneId` 前缀解析；四城新增 16 组占位静帧 + meta
+  （`assets/Textures/backgrounds/`，渐变占位图，**真实美术待单独确认后再生成**）。
+- `EventService` / `ContentService` 全面接 `cityId`：事件模板 id 带城市前缀、文案池按城市×事件选，
+  M2-A 的引用、多段式、FIFO、模板回退链路对四城保持可用（场景 Y 逐城验证）。
+
+### 状态边界
+
+- **未经真机构建验证**：U–Z 与四城链路只过了 LSP（0 Error）、`tools/m3-node-crosscheck.js`
+  独立实现对照（29/29，覆盖 DST 边界、可回复计划、随机掷点）与静态检查；构建与二维码待用户明确授权。
+- M2-B 网关口径不变：未部署、`GatewayEnabled=false`、零外发。
+- 占位静帧是渐变图，不是交付美术；`la_campus`、`la_commute` 两个景别仍是缺资产的历史条目。
+
+### 评审修正（同日，两轴 code-review 之后）
+
+- **消息城市戳随消息走**：`MsgEntry.cityIdAtSend` 发送时落快照城市、随存档往返，
+  气泡城市标签改为优先取消息自带城市（旧档缺字段才回落当前档案）——修掉「换城重进后
+  历史气泡按新档重打戳」这条规格偏差（自检 Y12/Y13/Z8 断言）。
+- **v5 半截脏档兜底**：带记录却缺 profile 的存档按 LA×陌生网友补齐 + WARN，不再重弹
+  初始化盖历史；无记录的空档仍进首次选择（自检 Z7 断言；设计 §4 表格同步澄清）。
+- **switch 模式隐藏「随机」chip**：随机只在初始化（设计 §7），换档案时不再留一枚点了没反应的死件。
+
+### Verified（本地证据）
+
+- `maker-lua-lsp --mode watch`：`Lua Errors: 0`（2026-09-24 19:50，全部改动之后重跑）。
+- `node tools/m3-node-crosscheck.js`：`ALL 29 NODE-CROSSCHECKS PASS`（Node 独立重算夏令时区间、
+  Snapshot、NextReplyableUtc 回退走查、fnv1a/RandomPick 与 Lua 常量逐位对表）。
+- `gateway npm test`：pass 19 / fail 0（本任务范围仅修 test 脚本，网关行为零改动）。
+- `os.date` 全库带 `"!"`；新 UI 按钮全部 `focusable = false`；`git diff --check` 干净。
+
+## 2026-09-24 — M2-B S1：LLM 润色网关与客户端适配层（代码就位，未接线未部署）
+
+### Added
+
+- `gateway/`：独立最小化 LLM 润色网关（Node ≥18，零依赖 CommonJS）。POST `/v1/polish` + GET `/healthz`；
+  Bearer 共享密钥鉴权、16KB 请求体上限、固定窗口限流（默认 2/min）、日 token 预算（默认 30000）、
+  熔断（连续 3 次失败→10 分钟；**成功只在契约校验通过后才计数**）、requestId 幂等（5 分钟 LRU，失败也重放）。
+  上游走 OpenAI 兼容接口（json_object、temp 0.7、max_tokens 250、15s 超时），错误映射
+  400/401/429/502/503/504；日志只记长度、结果类别与脱敏错误码。`node --test` 19/19 绿。
+- `scripts/services/PolishService.lua`：客户端适配层。白名单 payload 组装（不含历史消息/记忆/设备信息；
+  无引用时 `quote` 显式编码为 `null`）；`gateway/src/validate.js` 的 Lua 镜像严格校验；
+  Lua 独有的**事实词表守卫**（别的城市名 / 白名单外事件标题 / 允许钟点之外的 `时:分` → 整条回落）。
+  FIFO 槽位泵：只有队头交付、每条 8 秒预算到点必回落、迟到结果丢弃、401 会话级熔断、503 冷却 600s；
+  任何失败同步回落 ContentService 模板，队列零阻塞。
+- `DevSelfTest` 场景 R/S/T（共 20 场景）：R=契约矩阵 23 项（非法 JSON、额外字段、空数组、超长句、
+  错误引用 id、纯空白、控制字符、401/429/502/503、transport 异常、三类守卫、brief 档、300 字裁剪）；
+  S=FIFO 交付序 + 预算 + 迟到不二次回调；T=队列连续发送经润色层后顺序、逐句流式与事实字段仍归 Lua。
+
+### Changed
+
+- `main.lua`：`HandleDeliver` 改走 PolishService（成功→`BeginReplyStream` 逐句上屏，失败→原模板路径），
+  `HandleUpdate` 每帧推进润色预算，日志加 `来源=` 字段。**`GatewayEnabled=false` 时行为与 M2-A 一致、零外发**；
+  真实 transport（路径 A：Maker 多人房中转 + TapTap URL 白名单）待确认后才接线。
+- `EventService` 暴露 `KnownEventTitles()` 供词表守卫使用。
+
+### 状态边界（防止误读为已接入）
+
+网关**未部署到任何线上环境**；模型 Key 只存在于网关服务端环境变量（`LLM_API_BASE/LLM_API_KEY/LLM_MODEL/GATEWAY_SHARED_SECRET` 等，见 `gateway/README.md`）；
+部署位置、模型选型、路径 A 三项均待用户确认；R/S/T 未经真机构建验证。设计与测试矩阵见
+`docs/2026-09-23-m2b-llm-gateway-design.md`。
+
 ## 2026-09-23 — 本地运行时定位与 3D 场景/角色移动分层方案
 
 ### Changed
