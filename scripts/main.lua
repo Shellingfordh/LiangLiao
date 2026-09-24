@@ -27,7 +27,7 @@ local CONFIG = {
     Title = "送给你这个回来的人",
     City = "los_angeles",        -- 干净安装的初始城市；存档/换档案后的城市走 ProfileService
     ReplyWaitSeconds = 10,   -- 空闲档的固定等待（M0-1 验收过的那条链路）
-    DevTools = true,         -- 开发预览：显示「跳过等待」
+    DevTools = false,        -- 正式体验不展示覆盖式测试台；需验收时再显式打开
     UseCloudMemory = false,  -- 预览不绑定云存储，只保留异步接口
     DevSelfTest = true,      -- 启动时跑一次真实服务自检（busy/offline/idle + FIFO + 重进）
     AwaySummaryMinSeconds = 60, -- 离开超过这个时长才给一条「离开期间」摘要
@@ -427,6 +427,15 @@ function HandleDevAdvance()
     DevTestPanel.SetSummary("已推进 · " .. FormatClock(target) .. " 可回复")
 end
 
+--- 开发验收时可直接切城市；关系保持不变，便于对比同一关系在四城的状态与回复。
+---@param cityId string
+---@param label string
+function HandleDevCity(cityId, label)
+    ApplyProfile(cityId, ProfileService.GetRelationId())
+    DevTestPanel.SetSummary("开发城市：" .. label .. " · " .. (lastSnap_ and lastSnap_.clock or ""))
+    DevTestPanel.SetDetail((lastFact_ and (lastFact_.id .. " · " .. lastFact_.sceneId)) or "等待事件快照")
+end
+
 ---@param saveFile? string 独立存档路径（开发自检用），省略则用玩家的历史
 function InitServices(saveFile)
     TimeState.SetReplyDelay("idle", CONFIG.ReplyWaitSeconds)
@@ -763,6 +772,7 @@ function CreatePage()
             onPreset = HandleDevPreset,
             onReset = HandleDevReset,
             onAdvance = HandleDevAdvance,
+            onCity = HandleDevCity,
         })
         -- 自检跑在 Build 之前，那时 SetSummary 还没有 label 可写；这里补挂一次，
         -- 让结论行那串 场景=N/总数 从开机起就在画面上，不依赖会被整批丢掉的日志。

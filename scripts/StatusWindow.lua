@@ -25,7 +25,7 @@ local GLB_PATH = "models/characters/lin-ruoxi/lin-ruoxi.glb"
 local MATERIAL_PATH = "Materials/lin-ruoxi_00_tripo_mat_8ae16fc0-7a3a-402e-9a6e-1180f6c269f7.xml"
 -- 唯一背景路径：与 .project/resources.json 的 groups.default 白名单一致。
 -- 多候选回退在这里没有意义——不在白名单里的候选在设备上永远取不到，只会误导排查。
-local BACKGROUND_PATH = "Textures/backgrounds/la-cafe-4x3.png"
+local BACKGROUND_PATH = "image/la-cafe-grounded_20260924132347.png"
 -- 角色漫反射贴图：DWP 资源，设备冷启动时材质内引用可能是占位，需异步补载
 local CHARACTER_DIFFUSE_TEXTURE = "Textures/lin-ruoxi_00_D.jpg"
 
@@ -361,7 +361,7 @@ local function createLighting(scene)
     local cool = coolNode:CreateComponent("Light")
     cool.lightType = LIGHT_POINT
     cool.color = Color(0.60, 0.72, 0.92)
-    cool.brightness = 1.1
+    cool.brightness = 1.55
     cool.range = 9.0
     cool.castShadows = false
 
@@ -372,13 +372,13 @@ local function createLighting(scene)
     local fill = fillNode:CreateComponent("Light")
     fill.lightType = LIGHT_POINT
     fill.color = Color(1.0, 0.90, 0.80)
-    fill.brightness = 1.4
+    fill.brightness = 2.10
     fill.range = 8.0
     fill.castShadows = false
 
     -- 布光结果进 boot trace：真机上要判断「改这几个数够不够」还是「得换 Technique」，
     -- 凭的是这一行，不是截图
-    trace(string.format("三点布光 主光=1 冷补=%.1f 暖面=%.1f（均不投影）", 1.1, 1.4))
+    trace(string.format("三点布光 主光=1 冷补=%.2f 暖面=%.2f（均不投影）", 1.55, 2.10))
 end
 
 --- 几何占位人（深墨绿夹克 / 米白针织 / 深色牛仔裤 / 白鞋）
@@ -708,26 +708,26 @@ end
 ---@type table<string, string>
 local SCENE_BACKGROUNDS = {
     la_cafe = BACKGROUND_PATH,
-    -- 开发测试用原创占位图；正式资产替换后只需改这里的路径，不改状态机。
-    la_apartment = "Textures/backgrounds/la-apartment-dev-placeholder.png",
-    la_studio = "Textures/backgrounds/la-studio-dev-placeholder.png",
-    -- M3 四城场景：先以同规格占位图落 pipeline，真图生成单独等确认（设计 §8.3）。
-    sha_apartment = "Textures/backgrounds/sha-apartment-dev-placeholder.png",
-    sha_commute = "Textures/backgrounds/sha-commute-dev-placeholder.png",
-    sha_office = "Textures/backgrounds/sha-office-dev-placeholder.png",
-    sha_cafe = "Textures/backgrounds/sha-cafe-dev-placeholder.png",
-    sha_bookstore = "Textures/backgrounds/sha-bookstore-dev-placeholder.png",
-    cdu_apartment = "Textures/backgrounds/cdu-apartment-dev-placeholder.png",
-    cdu_studio = "Textures/backgrounds/cdu-studio-dev-placeholder.png",
-    cdu_cafe = "Textures/backgrounds/cdu-cafe-dev-placeholder.png",
-    cdu_commute = "Textures/backgrounds/cdu-commute-dev-placeholder.png",
-    cdu_nightmarket = "Textures/backgrounds/cdu-nightmarket-dev-placeholder.png",
-    lon_apartment = "Textures/backgrounds/lon-apartment-dev-placeholder.png",
-    lon_commute = "Textures/backgrounds/lon-commute-dev-placeholder.png",
-    lon_campus = "Textures/backgrounds/lon-campus-dev-placeholder.png",
-    lon_cafe = "Textures/backgrounds/lon-cafe-dev-placeholder.png",
-    lon_studio = "Textures/backgrounds/lon-studio-dev-placeholder.png",
-    lon_recordshop = "Textures/backgrounds/lon-recordshop-dev-placeholder.png",
+    -- 四城静帧均为 Maker 内生成的原创资产。每城用两张构图明确的画面覆盖其日程场景；
+    -- 场景事实仍由 TimeState/EventService 决定，静帧只承担状态窗的可见空间。
+    la_apartment = "image/la-cafe-grounded_20260924132347.png",
+    la_studio = "image/la-cafe-grounded_20260924132347.png",
+    sha_apartment = "image/sha-apartment-evening_20260924132208.png",
+    sha_commute = "image/sha-apartment-evening_20260924132208.png",
+    sha_office = "image/sha-bookstore-rain_20260924132208.png",
+    sha_cafe = "image/sha-bookstore-rain_20260924132208.png",
+    sha_bookstore = "image/sha-bookstore-rain_20260924132208.png",
+    cdu_apartment = "image/cdu-apartment-morning_20260924132208.png",
+    cdu_studio = "image/cdu-apartment-morning_20260924132208.png",
+    cdu_cafe = "image/cdu-apartment-morning_20260924132208.png",
+    cdu_commute = "image/cdu-nightmarket_20260924132208.png",
+    cdu_nightmarket = "image/cdu-nightmarket_20260924132208.png",
+    lon_apartment = "image/lon-apartment-rain_20260924132208.png",
+    lon_commute = "image/lon-apartment-rain_20260924132208.png",
+    lon_campus = "image/lon-recordshop-golden_20260924132208.png",
+    lon_cafe = "image/lon-recordshop-golden_20260924132208.png",
+    lon_studio = "image/lon-recordshop-golden_20260924132208.png",
+    lon_recordshop = "image/lon-recordshop-golden_20260924132208.png",
 }
 
 ---@type string

@@ -11,7 +11,8 @@
       "Meshes/*.mdl",
       "Materials/**",
       "Prefabs/**",
-      "Textures/backgrounds/**"
+      "Textures/backgrounds/**",
+      "image/**"
     ]
   }
 }

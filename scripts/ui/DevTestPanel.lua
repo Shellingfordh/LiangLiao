@@ -28,7 +28,7 @@ local function makeButton(text, onClick)
     return button
 end
 
----@param opts {onPreset: fun(hour: integer, label: string, minute: integer|nil), onReset: fun(), onAdvance: fun()}
+---@param opts {onPreset: fun(hour: integer, label: string, minute: integer|nil), onReset: fun(), onAdvance: fun(), onCity: fun(cityId: string, label: string)}
 ---@return Widget
 function DevTestPanel.Build(opts)
     controls_ = {}
@@ -89,6 +89,16 @@ function DevTestPanel.Build(opts)
                 children = {
                     makeButton("推进到可回复", opts.onAdvance),
                     makeButton("恢复真实时间", opts.onReset),
+                },
+            },
+            UI.Row {
+                gap = 4,
+                flexWrap = "wrap",
+                children = {
+                    makeButton("上海", function() opts.onCity("shanghai", "上海") end),
+                    makeButton("成都", function() opts.onCity("chengdu", "成都") end),
+                    makeButton("洛杉矶", function() opts.onCity("los_angeles", "洛杉矶") end),
+                    makeButton("伦敦", function() opts.onCity("london", "伦敦") end),
                 },
             },
         },

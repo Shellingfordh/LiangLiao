@@ -171,11 +171,11 @@ end
 local function MakeProfileEntryButton()
     local btn = UI.Button {
         id = "chatProfileEntry",
-        text = "换档案",
-        variant = "secondary",
-        fontSize = 9,
-        height = 20,
-        width = 48,
+        text = "城市档案",
+        variant = "primary",
+        fontSize = 10,
+        height = 26,
+        width = 68,
         paddingLeft = 0,
         paddingRight = 0,
         focusable = false,
