@@ -66,6 +66,7 @@ local QUOTE_PREVIEW_MAX = 24
 ---@field availabilityLabelAtSend? string 送达时可用性的中文标签
 ---@field placeAtSend? string 送达时的地点（作息表事实，不是猜测）
 ---@field sceneIdAtSend? string 送达时的场景 id
+---@field cityIdAtSend? string 发送时所在城市；气泡城市戳随消息走，换档案重进不改历史
 ---@field phraseAtSend? string 送达时作息表里的那句原话
 ---@field quotedMessageId? integer 引用的消息 id（只可能是当前会话里的 user/her 消息）
 ---@field quotedRole? string 被引用消息的角色
@@ -348,6 +349,7 @@ end
 ---@field availabilityLabel? string
 ---@field place? string
 ---@field sceneId? string
+---@field cityId? string 发送时刻快照所在城市（TimeSnapshot.cityId），落进气泡的城市戳
 ---@field phrase? string
 ---@field factId? string
 ---@field factKey? string 送达时刻命中的事件实例（occurrenceKey），补回与重进都引用它
@@ -424,6 +426,7 @@ function MessageService.Send(text, serverTime, clockText, ctx)
     entry.availabilityLabelAtSend = ctx.availabilityLabel
     entry.placeAtSend = ctx.place
     entry.sceneIdAtSend = ctx.sceneId
+    entry.cityIdAtSend = ctx.cityId
     entry.phraseAtSend = ctx.phrase
     -- 送达瞬间就带上事实 id 与实例键：引用的是「哪一场活动的哪一个实例」，不随回复时间漂移
     entry.factId = ctx.factId
