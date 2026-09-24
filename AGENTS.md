@@ -274,17 +274,28 @@ UrhoXRuntime.exe <entry.lua> -tapcode_dir=<source> -skip_login -p=Res -w -width=
 ```
 
 已实证用途：**3D 链路取证**（真实项目资产的渲染 + 固定相机 + 角色沿预设路径移动，已用 `Image:SavePNG`
-落出 3 张真实渲染像素）。三条边界，别再重新踩：
+落出 3 张真实渲染像素）、**整游逻辑取证**（见边界 3）、**16 场景装载取证**。四条边界，别再重新踩：
 
-1. **取证只有两条通道**：`Image:SavePNG` 与 `File(path, FILE_WRITE)` + `WriteString`。
-   `print()` / `log:Write()` **都不进**本地引擎日志，`io` 库整体为 `nil`；`File` 写入被固定在
-   `Documents/temp/savedata/<project>/<userId>/`，**子目录必须预先存在**，否则 `SavePNG` 报 `Could not open file`。
+1. **落盘取证两条通道**：`Image:SavePNG` 与 `File(path, FILE_WRITE)` + `WriteString`。`io` 库整体为 `nil`；
+   `File` 写入被固定在 `Documents/temp/savedata/<project>/<userId>/`，**子目录必须预先存在**，否则 `SavePNG`
+   报 `Could not open file`。补充（2026-09-25 实测，纠正旧结论）：`print()` 不进**引擎**日志，但会进
+   **`.cli/rt/logs/lua/lua-<时间戳>.log`**（`{"t":..,"l":"RAW","m":"[Script] ..."}` 逐行），
+   所以本地 PoC 除了自己写文件，还能直接读这份 Lua 日志。
 2. **本地资源是云端的子集**：`RenderPaths/Forward.xml`、`Cube/Day|Dusk/*SpecularHDR.dds`、
    `Editor/Textures/Engine/Vignetting.png` 本地缺失，依赖它们的特性本地验不了；
    `UrhoXCLI` 只在云端 `/workspace/.cli/`（见上文「GLB 不是运行时格式」）。
-3. **完整游戏本地跑不起来**：`common.get_server_time()` 本地返回越界值 → `TimeState.lua` 快照构建里的
-   `os.date("!%Y")` 抛 `date result cannot be represented` → `main.lua` 的 `RefreshSnapshot()` 中断。
-   本地只能跑绕开 TimeState 的 PoC。
+3. **整游本地可跑，条件是自己钉时钟**（2026-09-25 实测，取代旧「完整游戏本地跑不起来」结论）：
+   本地 `common.get_server_time()` 返回的是 **0**（不是越界值），旧失败其实是 `TimeState` 拿 0 当 UTC 用。
+   `common` 表可写，PoC 入口里 `common.get_server_time = function() return <真实 UTC 秒> end`
+   再 `require("main")` + `Start()`，`main.lua` 全流程就能跑完：32 场景自检、正式会话、`InitUI`、
+   `StatusWindow.Init`（模型 `IsModelLoaded=true`、非占位）全部通过。**引擎事件按名字在订阅时绑定**，
+   自建 `SubscribeToEvent("Update", ...)` 与事后替换 `_G.HandleUpdate` 都不派发 —— 要挂每帧驱动器
+   就包一张表上的方法（PoC 用的 `ChatPanel.Tick`，main.lua 每帧按字段调用）。
+4. **本地截图不能当画面验收依据**：`graphics:TakeScreenShot(image)` + `SavePNG` 能出图，但合成器
+   只在纹理失效时重绘 —— 同一场景间隔 2.5s 连拍两张 **md5 完全相同**，换场景才不同；
+   `engine.pauseMinimized = false` 不改变这一行为；且角色 RT 层在本地盖住了背景静帧、RT 的 Y 朝向
+   与原生 Android 相反（见 `docs/maker-lua-api-verification.md` §12）。所以微动、静帧融合、
+   接地阴影观感仍只能靠真机/云端预览判定，本地截图只证明「装载与应用链路跑通」。
 
 **上真机 / 出交付物仍然只有云端一条路**：`maker_build_current_directory` → 读
 `.maker/logs/runtime/runtime.log`（topics 含 `engine`，引擎层报错也会落这里）。

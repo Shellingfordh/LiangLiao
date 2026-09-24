@@ -95,6 +95,11 @@ local selfTestEcho_ = nil
 local lastSnap_ = nil
 ---@type EventFact|nil
 local lastFact_ = nil
+--- 本会话所属人生槽 id（InitServices 挂存档时定）。痕迹与档案一律按它读写，
+--- 不用 LifeService.Active()：注册表的 active 由 CreateSlot/OpenSlot 各自维护，
+--- 与当前挂载的存档一旦错位，A 段的事件就会写进 B 段（2026-09-25 自检 AF 实测串写）。
+---@type string|nil
+local sessionSlotId_ = nil
 ---@type integer
 local turnIndex_ = 0
 
@@ -111,6 +116,16 @@ end
 local function logWarn(msg)
     print("[M0-1] WARN: " .. msg)
     log:Write(LOG_WARNING, "[M0-1] " .. msg)
+end
+
+--- 本会话那一段人生的卡片。干净安装/自检临时会话没有槽（sessionSlotId_ 为 nil），
+--- 这时退回注册表 active；有槽时只认它，写入就不可能被别的段带走。
+---@return LifeSlot|nil
+local function SessionSlot()
+    if sessionSlotId_ then
+        return LifeService.SlotById(sessionSlotId_)
+    end
+    return LifeService.Active()
 end
 
 --- 全工程唯一取时刻的地方：权威 UTC 秒 + 开发自检投影（普通运行路径偏移恒为 0）
@@ -152,7 +167,7 @@ end
 --- 关键事件进入 ongoing 就替换当前痕迹；痕迹跟着人生槽走，换段读回各自的那一条。
 ---@param fact? EventFact
 function UpdateCurrentTrace(fact)
-    local slot = LifeService.Active()
+    local slot = SessionSlot()
     if not slot or not fact then
         return
     end
@@ -175,7 +190,7 @@ end
 
 --- 旧档升级/新人生还没有痕迹时，从当天计划里补挂最近一个已开始的关键事件。
 function EnsureTraceSeeded()
-    local slot = LifeService.Active()
+    local slot = SessionSlot()
     if not slot or slot.trace or not lastSnap_ then
         return
     end
@@ -561,6 +576,8 @@ end
 ---@param saveFile? string 独立存档路径（开发自检用），省略则用玩家的历史
 ---@param lifeSlot? LifeSlot M4 人生槽；nil = 自检/干净安装的临时会话
 function InitServices(saveFile, lifeSlot)
+    -- 会话槽与段存档在同一条线上定：此后痕迹/档案的读写都只认这一段
+    sessionSlotId_ = lifeSlot and lifeSlot.slotId or nil
     TimeState.SetReplyDelay("idle", CONFIG.ReplyWaitSeconds)
     -- M2-B S1：GatewayEnabled=false 时 PolishService 全程同步回落，不产生任何外发。
     -- 真正开启要等中转路径确认后再注入 transport（网关 URL + 共享密钥走服务端配置）。
@@ -715,7 +732,7 @@ function ApplyProfile(cityId, relationId, opts)
 
     MemoryService.SetProfile(p)
     MemoryService.Save()
-    local active = LifeService.Active()
+    local active = SessionSlot()
     if active then
         LifeService.UpdateSlotProfile(active.slotId, p.cityId, p.relationId, {
             seedText = p.seedText, isRandom = p.isRandom,
@@ -830,7 +847,7 @@ end
 function HandleSwitchLife(slotId)
     LifeCardsOverlay.Hide()
     SettingsOverlay.Hide()
-    local current = LifeService.Active()
+    local current = SessionSlot()
     if current and current.slotId == slotId then
         logInfo("已在这一段人生中，不重复切换")
         return
@@ -875,7 +892,7 @@ function ShowLifeCards(mode)
     ---@type LifeCardEntry[]
     local cards = {}
     local slots = LifeService.Slots()
-    local active = LifeService.Active()
+    local active = SessionSlot()
     for i = 1, #slots do
         local slot = slots[i]
         local city = ProfileService.CityFor(slot.cityId)
@@ -926,7 +943,7 @@ function BuildProfilePageData()
             recent[#recent + 1] = title .. (stateText ~= "" and ("（" .. stateText .. "）") or "")
         end
     end
-    local traceSlot = LifeService.Active()
+    local traceSlot = SessionSlot()
     local trace = traceSlot and traceSlot.trace or nil
     local traceItem = trace and SceneService.TraceFor(trace.traceKey) or nil
     ---@type ProfilePageData

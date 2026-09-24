@@ -91,6 +91,10 @@ local done_ = {}
 --- 判定失败（含整条场景抛出）的场景名，结论行靠它指到该看哪一段断言
 ---@type string[]
 local bad_ = {}
+--- 失败断言的 label+detail 明细。设备上逐条走 logError 可见，但本地引擎日志不落 print/log
+--- （AGENTS.md 边界 1），所以还要一份能被 PoC 直接读走的列表，否则只剩「AF×2」猜不出是哪两条。
+---@type string[]
+local failures_ = {}
 ---@type string
 local summary_ = "自检未运行"
 
@@ -117,6 +121,7 @@ local function check(label, ok, detail)
         logInfo(string.format("PASS %s %s", label, detail or ""))
     else
         failed_ = failed_ + 1
+        failures_[#failures_ + 1] = string.format("%s %s", label, detail or "")
         logError(string.format("FAIL %s %s", label, detail or ""))
     end
     return ok
@@ -2251,7 +2256,21 @@ local function ScenarioSwitchNoResidue(dateKey)
     advance(30)
     MemoryService.Persist(MessageService.GetMessages())
     local msgsA = #MessageService.GetMessages()
-    local traceA = LifeService.GetTrace()
+    -- 痕迹按槽读，不按注册表 active 读：CreateSlot(B) 会把 active 挪到 B，
+    -- 而这一段会话挂的是 A 的存档。会话槽才是「A 自己的痕迹」（main.lua 的 SessionSlot）。
+    local traceA = LifeService.GetTrace("life-1")
+    -- 串写守卫：CreateSlot(B) 把注册表 active 挪到了 life-2，而会话挂的是 A 的存档。
+    -- A 那条真链路跑出来的痕迹只许落在 A 身上，落进 B 就是完成标准 1「互不串写」失败
+    -- （2026-09-25 本地引擎真跑自检时正是这样串过去的：痕迹写到了 active 段）。
+    local activeNow = LifeService.Active()
+    check("AF0 会话槽≠注册表 active 时痕迹只写会话槽",
+        traceA ~= nil and traceA.traceKey ~= nil
+        and activeNow ~= nil and activeNow.slotId == "life-2"
+        and LifeService.GetTrace("life-2") == nil,
+        string.format("active=%s A=%s B=%s", tostring(activeNow and activeNow.slotId),
+            tostring(traceA and traceA.traceKey),
+            tostring(LifeService.GetTrace("life-2")
+                and LifeService.GetTrace("life-2").traceKey)))
 
     -- 切到 B：和 main.lua HandleSwitchLife 同一条链路——开段、挂该段存档、从头恢复
     local slotB = LifeService.OpenSlot("life-2", t0 + 3)
@@ -2263,11 +2282,16 @@ local function ScenarioSwitchNoResidue(dateKey)
         and ProfileService.GetCityId() == "shanghai",
         string.format("条数 %d 恢复 %d 城市=%s", #MessageService.GetMessages(),
             restoredB, ProfileService.GetCityId()))
+    -- 前缀判定用 sub 不用 find("^sha_",1,true)：plain=true 时 "^" 是字面字符，
+    -- 锚住不了开头，永远匹配不上（2026-09-25 本地引擎真跑自检把这条假失败暴露出来）。
     check("AF2 B 段画面没有旧景旧痕：作息场景是上海的包、活跃段痕迹为空",
-        LifeService.GetTrace() == nil
-        and string.find(snapB.sceneId, "^sha_", 1, true) ~= nil
+        LifeService.GetTrace("life-2") == nil
+        and snapB.sceneId:sub(1, 4) == "sha_"
         and SceneService.PackageFor(snapB.sceneId) ~= nil,
-        string.format("场景=%s 痕迹=%s", snapB.sceneId, tostring(LifeService.GetTrace())))
+        string.format("场景=%s B痕=%s A痕还在=%s", snapB.sceneId,
+            tostring(LifeService.GetTrace("life-2")),
+            tostring(LifeService.GetTrace("life-1")
+                and LifeService.GetTrace("life-1").traceKey)))
 
     -- 回 A：先模拟进程重启读注册表，再挂 A 段存档
     reinitLife_()
@@ -2275,7 +2299,7 @@ local function ScenarioSwitchNoResidue(dateKey)
     local slotA2 = LifeService.OpenSlot("life-1", TimeState.NowUtc())
     reinit_(LifeService.SlotSaveFile("life-1"), slotA2)
     MessageService.Restore(MemoryService.GetRestoredMessages())
-    local traceA2 = LifeService.GetTrace()
+    local traceA2 = LifeService.GetTrace("life-1")
     check("AF3 回到 life-1：聊天条数原样恢复、档案仍是洛杉矶（城市不跟着最后停留的段走）",
         #MessageService.GetMessages() == msgsA and ProfileService.GetCityId() == "los_angeles"
         and MemoryService.GetLifeId() == "life-1",
@@ -2309,6 +2333,7 @@ local function runScenario(name, fn, dateKey)
     local ok, err = pcall(fn, dateKey)
     if not ok then
         failed_ = failed_ + 1
+        failures_[#failures_ + 1] = string.format("场景 %s 抛出：%s", name, tostring(err))
         logError(string.format("场景 %s 抛出，该场景剩余断言未执行：%s", name, tostring(err)))
     end
     done_[#done_ + 1] = name
@@ -2336,6 +2361,13 @@ function DevSelfTest.Result()
     return passed_, failed_, #done_, SCENARIO_TOTAL
 end
 
+--- 失败断言明细（label + detail，含整条场景抛出）。设备上与逐条 logError 同源，
+--- 但本地引擎运行时 print/log 不落盘，PoC 只能靠这个接口取到「AF×2 到底是哪两条」。
+---@return string[]
+function DevSelfTest.Failures()
+    return failures_
+end
+
 --- 哪几条场景没过（`I×1` = 场景 I 有 1 条判定失败）。日志被截断时，
 --- 结论行只能告诉我有失败，这个告诉该去翻哪一段断言。
 ---@return string
@@ -2358,6 +2390,7 @@ function DevSelfTest.Run(options)
     failed_ = 0
     done_ = {}
     bad_ = {}
+    failures_ = {}
     summary_ = "自检未产出结论"
 
     local cleared = MemoryService.ClearSavedData()

@@ -41,14 +41,40 @@
   （先隐痕迹、重挂该段存档、重建聊天流、重放场景）。自检借同一批活函数（`reinit/updateTrace/
   ensureTrace/reinitLife` 注入），不另开旁路。
 
+### 修复（本地引擎真跑 32 场景自检暴露的串写）
+
+首轮本地真跑（`.tmp/poc/m4_selftest_local.lua`，钉 `common.get_server_time()` 后 `main.lua` 全流程可跑）
+判出 **通过=264 失败=2**，两条都在 AF：A 段跑出来的生活痕迹落进了 B 段、回到 A 段反而没有。
+根因不是断言写错，是**写入按注册表 `Active()` 而不是按会话槽**——`CreateSlot` 会把 `activeSlotId`
+挪到新槽，于是「会话挂着 A 的存档、注册表活跃的是 B」时 A 的事件写进 B（正是完成标准 1 禁止的串写）：
+
+- `scripts/main.lua`：新增 `sessionSlotId_`（`InitServices` 挂段存档时一并定）与 `SessionSlot()`；
+  `UpdateCurrentTrace` / `EnsureTraceSeeded` / `ApplyProfile` / `HandleSwitchLife` / `ShowLifeCards`
+  / `BuildProfilePageData` 六处一律按会话槽读写，冷启动选段仍按注册表（那时还没有会话）。
+- `DevSelfTest` AF：新增 **AF0**「会话槽≠注册表 active 时痕迹只写会话槽」作回归守卫；
+  痕迹断言改为按槽 id 显式读（`GetTrace("life-1")` / `GetTrace("life-2")`），不再靠 active 猜。
+- 顺带修掉 AF2 的一颗假判据：`string.find(s, "^sha_", 1, true)` 在 `plain=true` 下把 `^` 当字面字符，
+  锚不住开头 → 永远不匹配；改成 `s:sub(1,4) == "sha_"`。全仓同类误用已 grep 确认仅此一处。
+- `DevSelfTest` 新增 `Failures()`：本地引擎 `logError` 不进引擎日志，只有 label 明细可取，
+  否则失败只剩「AF×2」无从定位（真机上与逐条 logError 同源，不改变原有判据）。
+
+修复后本地判决：**通过=267 失败=0 场景=32/32[A B C D E F I J G H K L M N O P Q AA R S T U V W X Y Z AB AC AD AE AF]**。
+
 ### 状态边界
 
 - 本地门禁已过：Lua LSP 0 Error、`git diff --check` 干净、`tools/m4-node-crosscheck.js`
   独立对拍 15/15（16 包完整性与背景文件真实在库、作息↔模板↔包三方一致、
   非关键事件集固定 5 条、痕迹绑定/去重/补挂与人生槽状态机规则复刻）。
-- 云端构建已过：`bc53496` 构建成功 + `previewRefresh 200`（2026-09-25 00:59）；
-  **32 场景自检结论与真机画面验证未闭环**——需一次真实会话把结论行落进
-  `runtime.log`（判据「场景=32/32 … 全部通过」），见 BLOCKED.md B-6。
+- **项目自检已在真实引擎里跑过一次并全绿**（本地 Windows 运行时，判决见上）。这条只证明逻辑与
+  装载，不替代真机：`.tmp/poc/m4_scene_capture.lua` 逐场景 `ApplySceneState` 16/16 成功
+  （`GetCurrentSceneId` 与包一致、`IsModelLoaded=true`、非占位、模型/背景错误皆空、
+  唱片行阴影 anchorX=0.32 与其余 15 包 0.68 的左右分工也如实落在渲染里），但
+  `graphics:TakeScreenShot` 抓到的帧**只在纹理失效时重绘**（同场景隔 2.5s 两张 md5 相同），
+  且本地 RT 层盖住背景静帧、Y 朝向与原生 Android 相反 —— 所以「静帧融合 / 微动 / 接地阴影观感」
+  仍必须真机判定（边界已写进 `AGENTS.md` 本地运行时一节）。
+- 云端构建已过两次：`bc53496`，以及承载 4:3 裁切与锚点重映射的 `46206ea`
+  （均 `previewRefresh 200`）；**本次会话槽修复尚未构建**。**真机侧仍未闭环**——需一次真实会话把
+  结论行落进 `runtime.log`（判据「场景=32/32 … 全部通过」），见 BLOCKED.md B-6。
 - 骨骼动画仍未接入（硬门槛不变：GLB→MDL skin/动画轨/真机播放三关全过才谈）；
   M4 全部动效为无骨骼程序化微动。`future3D` 只是预留字段，运行时无消费方。
 - 包体修正：Maker 生成器对 16 张背景交付了 1296×864（3:2），与请求的 `aspect_ratio=4:3 /
