@@ -679,6 +679,27 @@ function MemoryService.ClearSavedData()
     return true
 end
 
+--- 清空用户明确要求重置的对话记忆，但保留当前城市/关系档案与当天已生成的日程事实。
+--- 与 ClearSavedData 不同：这里不是开发自检的「恢复出厂」，不能让用户重新选择档案，
+--- 也不能重算已经发生的事件计划。写盘失败时仍清空本轮内存，避免旧聊天继续留在屏幕上。
+---@return boolean saved
+function MemoryService.ClearConversation()
+    mem_.turns = 0
+    mem_.firstServerTime = 0
+    mem_.lastServerTime = 0
+    mem_.lastFactId = ""
+    mem_.topics = {}
+    mem_.messages = {}
+    mem_.eventLedger = {}
+    turnsSinceFlush_ = 0
+    cloudDirty_ = true
+    local saved = MemoryService.Save()
+    logInfo(string.format("对话记录已清空，档案=%s，事件计划保留=%d 天，落盘=%s",
+        mem_.profile and (mem_.profile.cityId .. "×" .. mem_.profile.relationId) or "未初始化",
+        #mem_.eventPlans, tostring(saved)))
+    return saved
+end
+
 --- 重进时要不要给一条「离开期间」摘要。规则放在这里是为了能被自检断言（场景 H）：
 --- 只有「确实离开过 + 有到点待补发的排队消息 + 离开时长够久」三者同时成立才给一条，
 --- 补发完再重进时 lastServerTime 已被推到交付时刻，于是第二次返回 false —— 这就是

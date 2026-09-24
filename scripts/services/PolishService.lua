@@ -509,6 +509,16 @@ function PolishService.Update(nowUtc)
     end
 end
 
+--- 用户主动重置对话时取消仍在预算内的外部润色槽位。
+--- transport 可能仍会在网络层返回，但 slots_ 已脱钩，迟到结果不会再回写新会话。
+function PolishService.CancelAll()
+    local count = #slots_
+    slots_ = {}
+    if count > 0 then
+        logInfo("对话重置，已取消 " .. tostring(count) .. " 个在途润色请求")
+    end
+end
+
 --- 还有几条回复在等润色结果（自检与「跳过等待」用）
 ---@return integer
 function PolishService.GetPendingCount()

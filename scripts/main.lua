@@ -427,6 +427,23 @@ function HandleDevAdvance()
     DevTestPanel.SetSummary("已推进 · " .. FormatClock(target) .. " 可回复")
 end
 
+--- 用户确认后的对话重置：聊天文本、草稿、队列和在途润色都失效；
+--- 城市/关系档案与当天事件计划保留，避免「清聊天」变成重开角色人生。
+function HandleResetConversation()
+    PolishService.CancelAll()
+    MessageService.Reset()
+    pendingQuote_ = nil
+    turnIndex_ = 0
+    local saved = MemoryService.ClearConversation()
+    local draft = ProfileService.DefaultDraft()
+    MessageService.SetDraft(draft)
+    ChatPanel.ResetConversation()
+    ChatPanel.SetDraft(draft)
+    ChatPanel.SetMemoryLine(MemoryService.GetSummaryLine())
+    PushChatPhase()
+    logInfo("用户重置对话记录，落盘=" .. tostring(saved))
+end
+
 --- 开发验收时可直接切城市；关系保持不变，便于对比同一关系在四城的状态与回复。
 ---@param cityId string
 ---@param label string
@@ -763,6 +780,7 @@ function CreatePage()
         onDraftChange = MessageService.SetDraft,
         onQuote = HandleQuote,
         onProfileEntry = HandleProfileEntry,
+        onResetConversation = HandleResetConversation,
         getMessages = MessageService.GetMessages,
         getVersion = MessageService.GetVersion,
     })

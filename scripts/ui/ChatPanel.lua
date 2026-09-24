@@ -72,6 +72,8 @@ local typingRow_ = nil
 local typingLabel_ = nil
 ---@type Panel|nil
 local quoteStrip_ = nil
+---@type Panel|nil
+local resetConfirmPanel_ = nil
 ---@type Label|nil
 local quotePreviewLabel_ = nil
 ---@type { id: integer, role: string, text: string }|nil
@@ -107,6 +109,8 @@ local onDraftChange_ = function() end
 local onQuote_ = function() end
 ---@type fun(): nil
 local onProfileEntry_ = function() end
+---@type fun(): nil
+local onResetConversation_ = function() end
 ---@type fun(): MsgEntry[]
 local messagesProvider_ = function()
     return {}
@@ -161,6 +165,7 @@ end
 ---@field onDraftChange? fun(text: string) 输入变化，回写草稿
 ---@field onQuote? fun(msg: MsgEntry) 点击某条气泡上的「引用」
 ---@field onProfileEntry? fun() 点击顶栏「换档案」
+---@field onResetConversation? fun() 用户二次确认后清空聊天记录
 ---@field getMessages? fun(): MsgEntry[]
 ---@field getVersion? fun(): integer
 
@@ -189,6 +194,31 @@ local function MakeProfileEntryButton()
         self:TransitionToStateBgColor()
         logInfo("换档案入口按下")
         onProfileEntry_()
+    end
+    return btn
+end
+
+---@return Widget
+local function MakeResetButton()
+    local btn = UI.Button {
+        id = "chatResetConversation",
+        text = "重置对话",
+        variant = "secondary",
+        fontSize = 10,
+        height = 26,
+        width = 68,
+        paddingLeft = 0,
+        paddingRight = 0,
+        focusable = false,
+    }
+    btn.focusable = false
+    function btn:OnPointerDown(event)
+        if not event or not event:IsPrimaryAction() then
+            return
+        end
+        self:SetState({ pressed = true })
+        self:TransitionToStateBgColor()
+        ChatPanel.ShowResetConfirmation()
     end
     return btn
 end
@@ -366,6 +396,7 @@ function ChatPanel.Build(opts)
     onDraftChange_ = opts.onDraftChange or onDraftChange_
     onQuote_ = opts.onQuote or onQuote_
     onProfileEntry_ = opts.onProfileEntry or onProfileEntry_
+    onResetConversation_ = opts.onResetConversation or onResetConversation_
     messagesProvider_ = opts.getMessages or messagesProvider_
     versionProvider_ = opts.getVersion or versionProvider_
     phase_ = "idle"
@@ -479,6 +510,50 @@ function ChatPanel.Build(opts)
         },
     }
 
+    local cancelResetButton = UI.Button {
+        text = "取消", variant = "secondary", fontSize = 10, height = 26, width = 50, focusable = false,
+    }
+    cancelResetButton.focusable = false
+    function cancelResetButton:OnPointerDown(event)
+        if event and event:IsPrimaryAction() then
+            ChatPanel.HideResetConfirmation()
+        end
+    end
+
+    local confirmResetButton = UI.Button {
+        text = "确认清空", variant = "primary", fontSize = 10, height = 26, width = 66, focusable = false,
+    }
+    confirmResetButton.focusable = false
+    function confirmResetButton:OnPointerDown(event)
+        if not event or not event:IsPrimaryAction() then
+            return
+        end
+        ChatPanel.HideResetConfirmation()
+        onResetConversation_()
+    end
+
+    resetConfirmPanel_ = UI.Panel {
+        id = "chatResetConfirm",
+        width = "100%",
+        flexShrink = 0,
+        flexDirection = "row",
+        alignItems = "center",
+        gap = 6,
+        visible = false,
+        backgroundColor = { 58, 38, 38, 245 },
+        borderRadius = 8,
+        paddingHorizontal = 8,
+        paddingVertical = 5,
+        children = {
+            UI.Label {
+                text = "清空当前聊天和待回复？", fontSize = 10,
+                fontColor = { 255, 218, 210, 255 }, flexGrow = 1, flexBasis = 0,
+            },
+            cancelResetButton,
+            confirmResetButton,
+        },
+    }
+
     content_ = UI.Panel {
         id = "chatMessages",
         width = rowW_ or "100%",
@@ -576,18 +651,16 @@ function ChatPanel.Build(opts)
                 justifyContent = "space-between",
                 alignItems = "center",
                 children = {
+                    profileLabel_,
                     UI.Row {
                         alignItems = "center",
-                        gap = 6,
-                        flexShrink = 1,
-                        children = {
-                            profileLabel_,
-                            MakeProfileEntryButton(),
-                        },
+                        gap = 5,
+                        flexShrink = 0,
+                        children = { MakeProfileEntryButton(), MakeResetButton() },
                     },
-                    memoryLabel_,
                 },
             },
+            memoryLabel_,
             scroller_,
             UI.Panel {
                 id = "chatStatusBar",
@@ -599,6 +672,7 @@ function ChatPanel.Build(opts)
                 children = { statusLabel_, skipButton_ },
             },
             quoteStrip_,
+            resetConfirmPanel_,
             UI.Panel {
                 id = "chatInputBar",
                 width = "100%",
@@ -810,6 +884,35 @@ function ChatPanel.ClearPendingQuote()
     logInfo("已取消待发送的引用")
 end
 
+function ChatPanel.ShowResetConfirmation()
+    if resetConfirmPanel_ then
+        resetConfirmPanel_:SetVisible(true)
+    end
+end
+
+function ChatPanel.HideResetConfirmation()
+    if resetConfirmPanel_ then
+        resetConfirmPanel_:SetVisible(false)
+    end
+end
+
+--- 旧消息行不调用 ClearChildren：该 API 不销毁 Yoga 节点，真机连续重置会累积幽灵布局。
+--- 逐行隐藏后清空索引，下一段会话仍走原有的增量追加路径。
+function ChatPanel.ResetConversation()
+    for _, row in pairs(rowsById_) do
+        row:SetVisible(false)
+    end
+    rowsById_ = {}
+    statusByMsgId_ = {}
+    renderedStatus_ = {}
+    bodyByMsgId_ = {}
+    renderedBody_ = {}
+    renderedVersion_ = -1
+    scrollAfterFrames_ = 0
+    ChatPanel.ClearPendingQuote()
+    ChatPanel.HideResetConfirmation()
+end
+
 ---@return string
 function ChatPanel.GetDraft()
     if inputField_ then
@@ -848,6 +951,7 @@ function ChatPanel.Shutdown()
     sendButton_ = nil
     skipButton_ = nil
     typingRow_ = nil
+    resetConfirmPanel_ = nil
     typingLabel_ = nil
     quoteStrip_ = nil
     quotePreviewLabel_ = nil

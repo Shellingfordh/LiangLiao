@@ -695,15 +695,21 @@ function MessageService.Restore(entries)
     return #queue_
 end
 
+--- 清空当前对话流及待回复队列。档案和事件日程属于其他服务，不在这里处理。
+--- 版本号递增而不是归零，确保增量 UI 一定会感知到本次清空。
 function MessageService.Reset()
     messages_ = {}
     queue_ = {}
-    version_ = 0
+    version_ = version_ + 1
     nextId_ = 1
     lastPlannedAtUtc_ = 0
     streaming_ = {}
     phase_ = MessageService.PHASE.IDLE
     draft_ = ""
+    if hooks_.onPhaseChange then
+        hooks_.onPhaseChange(phase_, nil)
+    end
+    logInfo("对话流已重置：消息、FIFO 队列与逐句上屏均已清空")
 end
 
 return MessageService
