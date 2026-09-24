@@ -43,6 +43,7 @@ local ContentService = require("services.ContentService")
 local MemoryService = require("services.MemoryService")
 local EventService = require("services.EventService")
 local PolishService = require("services.PolishService")
+local ElizaService = require("services.ElizaService")
 
 local DevSelfTest = {}
 
@@ -81,7 +82,7 @@ local bad_ = {}
 local summary_ = "自检未运行"
 
 --- Run 里 runScenario 的调用条数；结论行拿它判断「有没有场景被整批日志丢掉」
-local SCENARIO_TOTAL = 26
+local SCENARIO_TOTAL = 27
 
 local function logInfo(msg)
     print(TAG .. " " .. msg)
@@ -1278,6 +1279,25 @@ local function ScenarioPolishContract()
 end
 
 -- ---------------------------------------------------------------------------
+-- 场景 AA：离线 Eliza 规则层。它只根据输入或引用补一条陪伴式回应，
+-- 不新增任何城市、事件或时间事实；未命中时必须交回 ContentService 的模板回退。
+-- ---------------------------------------------------------------------------
+local function ScenarioElizaRules()
+    logInfo("场景 AA 离线 Eliza 规则层")
+
+    local tail1, rule1 = ElizaService.ReplyTail("项目赶得我好累", nil, 17)
+    local tail2, rule2 = ElizaService.ReplyTail("项目赶得我好累", nil, 17)
+    check("AA1 匹配疲惫主题", rule1 == "fatigue" and tail1 ~= "", tostring(rule1))
+    check("AA2 相同输入稳定返回", tail1 == tail2 and rule1 == rule2, tostring(tail1))
+
+    local fallback, fallbackRule = ElizaService.ReplyTail("今天路过一盏灯", nil, 17)
+    check("AA3 不匹配时交回模板链路", fallback == nil and fallbackRule == nil, tostring(fallbackRule))
+
+    local quoteTail, quoteRule = ElizaService.ReplyTail("嗯", "今天项目很赶", 18)
+    check("AA4 引用参与主题匹配", quoteRule == "work" and quoteTail ~= nil, tostring(quoteRule))
+end
+
+-- ---------------------------------------------------------------------------
 -- 场景 S：润色在途的 FIFO 与 8 秒预算 —— 后发不越序、队头超预算必回落、迟到作废
 -- ---------------------------------------------------------------------------
 local function ScenarioPolishFifo()
@@ -1893,6 +1913,7 @@ function DevSelfTest.Run(options)
     runScenario("O", ScenarioQuoteSleepQueue, dateKey)
     runScenario("P", ScenarioSegmentOrder, dateKey)
     runScenario("Q", ScenarioStreamingFifo, dateKey)
+    runScenario("AA", ScenarioElizaRules, dateKey)
     -- M2-B 润色：R 验适配层契约与全量回落（假 transport），S 验在途 FIFO 与预算，
     -- T 验开启态下真实队列链路（HandleDeliver）与 M2-A 时序不冲突
     runScenario("R", ScenarioPolishContract, dateKey)

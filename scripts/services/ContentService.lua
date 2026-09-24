@@ -9,6 +9,7 @@
 -- ============================================================================
 
 local ProfileService = require("ProfileService")
+local ElizaService = require("services.ElizaService")
 
 local ContentService = {}
 
@@ -375,6 +376,14 @@ local function BuildSegments(fact, userText, turnIndex, quote)
     end
 
     if briefReply then
+        return segments
+    end
+
+    -- 第三段优先走离线 Eliza 规则：只回应本条话的主题，不改写城市/事件/时间事实。
+    -- 不命中时才继续沿用原来的话题半句与关系风味，保证任何输入都有稳定回退。
+    local elizaTail = ElizaService.ReplyTail(userText or "", quoteText, turnIndex)
+    if elizaTail and elizaTail ~= "" then
+        segments[#segments + 1] = elizaTail
         return segments
     end
 
