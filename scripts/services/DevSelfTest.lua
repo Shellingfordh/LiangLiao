@@ -1299,10 +1299,14 @@ local function ScenarioPolishFifo()
     check("S0 两条都在途排队", #callbacks == 2 and PolishService.GetPendingCount() == 2,
         string.format("回调 %d 个 槽位 %d", #callbacks, PolishService.GetPendingCount()))
 
+    -- 结果落地 → 交付由主循环那一次 Update 推进（真机每帧调 HandleUpdate；
+    -- 自检在 Start 里同步跑，没有帧循环，所以这里手动推一拍，走的仍是同一个入口）
     callbacks[2](okResponse("B 句。"))
+    PolishService.Update(POLISH_BASE_UTC)
     check("S1 后发的结果先回来也不越序：一条都不交付", #order == 0,
         table.concat(order, ","))
     callbacks[1](okResponse("A 句。"))
+    PolishService.Update(POLISH_BASE_UTC)
     check("S2 队头落地后按发起顺序连发（A 先 B 后）",
         #order == 2 and order[1] == "A" and order[2] == "B"
         and PolishService.GetPendingCount() == 0,
@@ -1787,6 +1791,9 @@ local function ScenarioV4Migration()
     writeRawSave(SELFTEST_SAVE, fixture5)
     reinit_(SELFTEST_SAVE)
     local prof5 = MemoryService.GetProfile()
+    -- 与 Z3 同一条路：InitServices 只装服务，读回的记录要显式交给 MessageService
+    -- （真机上是 BootChat 里那一次 Restore）。少了这一步读的是空数组，不是存档。
+    MessageService.Restore(MemoryService.GetRestoredMessages())
     local back5 = MessageService.GetMessages()
     check("Z7 v5 半截脏档（带记录缺 profile）兜底为 LA×陌生网友已初始化，不弹初始化",
         prof5 ~= nil and prof5.cityId == "los_angeles" and prof5.relationId == "stranger"

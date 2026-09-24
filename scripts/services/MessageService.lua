@@ -237,6 +237,17 @@ local function EmitPhase(newPhase)
     end
 end
 
+--- 只改相位、不碰任何消息状态。逐句上屏专用（UI 的「正在输入」看的就是相位）。
+--- 为什么不能借 EmitPhase：交付一条多段回复时，onDeliver 回调里队首仍是刚被落成
+--- replied 的那条用户消息，EmitPhase(TYPING) 会把它改回 typing；回调里紧接着落盘，
+--- 存档里就留下「已回复却写着 typing」的记录，重进时按未回复再回一次（E5/Y11 断言）。
+local function EmitStreamingPhase(newPhase)
+    phase_ = newPhase
+    if hooks_.onPhaseChange then
+        hooks_.onPhaseChange(newPhase, queue_[1])
+    end
+end
+
 --- 非队首消息统一显示排队；队首由相位机决定
 local function SyncQueueStates()
     for i = 2, #queue_ do
@@ -590,7 +601,7 @@ function MessageService.BeginReplyStream(segments, serverTime, factId, clockText
     streaming_[#streaming_ + 1] = entry
     logInfo(string.format("若夕回复 #%d 分 %d 句，第 1 句已上屏，其余逐句追加",
         entry.id, #list))
-    EmitPhase(MessageService.PHASE.TYPING)
+    EmitStreamingPhase(MessageService.PHASE.TYPING)
     return entry
 end
 
@@ -617,7 +628,7 @@ local function AdvanceStreaming(now)
             entry.streamNextAtUtc = now + SEGMENT_GAP_SECONDS
             version_ = version_ + 1
             logInfo(string.format("回复 #%d 追加第 %d/%d 句", entry.id, idx, #segments))
-            EmitPhase(MessageService.PHASE.TYPING)
+            EmitStreamingPhase(MessageService.PHASE.TYPING)
         end
     end
     -- 句子全部上屏、手上也没有待回消息时才回到空闲相位

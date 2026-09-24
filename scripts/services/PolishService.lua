@@ -78,9 +78,12 @@ local function logInfo(msg)
     log:Write(LOG_INFO, "[PolishService] " .. msg)
 end
 
-local function logError(msg)
-    print("[PolishService] ERROR: " .. msg)
-    log:Write(LOG_ERROR, "[PolishService] " .. msg)
+--- 回落路径一律 WARN，不用 ERROR：契约里「网络/超时/预算/守卫任何失败都回落模板」
+--- 是设计内的正常收尾，不是故障。DevSelfTest 的判据是 runtime.log 里 ERROR=0 ⟺ 自检全绿，
+--- 这里报 ERROR 会让「故意打负路径」的 R16/S4 把 ERROR 变成常态噪音。
+local function logWarn(msg)
+    print("[PolishService] WARN: " .. msg)
+    log:Write(LOG_WARNING, "[PolishService] " .. msg)
 end
 
 --- UTF-8 码点计数：与网关 Array.from(s).length 同口径（一个汉字记 1）
@@ -273,7 +276,11 @@ function PolishService.ValidateResponse(obj, req)
     if type(obj) ~= "table" then
         return nil, "not_object"
     end
-    -- 顶层恰两键且键名精确（JSON null 解成 cjson.null，键仍在）
+    -- 顶层只允许 segments / replyToQuotedMessageId 两键，键名精确，别的键一律拒。
+    -- ⚠️ 引擎的 cjson 解码会把「值为 JSON null」的键整个丢掉（2026-09-24 实测：
+    -- {"segments":[…],"replyToQuotedMessageId":null} 解出来只有 1 个键，cjson.null
+    -- 是编码用的哨兵函数、解码侧拿不到），所以「缺 quote 键」与「显式 null」等价——
+    -- 无引用的合法响应必须放行，不能按多余/缺失字段拒掉。
     local count = 0
     for k in pairs(obj) do
         if k ~= "segments" and k ~= "replyToQuotedMessageId" then
@@ -281,7 +288,7 @@ function PolishService.ValidateResponse(obj, req)
         end
         count = count + 1
     end
-    if count ~= 2 or obj.segments == nil then
+    if count < 1 or obj.segments == nil then
         return nil, "key_set"
     end
 
@@ -338,9 +345,9 @@ function PolishService.ValidateResponse(obj, req)
     end
 
     local qid = obj.replyToQuotedMessageId
-    local nullSentinel = cjson and cjson.null
-    if qid ~= nullSentinel then
-        -- 无引用时 req.quote 是 cjson.null 哨兵，不能索引，只能按「无允许 id」处理
+    -- 解出来的 nil 就是 JSON null（键被解码器丢掉），按「无引用」处理
+    if qid ~= nil then
+        -- 无引用时 req.quote 是 cjson.null 哨兵（编码用函数），不能索引，只能按「无允许 id」处理
         local allowed = (type(req.quote) == "table" and req.quote.messageId) or nil
         if type(qid) ~= "number" or qid ~= math.floor(qid) or qid <= 0 then
             return nil, "quote_type"
@@ -440,7 +447,7 @@ local function Pump(nowUtc)
         elseif nowUtc >= slot.deadlineUtc then
             reason = "budget"
             slot.result = { ok = false, category = "budget" }
-            logError("润色超预算未回（transport 未守约），回落模板并继续 FIFO")
+            logWarn("润色超预算未回（transport 未守约），回落模板并继续 FIFO")
         else
             break -- 队头还在预算内等结果：后面的不许插队
         end
@@ -496,7 +503,7 @@ function PolishService.Polish(opts, onDone)
     if not okCall then
         slot.result = { ok = false, category = "transport_error" }
         slot.settled = true
-        logError("transport.request 抛异常，按网络错误回落")
+        logWarn("transport.request 抛异常，按网络错误回落")
     end
     Pump(nowUtc)
 end

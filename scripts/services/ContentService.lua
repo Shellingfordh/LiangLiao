@@ -179,7 +179,8 @@ local GENERIC_LINES = {
     "{event}，就这些。",
 }
 
--- 碎片时间档：规格 §5.2 要求「回复较短」，所以另开一组短句且不带话题后缀
+-- 碎片时间档：规格 §5.2 要求「回复较短」，所以另开一组短句且不带话题后缀。
+-- 唯一例外是引用回指句（用户明确点名的请求），见 BuildSegments。
 ---@type string[]
 local BRIEF_LINES = {
     "这会儿{avail}，{event}。",
@@ -361,11 +362,9 @@ local function BuildSegments(fact, userText, turnIndex, quote)
     end
     segments[#segments + 1] = head
 
-    if briefReply then
-        return segments
-    end
-
     -- 第二段：被引用的那一句。紧跟在主干句之后、通用话题后缀之前。
+    -- 碎片档也保留这一段：引用是用户明确点名的请求（「这句再说一遍」），
+    -- 被引句必须真的回到回复里；碎片档省的只是话题后缀与关系风味（自检 Y10 断言）。
     if quoteText ~= "" then
         local echoSeed = quoteText .. "|" .. fact.id .. "|" .. tostring(turnIndex)
         local echoPick = (hash(echoSeed) % #QUOTE_ECHO_LINES) + 1
@@ -373,6 +372,10 @@ local function BuildSegments(fact, userText, turnIndex, quote)
         if echoTpl and echoTpl ~= "" then
             segments[#segments + 1] = fill(echoTpl, vars)
         end
+    end
+
+    if briefReply then
+        return segments
     end
 
     -- 第三段：原文（连同被引用那句）里出现某个话题时追加的半句

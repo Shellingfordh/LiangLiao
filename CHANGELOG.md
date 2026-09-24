@@ -47,6 +47,37 @@
   初始化盖历史；无记录的空档仍进首次选择（自检 Z7 断言；设计 §4 表格同步澄清）。
 - **switch 模式隐藏「随机」chip**：随机只在初始化（设计 §7），换档案时不再留一枚点了没反应的死件。
 
+### 修复（同日，云端自检 21 项失败定位）
+
+用户给的云端 `runtime.log` 报 21 项 FAIL（通过=208），逐条复现后归为四个根因，改动只在
+`MessageService` / `PolishService` / `ContentService` 与自检夹具里：
+
+- **R×11 + T×2（全判 `schema_key_set`）**：引擎的 `cjson.decode` 会把「值为 JSON null」的键**整个丢掉**
+  （探针实测：`{"segments":[…],"replyToQuotedMessageId":null}` 解出只有 1 个键；`cjson.null` 是编码侧
+  哨兵函数，解码侧拿不到），而 `ValidateResponse` 按「顶层恰两键」判，于是无引用的合法响应全被拒。
+  改为「键名只允许这两个；缺 quote 键与显式 null 等价」，并同步修掉引用段的 `nullSentinel` 比较。
+  T2/T3 是它的级联（润色一失败就回落模板，回复里自然没有润色句）。
+- **E×1 + Y11×3（已回完的消息重进被再回一次）**：逐句上屏的 `EmitPhase(TYPING)` 在交付回调里
+  把「刚落成 replied 的队首」改回 `typing`，而回调紧接着落盘 ⇒ 存档里留下「已回复却写着 typing」的记录。
+  新增 `EmitStreamingPhase`（只改相位、不碰消息状态，UI 的「正在输入」看的就是相位）供逐句上屏使用。
+- **Y10×1（伦敦）**：伦敦 07:00–08:00 是碎片档，`BuildSegments` 的 brief 早退把引用回指段一起省了，
+  用户点名的「这句再说一遍」没有回到回复里。改为碎片档也保留引用回指段，省掉的只有话题后缀与关系风味。
+- **Z7/Z8**：两处少了 `MessageService.Restore(MemoryService.GetRestoredMessages())`
+  （`InitServices` 只装服务，真机上是 `BootChat` 里那一次 Restore），读的是空数组不是存档。
+- **S2**：结果落地后的交付由主循环 `PolishService.Update` 推进（真机每帧 `HandleUpdate`），
+  自检在 `Start` 里同步跑、没有帧循环，S1/S2 补上手动推一拍（走的仍是同一个入口）。
+- `PolishService` 的两条回落日志由 ERROR 降为 WARN：契约里回落是设计内的正常收尾，
+  而自检判据是「runtime.log 里 ERROR = 0 ⟺ 全绿」，R16/S4 故意打负路径不该让 ERROR 变成常态噪音。
+
+**Verified**：云端构建 1.0.9（两次）后 `/opt/log/dev/user_script.log` →
+`自检结论 通过=229 失败=0 场景=26/26[A…Z]`，同一窗口 `ERROR` 行数 = 0。
+本地 `UrhoXRuntime` validate 跑同一份自检为 221 通过 / 8 失败，余 8 项（D2、Y7×4、H2、J3、J8）
+全部由沙箱 `common.get_server_time()` 返回 0 → 1969-12-31 负纪元引起，云端（真时间）本就不失败：
+探针证明同一条 `Send` 路径在正纪元下 `planReplyAtUtc` 有序（1796000005 → 1796000009），
+负纪元下被 `lastPlannedAtUtc_ > 0` 守卫绕过；H2 命中 `AwayGap` 的 `lastServerTime <= 0` 早退；
+J3/J8 断言的正是 `> 0` 的生成时刻与落盘时刻。`maker-lua-lsp`：0 Error。
+**本节此前的「未经真机构建验证」边界就此解除**（U–Z 与四城链路已在云端自检全绿）。
+
 ### Verified（本地证据）
 
 - `maker-lua-lsp --mode watch`：`Lua Errors: 0`（2026-09-24 19:50，全部改动之后重跑）。
