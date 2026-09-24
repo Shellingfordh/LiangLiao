@@ -206,13 +206,19 @@ $ node .../@taptap/maker/dist/maker.js build --target-dir D:/Develop/ShanTianLia
 
 ## B-6 唯一未闭环项：一次真实会话的 runtime.log（与 B-2 同性质，机制已验证可成）
 
-- 本地门禁已全过：Lua LSP `Errors: 0`（`logs/lua_errors.log` 2026-09-25 00:53 判据行）、
-  `git diff --check` exit=0。
-- 云端构建成功：commit `bc53496`「chore: update maker project」已推 `maker/main`，
-  `previewRefresh 200`，构建返回「🎉 项目构建成功」；日志抓取器随构建重启
-  （state.json `lastSuccessAt` 每 ~31s 推进、`consecutiveFailures: 0`）。
-- 测试二维码已生成（`taptap-maker qrcode --confirmed-build`，
-  `https://tapcode-sce.spark.xd.com/qrcode/m_c7s3_1790269576070.png`）。
+- 本地门禁已全过：Lua LSP `Errors: 0`（`logs/lua_errors.log` 2026-09-25 02:01 判据行）、
+  `git diff --check` exit=0、`tools/m4-node-crosscheck.js` 15/15。
+- **项目自检已在真实引擎里跑过一次并全绿**（本地 Windows 运行时，`.tmp/poc/m4_selftest_local.lua`：
+  `通过=267 失败=0 场景=32/32`）。首轮是 `264/2`，两条失败揪出「痕迹按注册表 active 写、不按会话槽写」
+  的真串写缺陷，已修（见 `CHANGELOG.md` M4「修复」节 + 自检 AF0 守卫）。
+  这条只算逻辑与装载证据，**不算真机验证**：本地截图不可用于画面判定
+  （`m4_scene_capture.lua` 实测同场景隔 2.5s 两张 md5 相同、RT 层盖住背景静帧、Y 朝向与原生相反）。
+- 云端构建已过两次：`bc53496`（M4 主体）与 `46206ea`（4:3 精确裁切 + 锚点重映射），
+  均 `previewRefresh 200`、「🎉 项目构建成功」；承载会话槽修复的第三次构建在跑，hash 补进
+  `CHANGELOG.md`。测试二维码随每次构建刷新（最新
+  `https://tapcode-sce.spark.xd.com/qrcode/m_c7s3_1790271329714.png`，指向 `46206ea`，
+  会话槽修复构建完成后需再刷一次）。
 - **等待**：用户扫码/打开预览跑出真机会话 → 32 场景自检结论行落 `runtime.log` →
-  核对「场景=32/32 … 全部通过」与人生切换/痕迹绑定证据。取到日志前 B-2 的口径原样适用：
-  真机会话不开，云端就没有该构建的任何运行日志，任何「自检已过」的说法都不成立。
+  核对「场景=32/32 … 全部通过」＋零 ERROR ＋换段/换景/痕迹证据，并肉眼确认 16 场景的静帧融合与
+  接地阴影。取到日志前 B-2 的口径原样适用：真机会话不开，云端就没有该构建的任何运行日志，
+  任何「真机已验证」的说法都不成立。
