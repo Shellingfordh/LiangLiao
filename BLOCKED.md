@@ -201,3 +201,18 @@ $ node .../@taptap/maker/dist/maker.js build --target-dir D:/Develop/ShanTianLia
 无「连续 3 次构建失败」情形（连续 3 次的是**工具响应通路**，见 B-4，不是构建本身失败）。
 未生成测试二维码、未扫码、未动 Git 配置、未装依赖（含被权限层挡下的两次：一次本地 Lua 运行时探测、
 一次仓库外常驻日志看护脚本）、未接外部后端、无 LLM 调用、未新增任何资产。
+
+# BLOCKED — M4 可感知的平行人生（2026-09-25 追加）
+
+## B-6 唯一未闭环项：一次真实会话的 runtime.log（与 B-2 同性质，机制已验证可成）
+
+- 本地门禁已全过：Lua LSP `Errors: 0`（`logs/lua_errors.log` 2026-09-25 00:53 判据行）、
+  `git diff --check` exit=0。
+- 云端构建成功：commit `bc53496`「chore: update maker project」已推 `maker/main`，
+  `previewRefresh 200`，构建返回「🎉 项目构建成功」；日志抓取器随构建重启
+  （state.json `lastSuccessAt` 每 ~31s 推进、`consecutiveFailures: 0`）。
+- 测试二维码已生成（`taptap-maker qrcode --confirmed-build`，
+  `https://tapcode-sce.spark.xd.com/qrcode/m_c7s3_1790269576070.png`）。
+- **等待**：用户扫码/打开预览跑出真机会话 → 32 场景自检结论行落 `runtime.log` →
+  核对「场景=32/32 … 全部通过」与人生切换/痕迹绑定证据。取到日志前 B-2 的口径原样适用：
+  真机会话不开，云端就没有该构建的任何运行日志，任何「自检已过」的说法都不成立。
