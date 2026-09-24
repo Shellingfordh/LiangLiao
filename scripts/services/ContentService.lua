@@ -80,7 +80,7 @@ local EVENT_LINES = {
         "{event}，到{ends}前多半都在会议室。",
     },
     sha_cafe_midday = {
-        "{event}，下午还得回版房。",
+        "{event}，下午还有两版要盯。",
         "{event}，这顿吃得快。",
     },
     sha_office_layout = {
@@ -149,7 +149,7 @@ local EVENT_LINES = {
     },
     lon_campus_lecture = {
         "{event}，笔记还记着呢。",
-        "{event}，散场我再看手机。",
+        "{event}，忙完这阵我再看手机。",
     },
     lon_cafe_midday = {
         "{event}，下午的录音不能迟到。",

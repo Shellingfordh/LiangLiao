@@ -28,6 +28,8 @@
 --     睡眠排队 FIFO、引用她的回复、落盘重进（与洛杉矶用的完全是同一套 helper，不另开旁路）；
 --   * 场景 Z：v4 旧档迁移 —— 缺 profile 按「洛杉矶×陌生网友·已初始化」迁移，
 --     transcript 更名 messages，引用字段/排队计划/事件计划一条不丢、不弹初始化界面。
+--   * 场景 AB–AF（M4）：三段人生槽互不串写与满员拒建、冷启动选段与旧档收编、
+--     16 个场景状态包完整且背景不复用、2.5D 生活痕迹全生命周期、切换人生不残留旧城市/旧景/旧痕。
 -- 不 mock 任何被测服务，也不依赖被测服务没有的能力：
 --   * 时间用 TimeState.DevClockOffset 投影（权威时间源不变，只是把 now 拨到某个当地整点）；
 --   * 推进用 MessageService.Update(utcNow) 这个正式入口；
@@ -44,6 +46,8 @@ local MemoryService = require("services.MemoryService")
 local EventService = require("services.EventService")
 local PolishService = require("services.PolishService")
 local ElizaService = require("services.ElizaService")
+local SceneService = require("SceneService")
+local LifeService = require("services.LifeService")
 
 local DevSelfTest = {}
 
@@ -57,7 +61,10 @@ local SEGMENT_GAP_SECONDS = MessageService.SEGMENT_GAP_SECONDS
 ---@field cityId string
 ---@field idleWaitSeconds number
 ---@field makeSendContext fun(snap: TimeSnapshot, quote?: QuoteRef): SendContext
----@field reinit fun(saveFile: string|nil)
+---@field reinit fun(saveFile: string|nil, lifeSlot: LifeSlot|nil)
+---@field updateTrace fun(fact: EventFact?)
+---@field ensureTrace fun()
+---@field reinitLife fun()
 
 ---@type string
 local cityId_ = "los_angeles"
@@ -66,8 +73,14 @@ local idleWait_ = 10
 -- 未赋值的函数槽按 AGENTS 规则 #11 标注类型源头，调用点才有推导
 ---@type fun(snap: TimeSnapshot, quote?: QuoteRef): SendContext
 local makeSendContext_
----@type fun(saveFile: string|nil)
+---@type fun(saveFile: string|nil, lifeSlot: LifeSlot|nil)
 local reinit_
+---@type fun(fact: EventFact?)
+local updateTrace_
+---@type fun()
+local ensureTrace_
+---@type fun()
+local reinitLife_
 
 ---@type integer
 local passed_ = 0
@@ -82,7 +95,7 @@ local bad_ = {}
 local summary_ = "自检未运行"
 
 --- Run 里 runScenario 的调用条数；结论行拿它判断「有没有场景被整批日志丢掉」
-local SCENARIO_TOTAL = 27
+local SCENARIO_TOTAL = 32
 
 local function logInfo(msg)
     print(TAG .. " " .. msg)
@@ -1764,7 +1777,7 @@ local function ScenarioV4Migration()
         string.format("profile=%s×%s init=%s 夹具 %d 字节",
             tostring(prof and prof.cityId), tostring(prof and prof.relationId),
             tostring(prof and prof.initialized), bytes))
-    check("Z2 迁移后内存版本抬到 v5", MemoryService.Get().version == 5,
+    check("Z2 迁移后内存版本抬到 v6", MemoryService.Get().version == 6,
         tostring(MemoryService.Get().version))
     local reopened = MessageService.Restore(MemoryService.GetRestoredMessages())
     local msgs = MessageService.GetMessages()
@@ -1826,6 +1839,463 @@ local function ScenarioV4Migration()
         tostring(back5[1] and back5[1].cityIdAtSend))
 end
 
+
+-- ---------------------------------------------------------------------------
+-- M4 场景 AB–AF：平行人生槽、冷启动选段、场景状态包、生活痕迹与切换无残留。
+-- 全部走自检专属的人生注册表（main.lua 注入三个路径），绝不碰玩家的
+-- lives.json、段存档与 M0–M3 旧档。
+-- ---------------------------------------------------------------------------
+
+--- 自检旧单存档夹具路径，与 main.lua 的 legacyFile 注入严格一致
+local SELFTEST_LIFE_LEGACY = "memory/life-selftest-legacy.json"
+
+--- 读回存档原始表（隔离互证用：断言文件里写了什么，不是服务内存里说什么）
+---@param path string
+---@return any
+local function readRawSave(path)
+    local out = nil
+    pcall(function()
+        if not fileSystem:FileExists(path) then
+            return
+        end
+        local file = File(path, FILE_READ)
+        if not file:IsOpen() then
+            return
+        end
+        local raw = file:ReadString()
+        file:Close()
+        file:Dispose()
+        out = cjson.decode(raw)
+    end)
+    return out
+end
+
+--- 清掉 M4 场景用到的全部人生文件并重建内存注册表（场景之间不留残留）
+local function resetLifeRegistry()
+    reinitLife_()
+    LifeService.ClearAll()
+    pcall(function()
+        if fileSystem:FileExists(SELFTEST_LIFE_LEGACY) then
+            fileSystem:Delete(SELFTEST_LIFE_LEGACY)
+        end
+    end)
+end
+
+--- 场景 AB：最多三段、各写各的、第四段必须显式替换
+local function ScenarioLifeIsolation(dateKey)
+    logInfo("场景 AB 人生槽互不串写与三段上限")
+    beginScenario()
+    resetLifeRegistry()
+    local t0 = TimeState.NowUtc()
+    local slotA = LifeService.CreateSlot("los_angeles", "stranger", nil, t0)
+    local slotB = LifeService.CreateSlot("shanghai", "classmate", nil, t0 + 1)
+    local slotC = LifeService.CreateSlot("chengdu", "old_friend", nil, t0 + 2)
+    local fourth, reason = LifeService.CreateSlot("london", "ex_colleague", nil, t0 + 3)
+    check("AB1 满三段：第四段被拒 reason=full 且前三段原样在（不静默淘汰）",
+        slotA ~= nil and slotB ~= nil and slotC ~= nil and fourth == nil and reason == "full"
+        and LifeService.Count() == 3, tostring(reason))
+    check("AB2 段号固定为 life-1/2/3（段号同时决定存档文件名，跨重启稳定）",
+        slotA.slotId == "life-1" and slotB.slotId == "life-2" and slotC.slotId == "life-3")
+
+    LifeService.OpenSlot("life-1", t0 + 10)
+    reinit_(LifeService.SlotSaveFile("life-1"), LifeService.Active())
+    goLocalHour(12, dateKey)
+    sendNow("中午吃过了吗？")
+    advance(30)
+    MemoryService.Persist(MessageService.GetMessages())
+    local msgsA = MessageService.GetMessages()
+    check("AB3 life-1 全链路写聊天：落盘后条数在、lifeId 钉的是 life-1",
+        #msgsA >= 2 and MemoryService.GetLifeId() == "life-1",
+        string.format("条数 %d lifeId=%s", #msgsA, tostring(MemoryService.GetLifeId())))
+
+    LifeService.OpenSlot("life-2", t0 + 11)
+    reinit_(LifeService.SlotSaveFile("life-2"), LifeService.Active())
+    local restoredB = MessageService.Restore(MemoryService.GetRestoredMessages())
+    check("AB4 打开 life-2 是另一份空历史：A 的记录没漏进来、档案是上海",
+        #MessageService.GetMessages() == 0 and restoredB == 0
+        and ProfileService.GetCityId() == "shanghai"
+        and MemoryService.GetLifeId() == "life-2",
+        string.format("lifeId=%s city=%s", tostring(MemoryService.GetLifeId()), ProfileService.GetCityId()))
+
+    LifeService.SetTrace("life-3", { traceKey = "postcard", occurrenceKey = "cdu/seed-a",
+        eventTitle = "在公寓写明信片", sceneId = "cdu_apartment" }, t0 + 12)
+    LifeService.SetTrace("life-1", { traceKey = "coffee", occurrenceKey = "la/seed-a",
+        eventTitle = "中午的咖啡馆", sceneId = "la_cafe" }, t0 + 12)
+    local tr1, tr2, tr3 = LifeService.GetTrace("life-1"), LifeService.GetTrace("life-2"), LifeService.GetTrace("life-3")
+    check("AB5 痕迹按段各写各的：life-1 与 life-3 各说各的，life-2 仍是空",
+        tr1 ~= nil and tr1.traceKey == "coffee" and tr2 == nil
+        and tr3 ~= nil and tr3.traceKey == "postcard")
+
+    local rawA = readRawSave(LifeService.SlotSaveFile("life-1"))
+    local rawB = readRawSave(LifeService.SlotSaveFile("life-2"))
+    check("AB6 段存档文件各写各的：life-1 文件里才有 life-1 的记录，life-2 还没写过文件",
+        rawA ~= nil and rawA.lifeId == "life-1" and rawA.messages ~= nil and #rawA.messages == #msgsA
+        and rawB == nil and LifeService.SlotSaveFile("life-1") ~= LifeService.SlotSaveFile("life-2"),
+        string.format("A=%s B=%s", tostring(rawA and rawA.lifeId), tostring(rawB and rawB.lifeId)))
+
+    LifeService.OpenSlot("life-1", t0 + 13)
+    reinit_(LifeService.SlotSaveFile("life-1"), LifeService.Active())
+    MessageService.Restore(MemoryService.GetRestoredMessages())
+    local backA = MessageService.GetMessages()
+    local profA = MemoryService.GetProfile()
+    check("AB7 回到 life-1：聊天条数、档案、痕迹原样回来（换段不丢东西）",
+        #backA == #msgsA and profA ~= nil and profA.cityId == "los_angeles"
+        and LifeService.GetTrace().traceKey == "coffee")
+
+    -- 存档 lifeId 与当前槽不符是串写嫌疑：WARN 已落日志，会话仍按自己的槽指针继续
+    ---@type any
+    local crossed = {
+        version = 6, lifeId = "life-9", cityId = "shanghai", turns = 0,
+        firstServerTime = t0, lastServerTime = t0 + 1, lastFactId = "", topics = {},
+        messages = {},
+        profile = { cityId = "shanghai", relationId = "stranger", seedText = "x",
+            isRandom = false, initialized = true },
+    }
+    writeRawSave(SELFTEST_SAVE, crossed)
+    reinit_(SELFTEST_SAVE, LifeService.SlotById("life-1"))
+    check("AB8 存档带着别人的 lifeId：仍按当前槽指针继续（串写可见化但不被劫持）",
+        MemoryService.GetLifeId() == "life-1", tostring(MemoryService.GetLifeId()))
+end
+
+--- 场景 AC：旧单存档收编 + 冷启动直达最近打开的人生
+local function ScenarioColdStartLegacy(dateKey)
+    logInfo("场景 AC 冷启动选段与旧档收编（隔离注册表，不碰玩家存档）")
+    beginScenario()
+    resetLifeRegistry()
+    local t0 = TimeState.NowUtc()
+    ---@type any
+    local legacy = {
+        version = 5, cityId = "london", turns = 3,
+        firstServerTime = t0 - 86400, lastServerTime = t0 - 3600,
+        lastFactId = "lon_apartment_mixdown", topics = {},
+        profile = { cityId = "london", relationId = "old_friend", seedText = "fixture",
+            isRandom = false, initialized = true },
+        messages = {
+            { id = 7001, role = "user", text = "还在混音吗？", serverTime = t0 - 8000,
+                state = "replied", clockText = "23:10" },
+        },
+    }
+    writeRawSave(SELFTEST_LIFE_LEGACY, legacy)
+    LifeService.Load(t0)
+    local adopted = LifeService.Active()
+    check("AC1 无注册表但有旧档：收编为 life-1 且直接活跃（不弹初始化、不清历史）",
+        adopted ~= nil and adopted.slotId == "life-1" and adopted.cityId == "london"
+        and adopted.relationId == "old_friend" and LifeService.Count() == 1,
+        string.format("段数 %d 活跃=%s", LifeService.Count(), tostring(adopted and adopted.slotId)))
+    local copied = readRawSave(LifeService.SlotSaveFile("life-1"))
+    check("AC2 收编把历史复制进 life-1 自己的段存档（旧文件留作只读备份，此后不再被读）",
+        copied ~= nil and copied.messages ~= nil and copied.messages[1] ~= nil
+        and copied.messages[1].text == "还在混音吗？",
+        tostring(copied and copied.messages and #copied.messages or "无文件"))
+
+    LifeService.CreateSlot("shanghai", "stranger", nil, t0 + 100)
+    LifeService.CreateSlot("chengdu", "stranger", nil, t0 + 200)
+    LifeService.OpenSlot("life-1", t0 + 300)
+    LifeService.OpenSlot("life-2", t0 + 400)
+    LifeService.OpenSlot("life-3", t0 + 500)
+    LifeService.OpenSlot("life-2", t0 + 600)
+    -- 模拟进程重启：内存全部清掉，一切以注册表文件为准
+    reinitLife_()
+    LifeService.Load(t0 + 700)
+    local cold = LifeService.Active()
+    local latest = LifeService.LatestOpened()
+    check("AC3 冷启动重读注册表：活跃段仍是最后打开的 life-2",
+        cold ~= nil and cold.slotId == "life-2", tostring(cold and cold.slotId))
+    check("AC4 LatestOpened 按 lastOpenedUtc 取段（与冷启动同一条兜底路，life-3 停在 t0+500）",
+        latest ~= nil and latest.slotId == "life-2"
+        and LifeService.SlotById("life-3").lastOpenedUtc == math.floor(t0 + 500),
+        string.format("latest=%s life-3=%s", tostring(latest and latest.slotId),
+            tostring(LifeService.SlotById("life-3").lastOpenedUtc)))
+    check("AC5 段文件与旧档路径全锁在自检前缀：不碰玩家 lives.json / m0-1 旧档",
+        LifeService.SlotSaveFile("life-1") == "memory/life-selftest-1.json"
+        and SELFTEST_LIFE_LEGACY == "memory/life-selftest-legacy.json",
+        LifeService.SlotSaveFile("life-1"))
+    resetLifeRegistry()
+end
+
+--- 场景 AD：16 个场景状态包声明齐、背景不复用、作息表永远落在真包上
+local function ScenarioScenePackages(dateKey)
+    logInfo("场景 AD 十六个场景状态包与作息表同源")
+    local order = SceneService.SCENE_ORDER
+    local hits = 0
+    for i = 1, #order do
+        if SceneService.PackageFor(order[i]) then
+            hits = hits + 1
+        end
+    end
+    check("AD1 四城 × 四场景型 = 16 个包，逐个声明在",
+        #order == 16 and hits == 16, string.format("表 %d 命中 %d", #order, hits))
+
+    local badFields = nil
+    local dupPath = nil
+    local seenPath = {}
+    local typeCount = {}
+    for i = 1, #order do
+        local pkg = SceneService.PackageFor(order[i])
+        typeCount[pkg.cityId .. "/" .. pkg.type] = (typeCount[pkg.cityId .. "/" .. pkg.type] or 0) + 1
+        if seenPath[pkg.backgroundPath] then
+            dupPath = pkg.id
+        end
+        seenPath[pkg.backgroundPath] = true
+        local mm = pkg.microMotion
+        local okFields = pkg.id == order[i] and pkg.backgroundKey == pkg.id
+            and (pkg.type == "home" or pkg.type == "work" or pkg.type == "public" or pkg.type == "transit")
+            and pkg.label ~= nil and pkg.label ~= ""
+            and pkg.colorTemperature >= 2500 and pkg.colorTemperature <= 7000
+            and pkg.keyLightDirection ~= nil and pkg.keyLightDirection.x ~= nil
+            and pkg.keyLightDirection.y ~= nil and pkg.keyLightDirection.z ~= nil
+            and pkg.characterPlacement ~= nil
+            and (pkg.characterPlacement.side == "right" or pkg.characterPlacement.side == "left")
+            and pkg.groundShadow ~= nil
+            and pkg.groundShadow.anchorX > 0 and pkg.groundShadow.anchorX < 1
+            and pkg.groundShadow.anchorY > 0 and pkg.groundShadow.anchorY < 1
+            and pkg.groundShadow.rx > 0 and pkg.groundShadow.ry > 0
+            and (mm == "breathe" or mm == "sway" or mm == "turn" or mm == "dolly")
+            and pkg.traceAnchor ~= nil
+            and pkg.traceAnchor.x > 0 and pkg.traceAnchor.x < 1
+            and pkg.traceAnchor.y > 0 and pkg.traceAnchor.y < 1
+            and pkg.traceAnchor.scale > 0 and pkg.traceAnchor.layer >= 1
+            and pkg.future3D ~= nil and pkg.future3D.sceneRef == "scene/" .. pkg.id
+            and pkg.future3D.anchorId ~= nil and pkg.future3D.anchorId ~= ""
+        if not okFields and not badFields then
+            badFields = pkg.id
+        end
+    end
+    check("AD2 每个包字段齐：色温/主光向/站位/接地阴影/微动/痕迹锚点/future3D 全在",
+        badFields == nil, tostring(badFields))
+    local typesOk = true
+    for ci = 1, #ProfileService.CITY_ORDER do
+        local city = ProfileService.CITY_ORDER[ci]
+        if (typeCount[city .. "/home"] or 0) ~= 1 or (typeCount[city .. "/work"] or 0) ~= 1
+            or (typeCount[city .. "/public"] or 0) ~= 1 or (typeCount[city .. "/transit"] or 0) ~= 1 then
+            typesOk = false
+        end
+    end
+    check("AD3 每城四种各一不缺不重，16 条背景路径全局唯一（不复用错误背景）",
+        typesOk and dupPath == nil, tostring(dupPath))
+
+    local misses = ""
+    for ci = 1, #ProfileService.CITY_ORDER do
+        local city = ProfileService.CITY_ORDER[ci]
+        for h = 0, 23 do
+            local utc = TimeState.UtcAtLocal(city, dateKey, h, 0)
+            local snap = TimeState.Snapshot(city, utc)
+            if not SceneService.PackageFor(snap.sceneId) then
+                misses = misses .. string.format(" %s@%02d→%s", city, h, tostring(snap.sceneId))
+            end
+        end
+    end
+    check("AD4 四城 24 小时作息快照 sceneId 全部落在真包上（作息表里没有第五景）",
+        misses == "", misses)
+
+    check("AD5 退役/不存在的场景 id 必须显式降级：StateFor 返回 nil，不拿旧图假称已切换",
+        SceneService.StateFor("la_campus", nil) == nil
+        and SceneService.StateFor("lon_cafe", nil) == nil
+        and SceneService.StateFor("sha_jiaguan", nil) == nil)
+
+    local vocabBad = nil
+    for ci = 1, #ProfileService.CITY_ORDER do
+        local cityId = ProfileService.CITY_ORDER[ci]
+        local city = ProfileService.CityFor(cityId)
+        for vi = 1, #city.sceneVocab do
+            local pkg = SceneService.PackageFor(city.sceneVocab[vi])
+            if not pkg or pkg.cityId ~= cityId then
+                vocabBad = cityId .. ":" .. city.sceneVocab[vi]
+            end
+        end
+    end
+    check("AD6 档案 sceneVocab 与包同源：档案页可见场景全属该城的包（说的=画的）",
+        vocabBad == nil, tostring(vocabBad))
+
+    beginScenario()
+    local occBad = ""
+    local occChecked = 0
+    for ci = 1, #ProfileService.CITY_ORDER do
+        local cityId = ProfileService.CITY_ORDER[ci]
+        local plan = EventService.PlanFor(cityId, dateKey)
+        for i = 1, #plan.occurrences do
+            local occ = plan.occurrences[i]
+            occChecked = occChecked + 1
+            if occ.traceKey and not SceneService.TraceFor(occ.traceKey) then
+                occBad = occBad .. " trace:" .. occ.traceKey
+            end
+            if not SceneService.PackageFor(occ.sceneId) then
+                occBad = occBad .. " scene:" .. tostring(occ.sceneId)
+            end
+        end
+    end
+    check("AD7 四城当日事件实例都带有效 traceKey 且 sceneId 落在包上（痕迹与画面同一份声明）",
+        occBad == "" and occChecked >= 24, string.format("实例 %d%s", occChecked, occBad))
+end
+
+--- 场景 AE：2.5D 生活痕迹全生命周期（真链路绑定 / 去重 / 落盘往返 / 计划补挂 / 场景匹配）
+local function ScenarioTraceBinding(dateKey)
+    logInfo("场景 AE 生活痕迹生命周期")
+    beginScenario()
+    resetLifeRegistry()
+    local t0 = TimeState.NowUtc()
+    local slot = LifeService.CreateSlot("los_angeles", "stranger", nil, t0)
+    reinit_(LifeService.SlotSaveFile("life-1"), slot)
+    -- 真实交付链路：中午咖啡馆（fragments 档）发送，HandleDeliver 里 RefreshSnapshot
+    -- 命中 ongoing 的 la_cafe_midday（traceKey=coffee），痕迹被活路径钉进槽里
+    goLocalHour(12, dateKey)
+    sendNow("中午的咖啡馆怎么样？")
+    advance(30)
+    local plan = EventService.PlanFor(cityId_, dateKey)
+    ---@type EventOccurrence?
+    local midday = nil
+    for i = 1, #plan.occurrences do
+        if plan.occurrences[i].templateId == "la_cafe_midday" then
+            midday = plan.occurrences[i]
+        end
+    end
+    local trace = LifeService.GetTrace()
+    check("AE1 ongoing 关键事件经真实交付链路替换痕迹（与事件实例同一份键）",
+        trace ~= nil and midday ~= nil and trace.occurrenceKey == midday.occurrenceKey
+        and trace.traceKey == "coffee" and trace.sceneId == "la_cafe",
+        string.format("trace=%s/%s", tostring(trace and trace.traceKey),
+            tostring(trace and trace.occurrenceKey)))
+
+    ---@type any
+    local endedFact = { traceKey = "note", eventState = "ended", occurrenceKey = "la/ended-1",
+        sceneId = "la_apartment", eventTitle = "睡下了", serverTime = TimeState.NowUtc() }
+    ---@type any
+    local plainFact = { eventState = "ongoing", occurrenceKey = "la/plain-1",
+        sceneId = "la_studio", eventTitle = "非关键事件", serverTime = TimeState.NowUtc() }
+    updateTrace_(endedFact)
+    updateTrace_(plainFact)
+    local kept = LifeService.GetTrace()
+    check("AE2 已结束或无痕迹键的事件不动痕迹（只有 ongoing 的关键事件有替换权）",
+        kept ~= nil and midday ~= nil and kept.occurrenceKey == midday.occurrenceKey)
+
+    ---@type any
+    local nextFact = { traceKey = "proofs", eventState = "ongoing", occurrenceKey = "la/layout-1",
+        sceneId = "la_studio", eventTitle = "在工作室排版", serverTime = TimeState.NowUtc() }
+    updateTrace_(nextFact)
+    local bound = LifeService.GetTrace()
+    check("AE3 下一个关键事件 ongoing：直接替换（最新为准，不叠痕）",
+        bound ~= nil and bound.traceKey == "proofs" and bound.occurrenceKey == "la/layout-1"
+        and bound.sceneId == "la_studio")
+
+    ---@type any
+    local sameFact = { traceKey = "proofs", eventState = "ongoing", occurrenceKey = "la/layout-1",
+        sceneId = "la_studio", eventTitle = "在工作室排版", serverTime = TimeState.NowUtc() + 500 }
+    updateTrace_(sameFact)
+    check("AE4 同一事件实例反复扫到：occurrenceKey 去重，boundAt 不漂",
+        bound ~= nil and LifeService.GetTrace().boundAtUtc == bound.boundAtUtc,
+        string.format("%s vs %s", tostring(LifeService.GetTrace().boundAtUtc),
+            tostring(bound and bound.boundAtUtc)))
+
+    -- 注册表落盘往返：痕迹随 lives.json 走，重启后仍是 proofs@la_studio
+    reinitLife_()
+    LifeService.Load(TimeState.NowUtc())
+    local revived = LifeService.GetTrace("life-1")
+    check("AE5 痕迹随注册表落盘：进程重启读回仍是 proofs@la_studio",
+        revived ~= nil and revived.traceKey == "proofs" and revived.sceneId == "la_studio"
+        and revived.occurrenceKey == "la/layout-1",
+        string.format("痕迹=%s", tostring(revived and revived.traceKey)))
+
+    -- 旧档升级：槽里没有痕迹 → 按当日计划补挂最近一个已开始的关键事件
+    LifeService.SetTrace("life-1", nil, TimeState.NowUtc())
+    ensureTrace_()
+    local snapNow = TimeState.Snapshot(cityId_, TimeState.NowUtc())
+    ---@type EventOccurrence?
+    local best = nil
+    for i = 1, #plan.occurrences do
+        local occ = plan.occurrences[i]
+        if occ.traceKey and occ.startUtc <= snapNow.utcSec
+            and (best == nil or occ.startUtc > best.startUtc) then
+            best = occ
+        end
+    end
+    local seeded = LifeService.GetTrace()
+    check("AE6 旧档升级（无痕迹）：按当日计划补挂最近一个已开始的关键事件",
+        best ~= nil and seeded ~= nil
+        and seeded.occurrenceKey == best.occurrenceKey and seeded.traceKey == best.traceKey,
+        string.format("补挂=%s 期望=%s", tostring(seeded and seeded.occurrenceKey),
+            tostring(best and best.occurrenceKey)))
+
+    ---@type any
+    local pinned = { traceKey = "umbrella", occurrenceKey = "la/pinned-1",
+        eventTitle = "手工钉住的痕迹", sceneId = "la_studio" }
+    LifeService.SetTrace("life-1", pinned, TimeState.NowUtc())
+    ensureTrace_()
+    local pinnedBack = LifeService.GetTrace()
+    check("AE7 槽里已有痕迹：补挂不覆盖（只补空）",
+        pinnedBack ~= nil and pinnedBack.traceKey == "umbrella")
+
+    -- 痕迹只出现在它绑定的那个场景（验收 4：换景不跟旧痕）
+    local pkgStudio = SceneService.PackageFor("la_studio")
+    local sSame = SceneService.StateFor("la_studio", pinned)
+    local sAway = SceneService.StateFor("la_cafe", pinned)
+    check("AE8 StateFor 按场景匹配痕迹：同一条在 la_studio 有锚点、在 la_cafe 一律没有",
+        sSame ~= nil and sSame.recentTrace ~= nil and sSame.recentTrace.assetKey == "umbrella"
+        and pkgStudio ~= nil and sSame.recentTrace.anchorX == pkgStudio.traceAnchor.x
+        and sAway ~= nil and sAway.recentTrace == nil,
+        string.format("同景=%s 异景=%s", tostring(sSame ~= nil and sSame.recentTrace ~= nil),
+            tostring(sAway ~= nil and sAway.recentTrace ~= nil)))
+end
+
+--- 场景 AF：切换人生 / 重进后不残留旧城市、旧场景、旧痕迹
+local function ScenarioSwitchNoResidue(dateKey)
+    logInfo("场景 AF 切换人生后无残留")
+    beginScenario()
+    resetLifeRegistry()
+    local t0 = TimeState.NowUtc()
+    local slotA = LifeService.CreateSlot("los_angeles", "stranger", nil, t0)
+    LifeService.CreateSlot("shanghai", "stranger", nil, t0 + 1)
+    -- A 段跑出一条真链路：交付后自然带着中午咖啡馆的痕迹
+    reinit_(LifeService.SlotSaveFile("life-1"), slotA)
+    goLocalHour(12, dateKey)
+    sendNow("你在咖啡馆吗？")
+    advance(30)
+    MemoryService.Persist(MessageService.GetMessages())
+    local msgsA = #MessageService.GetMessages()
+    local traceA = LifeService.GetTrace()
+
+    -- 切到 B：和 main.lua HandleSwitchLife 同一条链路——开段、挂该段存档、从头恢复
+    local slotB = LifeService.OpenSlot("life-2", t0 + 3)
+    reinit_(LifeService.SlotSaveFile("life-2"), slotB)
+    local restoredB = MessageService.Restore(MemoryService.GetRestoredMessages())
+    local snapB = TimeState.Snapshot("shanghai", TimeState.NowUtc())
+    check("AF1 刚切过去：聊天是空的、档案是上海（A 的记录与城市都没跟来）",
+        #MessageService.GetMessages() == 0 and restoredB == 0
+        and ProfileService.GetCityId() == "shanghai",
+        string.format("条数 %d 恢复 %d 城市=%s", #MessageService.GetMessages(),
+            restoredB, ProfileService.GetCityId()))
+    check("AF2 B 段画面没有旧景旧痕：作息场景是上海的包、活跃段痕迹为空",
+        LifeService.GetTrace() == nil
+        and string.find(snapB.sceneId, "^sha_", 1, true) ~= nil
+        and SceneService.PackageFor(snapB.sceneId) ~= nil,
+        string.format("场景=%s 痕迹=%s", snapB.sceneId, tostring(LifeService.GetTrace())))
+
+    -- 回 A：先模拟进程重启读注册表，再挂 A 段存档
+    reinitLife_()
+    LifeService.Load(TimeState.NowUtc())
+    local slotA2 = LifeService.OpenSlot("life-1", TimeState.NowUtc())
+    reinit_(LifeService.SlotSaveFile("life-1"), slotA2)
+    MessageService.Restore(MemoryService.GetRestoredMessages())
+    local traceA2 = LifeService.GetTrace()
+    check("AF3 回到 life-1：聊天条数原样恢复、档案仍是洛杉矶（城市不跟着最后停留的段走）",
+        #MessageService.GetMessages() == msgsA and ProfileService.GetCityId() == "los_angeles"
+        and MemoryService.GetLifeId() == "life-1",
+        string.format("条数 %d/%d", #MessageService.GetMessages(), msgsA))
+    check("AF4 回到 life-1：痕迹仍是 A 段自己那条（B 没有痕迹，切换不把它抹掉也不借用）",
+        (traceA2 ~= nil) == (traceA ~= nil)
+        and (traceA == nil or (traceA2.traceKey == traceA.traceKey
+            and traceA2.occurrenceKey == traceA.occurrenceKey)),
+        string.format("A=%s 回来=%s", tostring(traceA and traceA.traceKey),
+            tostring(traceA2 and traceA2.traceKey)))
+    local rawA = readRawSave(LifeService.SlotSaveFile("life-1"))
+    local rawB = readRawSave(LifeService.SlotSaveFile("life-2"))
+    check("AF5 两段存档文件各自只有各自的历史：来回切一次 A 不变、B 没被写过内容",
+        rawA ~= nil and rawA.messages ~= nil and #rawA.messages == msgsA
+        and (rawB == nil or rawB.messages == nil or #rawB.messages == 0),
+        string.format("A=%d B=%s", msgsA,
+            tostring(rawB and rawB.messages and #rawB.messages or "无")))
+    resetLifeRegistry()
+end
+
 --- 一个场景独立跑完再进下一个，并落一行「本场景判定几条」。
 --- 2026-09-22 云端实测：开机那一瞬的突发日志会被管道整批丢掉（suite 只剩 PASS A0…A6，
 --- 同批的 开场事件 / M1 已就绪 一起缺席），而调用点本来就有 pcall，所以不是断言抛出吞掉后续场景。
@@ -1881,6 +2351,9 @@ function DevSelfTest.Run(options)
     idleWait_ = options.idleWaitSeconds
     makeSendContext_ = options.makeSendContext
     reinit_ = options.reinit
+    updateTrace_ = options.updateTrace
+    ensureTrace_ = options.ensureTrace
+    reinitLife_ = options.reinitLife
     passed_ = 0
     failed_ = 0
     done_ = {}
@@ -1928,8 +2401,18 @@ function DevSelfTest.Run(options)
     runScenario("X", ScenarioRandomPersistence, dateKey)
     runScenario("Y", ScenarioCityConsistency, dateKey)
     runScenario("Z", ScenarioV4Migration, dateKey)
+    -- M4：AB 人生槽互不串写、AC 冷启动与旧档收编、AD 十六场景包、
+    -- AE 生活痕迹生命周期、AF 切换人生无残留。AB 起各场景先清人生注册表，跑完 Run 收尾再整体清一遍。
+    runScenario("AB", ScenarioLifeIsolation, dateKey)
+    runScenario("AC", ScenarioColdStartLegacy, dateKey)
+    runScenario("AD", ScenarioScenePackages, dateKey)
+    runScenario("AE", ScenarioTraceBinding, dateKey)
+    runScenario("AF", ScenarioSwitchNoResidue, dateKey)
 
     MemoryService.ClearSavedData()
+    -- M4 场景的注册表与段文件同理收尾清掉：自检不在设备上留人生
+    reinitLife_()
+    LifeService.ClearAll()
     summary_ = string.format("自检结论 通过=%d 失败=%d 场景=%d/%d[%s]",
         passed_, failed_, #done_, SCENARIO_TOTAL, table.concat(done_, " "))
     if #bad_ > 0 then

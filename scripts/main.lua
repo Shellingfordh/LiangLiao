@@ -21,6 +21,11 @@ local ChatPanel = require("ui.ChatPanel")
 local DevTestPanel = require("ui.DevTestPanel")
 local ProfileService = require("ProfileService")
 local ProfileOverlay = require("ui.ProfileOverlay")
+local SceneService = require("SceneService")
+local LifeService = require("services.LifeService")
+local SettingsOverlay = require("ui.SettingsOverlay")
+local ProfilePageOverlay = require("ui.ProfilePageOverlay")
+local LifeCardsOverlay = require("ui.LifeCardsOverlay")
 
 ---@type {Title: string, City: string, ReplyWaitSeconds: integer, DevTools: boolean, UseCloudMemory: boolean, DevSelfTest: boolean, AwaySummaryMinSeconds: integer, GatewayEnabled: boolean}
 local CONFIG = {
@@ -49,6 +54,12 @@ local EVENT_STATE_LABEL = {
 local uiRoot_ = nil
 ---@type Widget|nil
 local preview_ = nil
+---@type Widget|nil
+local traceImage_ = nil
+---@type number
+local frameW_ = 0
+---@type number
+local frameH_ = 0
 ---@type Label|nil
 local infoClockLabel_ = nil
 ---@type Label|nil
@@ -97,6 +108,11 @@ local function logError(msg)
     log:Write(LOG_ERROR, "[M0-1] " .. msg)
 end
 
+local function logWarn(msg)
+    print("[M0-1] WARN: " .. msg)
+    log:Write(LOG_WARNING, "[M0-1] " .. msg)
+end
+
 --- 全工程唯一取时刻的地方：权威 UTC 秒 + 开发自检投影（普通运行路径偏移恒为 0）
 ---@return number
 local function NowUtc()
@@ -110,11 +126,14 @@ local function City()
     return ProfileService.GetCityId()
 end
 
---- 刷新时间快照，并保证 lastFact_ 与它同源：事实来自当天的事件计划，不是现挑模板
+--- 刷新时间快照，并保证 lastFact_ 与它同源：事实来自当天的事件计划，不是现挑模板。
+--- M4：快照刷新同时是「当前生活痕迹」的推进点——ongoing 的关键事件会替换痕迹，
+--- 状态窗、档案页与回复事实引用的都是同一份 SceneState。
 local function RefreshSnapshot()
     local snap = TimeState.Snapshot(City(), NowUtc())
     lastSnap_ = snap
     lastFact_ = EventService.FactFor(City(), snap.utcSec)
+    UpdateCurrentTrace(lastFact_)
     return snap
 end
 
@@ -124,6 +143,61 @@ function PublishEventPlans()
     MemoryService.SetEventPlans(EventService.ExportPlans())
     local ok = MemoryService.Save()
     logInfo(string.format("事件计划落盘 %s", tostring(ok)))
+end
+
+-- ============================================================================
+-- M4：当前生活痕迹（每段人生一条，绑定最近确定的关键事件，下一关键事件替换）
+-- ============================================================================
+
+--- 关键事件进入 ongoing 就替换当前痕迹；痕迹跟着人生槽走，换段读回各自的那一条。
+---@param fact? EventFact
+function UpdateCurrentTrace(fact)
+    local slot = LifeService.Active()
+    if not slot or not fact then
+        return
+    end
+    if not fact.traceKey or fact.eventState ~= "ongoing" then
+        return
+    end
+    if slot.trace and slot.trace.occurrenceKey == fact.occurrenceKey then
+        return
+    end
+    LifeService.SetTrace(slot.slotId, {
+        traceKey = fact.traceKey,
+        occurrenceKey = fact.occurrenceKey,
+        eventTitle = fact.eventTitle or "",
+        sceneId = fact.sceneId,
+    }, fact.serverTime)
+    logInfo(string.format("生活痕迹替换 槽=%s 痕迹=%s 场景=%s 事件=%s",
+        slot.slotId, fact.traceKey, fact.sceneId, tostring(fact.eventTitle or "")))
+    ApplyScene(true)
+end
+
+--- 旧档升级/新人生还没有痕迹时，从当天计划里补挂最近一个已开始的关键事件。
+function EnsureTraceSeeded()
+    local slot = LifeService.Active()
+    if not slot or slot.trace or not lastSnap_ then
+        return
+    end
+    local plan = EventService.PlanFor(City(), lastSnap_.dateKey)
+    local best = nil
+    for i = 1, #plan.occurrences do
+        local occ = plan.occurrences[i]
+        if occ.traceKey and occ.startUtc <= lastSnap_.utcSec then
+            if not best or occ.startUtc > best.startUtc then
+                best = occ
+            end
+        end
+    end
+    if best then
+        LifeService.SetTrace(slot.slotId, {
+            traceKey = best.traceKey,
+            occurrenceKey = best.occurrenceKey,
+            eventTitle = best.title,
+            sceneId = best.sceneId,
+        }, lastSnap_.utcSec)
+        logInfo("生活痕迹按当日计划补挂 槽=" .. slot.slotId .. " 痕迹=" .. tostring(best.traceKey))
+    end
 end
 
 -- UTC 秒 → 当地钟点的单格缓存：同一条排队消息的计划窗口是固定的，
@@ -301,35 +375,41 @@ function Start()
     input.mouseMode = MM_ABSOLUTE
     input.mouseVisible = true
 
-    logInfo("启动 M0-1 竖切片 · M1 时间状态闭环")
+    logInfo("启动 M0-1 竖切片 · M4 可感知的平行人生")
     logInfo("屏幕物理分辨率: " .. tostring(graphics.width) .. "x" .. tostring(graphics.height)
         .. " DPR=" .. tostring(graphics:GetDPR()))
 
-    -- 时间层先落一条日志：真机上没有 console，状态算错时这条是唯一线索
-    local snap = RefreshSnapshot()
-    statusLine_ = snap.cityLabel .. " · " .. snap.clock .. " · " .. snap.phrase
-    logInfo(string.format("时间状态: %s %s %s UTC%+d DST=%s 季节=%s 天气=%s 可用性=%s 地点=%s",
-        snap.dateKey, snap.clock, snap.cityLabel,
-        math.floor(snap.offsetSeconds / 3600), tostring(snap.isDst),
-        snap.season, snap.weather, snap.availability, snap.place))
-
-    -- 自检用独立存档跑真实服务，跑完交还时钟；正式会话在它之后重新初始化。
-    -- pcall 不是把检查吞掉：自检里任何断言失败本来就走 logError，这里兜的是
-    -- 「自检自身出异常也不许把正式会话带崩」——M0-1 已验收的链路不能因为工具而死。
+    -- 自检用独立存档 + 独立人生注册表跑真实服务，跑完交还时钟与注册表；
+    -- 正式会话在它之后重新初始化。pcall 不是把检查吞掉：自检里任何断言失败本来就走
+    -- logError，这里兜的是「自检自身出异常也不许把正式会话带崩」——
+    -- M0-1 已验收的链路不能因为工具而死。
+    LifeService.Init()
     if CONFIG.DevSelfTest then
+        -- 旧档收编路径也隔离到自检夹具：自检绝不读玩家的 memory/m0-1-la-stranger.json
+        local lifeSelftestOpts = {
+            registryFile = "memory/life-selftest.json",
+            savePrefix = "memory/life-selftest-",
+            legacyFile = "memory/life-selftest-legacy.json",
+        }
+        LifeService.Init(lifeSelftestOpts)
+        LifeService.ClearAll()
         InitServices("memory/m1-selftest-la.json")
         local okRun, errRun = pcall(DevSelfTest.Run, {
             cityId = CONFIG.City,
             idleWaitSeconds = CONFIG.ReplyWaitSeconds,
             makeSendContext = MakeSendContext,
             reinit = InitServices,
+            -- M4 场景钩子：痕迹替换/计划补挂/注册表重建都借同一份活函数，不开旁路
+            updateTrace = UpdateCurrentTrace,
+            ensureTrace = EnsureTraceSeeded,
+            reinitLife = function() LifeService.Init(lifeSelftestOpts) end,
         })
         if not okRun then
             logError("开发自检异常退出（正式会话继续，不受影响）：" .. tostring(errRun))
         end
         -- 开机那一瞬的整批日志会被日志管道丢掉（2026-09-22 实测：自检只上来 PASS A0…A6，
         -- 同批的尾巴连同 M1 已就绪 一起没落盘），所以结论行要在之后几个真实帧里原样重发，
-        -- 让它落进别的抓取窗口。判据是结论行里的 场景=N/总数（当前 26，含 M3 的 U–Z）。
+        -- 让它落进别的抓取窗口。判据是结论行里的 场景=N/总数（当前 32，含 M4 的 AB–AF）。
         -- 屏上也挂一份短结论（面板那行 nowrap，长文本会被裁）：日志整批丢了也能肉眼读数。
         local p, f, d, total = DevSelfTest.Result()
         -- 全绿时面板那行不变长；只有真没过才多挂一段名字，避免 nowrap 那行被裁
@@ -342,9 +422,22 @@ function Start()
             elapsed = 0,
         }
         TimeState.DevClockOffset = 0
+        LifeService.Init()
     end
 
-    InitServices()
+    -- M4 冷启动：读注册表，直接进「最近打开的那一段人生」的聊天。
+    -- 没有任何一段人生（干净安装）才走首次新故事创建。
+    LifeService.Load(NowUtc())
+    local slot = LifeService.Active() or LifeService.LatestOpened()
+    if slot then
+        slot = LifeService.OpenSlot(slot.slotId, NowUtc())
+        logInfo(string.format("冷启动进入最近人生 槽=%s 城市=%s 关系=%s",
+            slot.slotId, slot.cityId, slot.relationId))
+        InitServices(LifeService.SlotSaveFile(slot.slotId), slot)
+    else
+        logInfo("没有任何人生槽：干净安装，等待首次新故事创建")
+        InitServices()
+    end
     InitUI()
     StatusWindow.Init()
     CreatePage()
@@ -354,6 +447,15 @@ function Start()
     -- 正式会话的服务与计划都在 InitServices 里重建过，开场前再取一次事实，
     -- 这样 BootChat 与状态窗引用的是存档接管后的那一份事件实例
     RefreshSnapshot()
+    -- 真机上没有 console，时间状态这条是「状态算错时」的唯一线索（M1 起保留的取证行）
+    if lastSnap_ then
+        local snap = lastSnap_
+        logInfo(string.format("时间状态: %s %s %s UTC%+d DST=%s 季节=%s 天气=%s 可用性=%s 地点=%s",
+            snap.dateKey, snap.clock, snap.cityLabel,
+            math.floor(snap.offsetSeconds / 3600), tostring(snap.isDst),
+            snap.season, snap.weather, snap.availability, snap.place))
+    end
+    EnsureTraceSeeded()
     BootChat()
     -- 开场就把这一份事件事实的身份挂上屏：同一天第二次进入时这里该读成 计划=存档
     if lastFact_ then
@@ -362,7 +464,7 @@ function Start()
     end
 
     logInfo(string.format(
-        "M1 已就绪：状态窗 + 排队聊天（空闲等待 %.0f 秒，跳过按钮=%s，云记忆=%s）",
+        "M4 已就绪：三段人生 + 场景状态包 + 状态窗排队聊天（空闲等待 %.0f 秒，跳过按钮=%s，云记忆=%s）",
         CONFIG.ReplyWaitSeconds, tostring(CONFIG.DevTools), tostring(CONFIG.UseCloudMemory)))
 end
 
@@ -370,6 +472,9 @@ function Stop()
     MemoryService.FlushCloud()
     DevTestPanel.Shutdown()
     ProfileOverlay.Shutdown()
+    SettingsOverlay.Shutdown()
+    ProfilePageOverlay.Shutdown()
+    LifeCardsOverlay.Shutdown()
     ChatPanel.Shutdown()
     StatusWindow.Shutdown()
     UI.Shutdown()
@@ -454,7 +559,8 @@ function HandleDevCity(cityId, label)
 end
 
 ---@param saveFile? string 独立存档路径（开发自检用），省略则用玩家的历史
-function InitServices(saveFile)
+---@param lifeSlot? LifeSlot M4 人生槽；nil = 自检/干净安装的临时会话
+function InitServices(saveFile, lifeSlot)
     TimeState.SetReplyDelay("idle", CONFIG.ReplyWaitSeconds)
     -- M2-B S1：GatewayEnabled=false 时 PolishService 全程同步回落，不产生任何外发。
     -- 真正开启要等中转路径确认后再注入 transport（网关 URL + 共享密钥走服务端配置）。
@@ -473,12 +579,17 @@ function InitServices(saveFile)
     if CONFIG.UseCloudMemory then
         adapter = MemoryService.DefaultClientCloudAdapter()
     end
-    MemoryService.Init({ cityId = CONFIG.City, cloud = adapter, saveFile = saveFile })
+    MemoryService.Init({
+        cityId = lifeSlot and lifeSlot.cityId or CONFIG.City,
+        cloud = adapter,
+        saveFile = saveFile,
+        lifeId = lifeSlot and lifeSlot.slotId or nil,
+    })
     local _, source = MemoryService.Load()
     logInfo("记忆装载来源: " .. source)
     -- 档案在记忆之后、事件层之前接：存档带 profile 就原样恢复；v1–v4 旧档由
     -- MemoryService 迁移成 LA×陌生网友（initialized=true，不弹初始化）；
-    -- 干净安装没有 profile → 标为未初始化，等 BootChat 弹首次选择。
+    -- 新人生槽还没有存档 → 用注册表卡片里的档案（initialized=true）。
     local saved = MemoryService.GetProfile()
     if saved then
         ProfileService.Set(saved.cityId, saved.relationId, {
@@ -486,13 +597,21 @@ function InitServices(saveFile)
             isRandom = saved.isRandom,
             initialized = saved.initialized,
         })
+    elseif lifeSlot then
+        ProfileService.Set(lifeSlot.cityId, lifeSlot.relationId, {
+            seedText = lifeSlot.seedText,
+            isRandom = lifeSlot.isRandom,
+            initialized = true,
+        })
     else
         ProfileService.Set(CONFIG.City, "stranger", { initialized = false })
     end
-    logInfo(string.format("档案: 城市=%s 关系=%s 随机=%s 已初始化=%s",
-        saved and saved.cityId or CONFIG.City, saved and saved.relationId or "stranger",
-        tostring(saved and saved.isRandom or false),
-        tostring(saved and saved.initialized or false)))
+    logInfo(string.format("档案: 槽=%s 城市=%s 关系=%s 随机=%s 已初始化=%s",
+        tostring(lifeSlot and lifeSlot.slotId or "无"),
+        saved and saved.cityId or (lifeSlot and lifeSlot.cityId or CONFIG.City),
+        saved and saved.relationId or (lifeSlot and lifeSlot.relationId or "stranger"),
+        tostring(saved and saved.isRandom or (lifeSlot and lifeSlot.isRandom) or false),
+        tostring(saved and saved.initialized or (lifeSlot ~= nil))))
     -- 事件层在记忆之后接：存档里已有当天的计划就直接接管，不重新生成同日事件
     EventService.Init({ cityId = City(), onPlansChanged = PublishEventPlans })
     local restoredPlans = EventService.Restore(MemoryService.GetEventPlans())
@@ -520,10 +639,10 @@ function BootChat()
         fact.planFromSave and "存档" or "当场生成"))
 
     if not ProfileService.Get().initialized then
-        -- 干净安装：开场白要等玩家选完城市与关系再写，不然会把默认 LA 的话先钉进历史。
+        -- 干净安装：开场白要等玩家创建第一段人生再写，不然会把默认 LA 的话先钉进历史。
         -- 这里不落盘，profile 只在内存里标着未初始化。
-        logInfo("档案未初始化：等待首次城市与关系选择")
-        ProfileOverlay.Show({ mode = "init", onConfirm = HandleProfileInit })
+        logInfo("没有人生存档：等待首次新故事创建")
+        ProfileOverlay.Show({ mode = "init", onConfirm = HandleNewStoryConfirm })
         PushChatPhase()
         return
     end
@@ -578,9 +697,9 @@ function WriteAwaySummary()
     end
 end
 
---- 统一的换档案入口：首次初始化与中途「换档案」走同一条路（设计 §7）。
+--- 改「当前这一段人生」的档案（开发测试台切城用；玩家入口已换成三段人生）。
 --- 队列与 FIFO 一律不动：排队中的消息到点按新城事实回复（她人在新城）；
---- 已上屏的历史不重建行，旧城市戳原样保留。
+--- 已上屏的历史不重建行，旧城市戳原样保留。注册表卡片摘要同步更新。
 ---@param cityId string
 ---@param relationId string
 ---@param opts? { isRandom?: boolean, firstTime?: boolean }
@@ -596,6 +715,12 @@ function ApplyProfile(cityId, relationId, opts)
 
     MemoryService.SetProfile(p)
     MemoryService.Save()
+    local active = LifeService.Active()
+    if active then
+        LifeService.UpdateSlotProfile(active.slotId, p.cityId, p.relationId, {
+            seedText = p.seedText, isRandom = p.isRandom,
+        })
+    end
     EventService.SetCity(p.cityId)
     clockCacheKey_ = nil -- 城市换了，钟点缓存整格作废
     RefreshSnapshot()
@@ -618,25 +743,225 @@ function ApplyProfile(cityId, relationId, opts)
         #MessageService.GetMessages()))
 end
 
---- 首次初始化确认：写开场白与计划，之后与正常会话同一条链路
-function HandleProfileInit(cityId, relationId, isRandom)
+-- ============================================================================
+-- M4：人生入口（新故事 / 换一段人生 / 查看档案）
+-- ============================================================================
+
+---@type { cityId: string, relationId: string, seedText: string, isRandom: boolean }|nil
+local pendingNewStory_ = nil
+
+--- 「新故事」确认：随机只是次要选项；满三段时不创建也不淘汰，
+--- 必须由用户点一张卡片明确替换（设计 §3）。
+function HandleNewStoryConfirm(cityId, relationId, isRandom)
     ProfileOverlay.Hide()
-    ApplyProfile(cityId, relationId, { isRandom = isRandom, firstTime = true })
-    WriteBootGreeting(0)
-    ChatPanel.SetDraft(ProfileService.DefaultDraft())
+    local now = NowUtc()
+    local pickCity, pickRel, seedText = cityId, relationId, nil
+    if isRandom then
+        local picked = ProfileService.RandomPick(now)
+        pickCity, pickRel, seedText = picked.cityId, picked.relationId, picked.seedText
+    end
+    if LifeService.IsFull() then
+        pendingNewStory_ = {
+            cityId = pickCity, relationId = pickRel,
+            seedText = seedText or (pickCity .. "|" .. pickRel), isRandom = isRandom == true,
+        }
+        ShowLifeCards("replace")
+        logInfo("人生槽已满：等待用户点名替换卡片")
+        return
+    end
+    local slot = LifeService.CreateSlot(pickCity, pickRel, {
+        seedText = seedText, isRandom = isRandom == true,
+    }, now)
+    if not slot then
+        logError("创建人生槽失败（意外分支），本次不写开场白")
+        return
+    end
+    StartLifeSession(slot, true)
 end
 
---- 顶栏「换档案」：重开覆盖层（switch 模式带取消；随机只在首次给）
-function HandleProfileEntry()
-    ProfileOverlay.Show({
-        mode = "switch",
-        onConfirm = function(cityId, relationId, isRandom)
-            ProfileOverlay.Hide()
-            ApplyProfile(cityId, relationId, { isRandom = isRandom })
-        end,
-        onCancel = function()
-            logInfo("换档案已取消，档案保持 " .. ProfileService.GetCityId())
-        end,
+--- 打开一段人生并重建会话。firstTime=true 是新建故事（写开场白）；
+--- false 是切换/冷启动（恢复那一段自己的历史，绝不带上一段的城市/场景/痕迹）。
+---@param slot LifeSlot
+---@param firstTime boolean
+function StartLifeSession(slot, firstTime)
+    PolishService.CancelAll()
+    InitServices(LifeService.SlotSaveFile(slot.slotId), slot)
+    clockCacheKey_ = nil
+    RefreshSnapshot()
+    EnsureTraceSeeded()
+    if firstTime then
+        ChatPanel.ResetConversation()
+        WriteBootGreeting(0)
+        ChatPanel.SetDraft(ProfileService.DefaultDraft())
+        ChatPanel.SetProfileLine(ProfileService.ProfileLine())
+        ChatPanel.SetMemoryLine(MemoryService.GetSummaryLine())
+    else
+        RebuildChatForLife()
+    end
+    PushChatPhase()
+    logInfo(string.format("进入人生 槽=%s 城市=%s 关系=%s 首建=%s",
+        slot.slotId, slot.cityId, slot.relationId, tostring(firstTime)))
+end
+
+--- 切换人生后的会话重建：先藏旧痕迹与旧场景（验收 4 的「不显示旧东西」），
+--- 再按新档恢复历史、队列、场景与痕迹。
+function RebuildChatForLife()
+    if traceImage_ then
+        traceImage_:SetVisible(false)
+    end
+    ChatPanel.ResetConversation()
+    local pendingCount = MessageService.Restore(MemoryService.GetRestoredMessages())
+    ChatPanel.SetMemoryLine(MemoryService.GetSummaryLine())
+    ChatPanel.SetProfileLine(ProfileService.ProfileLine())
+    ChatPanel.SetDraft(ProfileService.DefaultDraft())
+    RefreshStatusLine(true)
+    ApplyScene(true)
+    if #MessageService.GetMessages() == 0 then
+        WriteBootGreeting(0)
+    else
+        logInfo(string.format("已恢复 %d 条历史记录（其中 %d 条待回复）",
+            #MessageService.GetMessages(), pendingCount or 0))
+    end
+    WriteAwaySummary()
+end
+
+--- 点一张人生卡片切换过去：先冲刷当前段，再整段换挂目标档。
+---@param slotId string
+function HandleSwitchLife(slotId)
+    LifeCardsOverlay.Hide()
+    SettingsOverlay.Hide()
+    local current = LifeService.Active()
+    if current and current.slotId == slotId then
+        logInfo("已在这一段人生中，不重复切换")
+        return
+    end
+    MemoryService.Persist(MessageService.GetMessages())
+    local slot = LifeService.OpenSlot(slotId, NowUtc())
+    if not slot then
+        return
+    end
+    StartLifeSession(slot, false)
+end
+
+--- 「替换哪一张卡」确认后走这里：旧段历史整段作废（文件删除），槽号复用。
+---@param slotId string
+function HandleReplacePick(slotId)
+    LifeCardsOverlay.Hide()
+    local pending = pendingNewStory_
+    if not pending then
+        logWarn("替换请求已失效（没有待创建的新故事）")
+        return
+    end
+    pendingNewStory_ = nil
+    MemoryService.Persist(MessageService.GetMessages())
+    LifeService.ClearSlotSaveFile(slotId)
+    local slot = LifeService.ReplaceSlot(slotId, pending.cityId, pending.relationId, {
+        seedText = pending.seedText, isRandom = pending.isRandom,
+    }, NowUtc())
+    if not slot then
+        logError("替换人生槽失败: " .. tostring(slotId))
+        return
+    end
+    StartLifeSession(slot, true)
+    logInfo("用户点名替换卡片 槽=" .. slotId)
+end
+
+--- 卡片摘要：城市 × 关系 + 那一段自己的当地钟点/状态/痕迹/最近打开。
+--- 钟点与状态按每张卡的城现算 —— 三段人生各按各的时区生活，这正是产品本身。
+--- （全局：HandleNewStoryConfirm 在定义之前就要能调用到它。）
+---@param mode string switch|replace
+function ShowLifeCards(mode)
+    local now = NowUtc()
+    ---@type LifeCardEntry[]
+    local cards = {}
+    local slots = LifeService.Slots()
+    local active = LifeService.Active()
+    for i = 1, #slots do
+        local slot = slots[i]
+        local city = ProfileService.CityFor(slot.cityId)
+        local relation = ProfileService.RelationFor(slot.relationId)
+        local snap = TimeState.Snapshot(slot.cityId, now)
+        local trace = slot.trace and SceneService.TraceFor(slot.trace.traceKey) or nil
+        local opened = slot.lastOpenedUtc > 0
+            and os.date("!%m-%d %H:%M", slot.lastOpenedUtc) or "—"
+        cards[i] = {
+            slotId = slot.slotId,
+            head = (city and city.label or slot.cityId) .. " × "
+                .. (relation and relation.label or slot.relationId)
+                .. (active and slot.slotId == active.slotId and "（当前）" or ""),
+            body = string.format("%s · %s · %s ｜ 痕迹：%s ｜ 最近打开 %s",
+                snap.clock, snap.cityLabel, snap.phrase,
+                trace and trace.label or "还没有", opened),
+            isActive = active ~= nil and slot.slotId == active.slotId,
+        }
+    end
+    LifeCardsOverlay.Show({
+        title = mode == "replace" and "替换哪一段人生？" or "换一段人生",
+        hint = mode == "replace"
+                and "三段都满了。点一张卡将被新故事覆盖，它的聊天、事件与痕迹整段作废。"
+                or "每张卡是一段独立人生：聊天、事件、记忆与生活痕迹互不串写。",
+        cards = cards,
+        onPick = mode == "replace" and HandleReplacePick or HandleSwitchLife,
+        cancelText = mode == "replace" and "先不替换" or "先不换",
+    })
+end
+
+--- 「查看档案」：只读页，全部字段来自当前人生的同一事实源（设计 §4）。
+function BuildProfilePageData()
+    local snap = lastSnap_ or RefreshSnapshot()
+    local fact = lastFact_
+    local p = ProfileService.Get()
+    local pkg = fact and SceneService.PackageFor(fact.sceneId) or nil
+    ---@type string[]
+    local recent = {}
+    local ledger = MemoryService.Get().eventLedger
+    for i = #ledger, 1, -1 do
+        if #recent >= 3 then
+            break
+        end
+        local entry = ledger[i]
+        local stateText = EVENT_STATE_LABEL[entry.lastEventState] or ""
+        local title = entry.title ~= "" and entry.title or ""
+        if title ~= "" then
+            recent[#recent + 1] = title .. (stateText ~= "" and ("（" .. stateText .. "）") or "")
+        end
+    end
+    local traceSlot = LifeService.Active()
+    local trace = traceSlot and traceSlot.trace or nil
+    local traceItem = trace and SceneService.TraceFor(trace.traceKey) or nil
+    ---@type ProfilePageData
+    return {
+        cityClock = snap.cityLabel .. " · " .. snap.clock .. " · " .. snap.dateKey,
+        identity = p.identity,
+        relation = p.relationLabel .. " × " .. p.cityLabel,
+        scene = pkg and (pkg.label .. " · " .. (fact and fact.placeLabel or "")) or "此刻不在任何已知场景",
+        status = snap.availabilityLabel .. " · " .. snap.phrase,
+        recent = recent,
+        trace = traceItem and (traceItem.label .. "（" .. trace.eventTitle .. "留下的）") or "",
+    }
+end
+
+function HandleViewProfile()
+    SettingsOverlay.Hide()
+    ProfilePageOverlay.Show(BuildProfilePageData())
+end
+
+function HandleSwitchEntry()
+    SettingsOverlay.Hide()
+    ShowLifeCards("switch")
+end
+
+function HandleNewStoryEntry()
+    SettingsOverlay.Hide()
+    ProfileOverlay.Show({ mode = "init", onConfirm = HandleNewStoryConfirm })
+end
+
+--- 顶栏「设置」入口：打开设置层（查看档案 / 换一段人生 / 新故事）。
+function HandleSettingsEntry()
+    SettingsOverlay.Show({
+        onProfile = HandleViewProfile,
+        onSwitch = HandleSwitchEntry,
+        onNew = HandleNewStoryEntry,
     })
 end
 
@@ -698,7 +1023,9 @@ function CreatePage()
         id = "statusInfoCard",
         position = "absolute",
         left = 10,
-        bottom = 10,
+        -- M4：信息卡从左下角挪到左上角，把画面左下让给生活痕迹覆盖物
+        -- （痕迹按场景包锚点摆在桌台高度，与卡片重叠会两败俱伤）
+        top = 10,
         maxWidth = "66%",
         flexDirection = "column",
         gap = 1,
@@ -746,7 +1073,7 @@ function CreatePage()
 
     -- 宽度撑满、高度由 4:3 算出：反过来用高度定宽度时，竖屏上 maxWidth 会把宽度夹到
     -- 100%，画框就不是真 4:3，cover 会裁掉静帧两侧。
-    -- backgroundImage 不在这里给：要等静帧到手后再设，见下方 WarmUpBackground
+    -- 背景不再在这里给：由 ApplyScene 拿场景状态包后挂载（M4，缺包显式回退）
     local preview = StatusWindow.CreatePreviewWidget({
         id = "statusPreview",
         width = "100%",
@@ -769,6 +1096,22 @@ function CreatePage()
         dpr = 1
     end
     local chatOuterWidth = graphics.width / dpr - 32 - 2
+    -- 状态窗画框的确定像素尺寸：生活痕迹覆盖物按归一化锚点 × 画框宽高定位
+    frameW_ = graphics.width / dpr - 32
+    frameH_ = frameW_ * 3 / 4
+
+    -- 2.5D 生活痕迹：静态背景上的不可点击 2D 覆盖物（M4 §6）
+    traceImage_ = UI.Panel {
+        id = "traceOverlay",
+        position = "absolute",
+        left = 0,
+        top = 0,
+        width = 40,
+        height = 40,
+        backgroundFit = "contain",
+        visible = false,
+        pointerEvents = "none",
+    }
 
     local chat = ChatPanel.Build({
         devTools = CONFIG.DevTools,
@@ -779,7 +1122,7 @@ function CreatePage()
         onSkip = HandleSkip,
         onDraftChange = MessageService.SetDraft,
         onQuote = HandleQuote,
-        onProfileEntry = HandleProfileEntry,
+        onSettingsEntry = HandleSettingsEntry,
         onResetConversation = HandleResetConversation,
         getMessages = MessageService.GetMessages,
         getVersion = MessageService.GetVersion,
@@ -828,9 +1171,10 @@ function CreatePage()
                         flexShrink = 0,
                         justifyContent = "center",
                         alignItems = "center",
-                        pointerEvents = "none",
+                        pointerEvents = "box-none",
                         children = {
                             preview,
+                            traceImage_,
                             infoCard,
                         },
                     },
@@ -840,21 +1184,21 @@ function CreatePage()
                 },
             },
             devTestPanel_,
-            -- 初始化/换档案覆盖层：绝对定位铺满整页，默认不可见，最后挂保证压在一切之上
+            -- 初始化/新故事覆盖层 + M4 设置层/档案页/人生卡片层：
+            -- 绝对定位铺满整页，默认不可见，最后挂保证压在一切之上
             ProfileOverlay.Build(),
+            SettingsOverlay.Build(),
+            ProfilePageOverlay.Build(),
+            LifeCardsOverlay.Build(),
         },
     }
 
     UI.SetRoot(uiRoot_)
-    logInfo("竖屏页面已创建：顶部真 4:3 状态窗 + 下方可交互聊天区")
+    logInfo("竖屏页面已创建：顶部真 4:3 状态窗（场景包驱动）+ 下方可交互聊天区")
 
-    -- 静帧到手之后才挂背景：UI 的 ImageCache 会把首次加载失败永久缓存，
-    -- DWP 冷启动时提前挂上去会让背景在整个会话里静默缺失。
-    StatusWindow.WarmUpBackground(function(path)
-        preview:SetBackgroundImage(path)
-        logInfo("状态窗背景已挂载: " .. path)
-    end)
-    ApplyScene()
+    -- 首帧就按当前事实应用场景包：背景要等资源到手才挂（见 PrepareTexture 注释），
+    -- 缺包会显式留在暗色底并上屏说明，不伪称已切换。
+    ApplyScene(true)
 end
 
 function RefreshResourceNotices()
@@ -899,22 +1243,59 @@ function RefreshNoteLine()
     noteLabel_:SetText(note)
 end
 
---- 状态窗按 scene_id 尝试换远景；没有资产时 RequestScene 会留在当前静帧
-function ApplyScene()
+--- 状态窗按当前事实的场景 id 应用「场景状态包」（M4 §5 单源）：
+--- 背景、色温、主光、站位、接地阴影、微动与生活痕迹一次换齐；
+--- 缺包必须显式回退并上屏说明，绝不沿用旧图假称已切换。
+---@param force? boolean 换人生/换痕迹时同场景也要重挂
+function ApplyScene(force)
     local widget = preview_
     if not lastSnap_ or not widget then
-        return
+        return "no-widget"
     end
     local sceneId = (lastFact_ and lastFact_.sceneId) or lastSnap_.sceneId or ""
-    local result = StatusWindow.RequestScene(sceneId, function(path)
+    local state = SceneService.StateFor(sceneId, LifeService.GetTrace())
+    local result = StatusWindow.ApplySceneState(state, function(path)
         widget:SetBackgroundImage(path)
-    end)
-    if result == "missing-asset" then
-        logInfo("场景降级: " .. sceneId .. "（缺原创静帧，沿用当前画面）")
-        RefreshNoteLine()
-    elseif result == "pending" then
+        RefreshTraceOverlay(state)
+        RefreshResourceNotices()
+    end, force)
+    if result == "missing-package" then
+        RefreshTraceOverlay(nil)
+        logInfo("场景降级: " .. sceneId .. "（缺场景状态包，沿用当前画面）")
         RefreshNoteLine()
     end
+    return result
+end
+
+--- 2.5D 生活痕迹覆盖物：静态背景上的不可点击 2D 贴图，归一化锚点定位。
+--- 与状态窗背景同一条装载纪律：先确认资源到手再 SetBackgroundImage（ImageCache
+--- 会永久缓存首次失败）。换人生时先隐藏，旧痕迹绝不跟到新画面上。
+---@param state? SceneState
+function RefreshTraceOverlay(state)
+    if not traceImage_ then
+        return
+    end
+    local tr = state and state.recentTrace or nil
+    if not tr then
+        traceImage_:SetVisible(false)
+        return
+    end
+    local w = frameW_ * tr.scale
+    StatusWindow.PrepareTexture(tr.assetPath, function(path)
+        traceImage_:SetBackgroundImage(path)
+        traceImage_:SetStyle({
+            position = "absolute",
+            left = frameW_ * tr.anchorX - w / 2,
+            top = frameH_ * tr.anchorY - w / 2,
+            width = w,
+            height = w,
+        })
+        traceImage_:SetVisible(true)
+        logInfo(string.format("生活痕迹上屏 %s 锚点=(%.2f,%.2f)", tr.assetKey, tr.anchorX, tr.anchorY))
+    end, function(failed)
+        traceImage_:SetVisible(false)
+        logWarn("生活痕迹贴图未就绪，本次不显示: " .. failed)
+    end)
 end
 
 --- 状态文案一分钟一变；变了才重画，避免每帧 SetText

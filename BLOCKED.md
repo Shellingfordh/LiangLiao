@@ -1,5 +1,7 @@
 # BLOCKED — M0-1 聊天竖切片（2026-09-21）
 
+> **阶段快照（已归档）**：本文件只覆盖 M0-1 竖切片（2026-09-21）的阻塞项。当前阶段与后续决策见 `CHANGELOG.md`。
+
 Maker 项目状态本身**不是阻塞**：`maker_status_lite` 返回 project bound / git ready / lua_lsp ready / pat found / **status ready**。以下是本阶段真实卡住的点。
 
 ## 1.（已解）sent → waiting → typing → replied 的运行时证据

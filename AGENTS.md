@@ -226,6 +226,8 @@ preserved for later edits and builds.
 | `docs/platform-capabilities.md` | Tripo、Marble、TapTap Maker 的能力、格式、资产流程与限制 |
 | `docs/3d-scene-character-movement.md` | 3D 场景与角色移动的分层方案（T1–T5）、每层的确定性证据、Tripo/Marble 本地可操作性、当前 3D 体量预算 |
 | `docs/maker-lua-api-verification.md` | Maker 平台假设逐项验证（时区 / 运行时 LLM / GLB→MDL / clientCloud / 全景 / 预览 0% 定性与收尾 runbook） |
+| `docs/2026-09-23-m2b-llm-gateway-design.md` | M2-B 外部 LLM 润色网关：契约、鉴权、限流、回落与实施状态（§12：代码就位、未部署未接线） |
+| `docs/2026-09-24-m3-four-city-init-design.md` | M3 四城初始化与关系档案：可复现随机、存档 v5 语义与验收 |
 | `docs/asset-provenance.md` | 资产唯一真源表、GLB/MDL 实测差异、重导入命令、M0-1 阻塞项 |
 | `docs/demand.md` | Tripothon S1 赛事规则与提交物 |
 | `CHANGELOG.md` | 当前阶段与已完成决策 |
@@ -249,7 +251,7 @@ preserved for later edits and builds.
    可滚动聊天流 + 可编辑输入 + 发送/跳过等待，正式链路固定 10 秒。后端是同工程内的 Lua 服务
    （`scripts/services/` 的 MessageService / EventService / ContentService / MemoryService，
    前端 `scripts/ui/ChatPanel.lua`），**没有外部后端、没有运行时 LLM**；记忆走本地文件，`clientCloud` 只留接口。
-   下一阶段是 M1（多时段状态与消息排队），不是再改视觉层。
+   此后 M1/M2-A/M2-B/M3 各阶段进展一律只看 `CHANGELOG.md`（本节 1–4 条是 M0 时代快照，不再逐阶段更新）。
 5. 仍缺的交付物（都要人操作，git/MCP 都代不了）：**还差一张真机截图**（冷启动后隔一会儿再截同一画面，以证「稳定」；
    同屏裁剪近景已于 2026-09-21 13:21 取到 `screenshots/device/m00-realdevice-02-crop.jpg`，但
    `.project/project.json` 的 `assets.screenshots` 仍为 `[]`，浏览器预览抓取不算）；**图标需在 Maker 网页
@@ -280,13 +282,13 @@ UrhoXRuntime.exe <entry.lua> -tapcode_dir=<source> -skip_login -p=Res -w -width=
 2. **本地资源是云端的子集**：`RenderPaths/Forward.xml`、`Cube/Day|Dusk/*SpecularHDR.dds`、
    `Editor/Textures/Engine/Vignetting.png` 本地缺失，依赖它们的特性本地验不了；
    `UrhoXCLI` 只在云端 `/workspace/.cli/`（见上文「GLB 不是运行时格式」）。
-3. **完整游戏本地跑不起来**：`common.get_server_time()` 本地返回越界值 → `TimeState.lua:349` 的
-   `os.date("!%Y")` 抛 `date result cannot be represented` → `main.lua:222` 的 `RefreshSnapshot()` 中断。
+3. **完整游戏本地跑不起来**：`common.get_server_time()` 本地返回越界值 → `TimeState.lua` 快照构建里的
+   `os.date("!%Y")` 抛 `date result cannot be represented` → `main.lua` 的 `RefreshSnapshot()` 中断。
    本地只能跑绕开 TimeState 的 PoC。
 
 **上真机 / 出交付物仍然只有云端一条路**：`maker_build_current_directory` → 读
 `.maker/logs/runtime/runtime.log`（topics 含 `engine`，引擎层报错也会落这里）。
-判据：该文件出现且含 `[M0-1] 启动 M0-1 竖切片`（M0-0 时代是 `[M0-0] 启动 M0-0 原型`）→ 已进入 Lua；
+判据：该文件出现且含 `[M0-1] 启动 M0-1 竖切片`（`main.lua` 的 `logInfo` 前缀特意保留 `[M0-1]` 作此判据）→ 已进入 Lua；
 文件不出现 → 仍卡在资源装载层。
 ⚠️ 每次 `maker_build_current_directory` 都会带 `--reset` 重启日志抓取器并**删掉本地 `runtime.log`**，而 CLI 抓取器
 实测只活 4~8 分钟。所以：**日志证据要在下一次构建前转录进文档**；取证的当下先量 `state.json.updatedAt`

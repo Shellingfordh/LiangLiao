@@ -19,6 +19,7 @@ Tripothon S1 原创参赛项目：一位生活在另一座城市、与你共处�
 | [3D 场景与角色移动分层方案](docs/3d-scene-character-movement.md) | 固定镜头 + 预设移动等五层方案的实测证据、Tripo/Marble 本地可操作性、3D 体量预算 |
 | [Maker 平台假设验证报告](docs/maker-lua-api-verification.md) | 时区 / 运行时 LLM / GLB→MDL / clientCloud / 全景 的逐项核实结论 |
 | [M2-B LLM 润色网关设计](docs/2026-09-23-m2b-llm-gateway-design.md) | 外部润色的契约、鉴权、限流、回落与实施状态（§12：S1 代码就位、未部署未接线） |
+| [M3 四城初始化与关系档案设计](docs/2026-09-24-m3-four-city-init-design.md) | 城市 × 关系初始化、可复现随机、存档 v5 语义与验收 |
 | [UrhoX Lua 开发指南](docs/urhox-lua-development-guide.md) | 引擎规则、示例索引、任务到文档的映射与故障速查（自主工程 `AGENTS.md` 迁出） |
 | [角色资产溯源与实测数据](docs/asset-provenance.md) | 资产唯一真源表、GLB/MDL 实测差异、重导入命令与阻塞项 |
 | [赛事规则](docs/demand.md) | Tripothon S1 赛道、提交物与评审规则 |
@@ -96,6 +97,6 @@ UrhoXRuntime.exe <entry.lua> -tapcode_dir=<source> -skip_login -p=Res -w -width=
   git 与 MCP 都交付不了）；真机截图已有两张（`screenshots/device/m00-realdevice-01-fullframe.jpg` 与
   `-02-crop.jpg`），`assets.screenshots` 仍为 `[]` 且还差第三张（隔一会儿再截同一画面以证「稳定」）；角色**悬空**（分层设计无共享地面，
   需调固定相机纵向取景）；移动端中文 IME 未实测；云变量记忆未接。
-- 阶段级进度与阻塞逐条记在 `PROGRESS.md` / `BLOCKED.md`，跨阶段决策记在 [CHANGELOG.md](CHANGELOG.md)。
+- M0-1 阶段的进度与阻塞逐条快照记在 `PROGRESS.md` / `BLOCKED.md`（已归档，仅覆盖该阶段），跨阶段决策记在 [CHANGELOG.md](CHANGELOG.md)。
 
 已知阻塞项与实测数据（面数超标、导入器丢骨骼与 RM 贴图、状态窗每帧重渲）统一记在 [角色资产溯源](docs/asset-provenance.md) 与规格的 M0-1 前置修复项里。完整资产契约与验收标准见[设计规格的 M0-0](docs/2026-09-15-parallel-companion-design.md#m0-0林若夕可见状态窗已冻结开工基线2026-09-16)。

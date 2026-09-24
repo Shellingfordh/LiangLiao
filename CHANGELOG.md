@@ -1,5 +1,55 @@
 # Changelog
 
+## 2026-09-25 — M4：可感知的平行人生（三段人生槽 · 设置层三入口 · 16 场景状态包 · 2.5D 生活痕迹）
+
+### Added
+
+- `scripts/services/LifeService.lua`：平行人生槽真源。注册表 `memory/lives.json` 只放卡片级信息
+  （段号、档案摘要、当前痕迹、最近打开时刻），聊天/事件/记忆全在各段自己的文件
+  （`memory/life-<n>.json`）——三段结构上不可能互写。满三段再建返回 `full`，必须用户点选替换，
+  绝不静默淘汰；冷启动按注册表直达最近打开段；无注册表但有 M0–M3 旧单档时收编为 life-1
+  （历史整段复制进段文件，旧文件留作只读备份）。注册表损坏退回段文件重建，任何一段不因索引而丢。
+- `scripts/SceneService.lua`：16 个原创 4:3 场景状态包（四城 × {居所/工作场所/公共停留处/街区过渡处}）
+  与 9 件 2.5D 生活痕迹的唯一声明处：背景路径、色温（Planck 近似→主光 RGB）、主光方向、人物站位
+  （含 `lon_recordshop` 整组翻左的例外）、接地阴影椭圆、无骨骼微动（breathe/sway/turn/dolly）、
+  归一化痕迹锚点与 `future3D {sceneRef, anchorId}` 预留。`StateFor(sceneId, currentTrace)` 是状态窗、
+  档案页与回复事实共用的同一份 SceneState；缺包返回 nil，调用方显式回退，绝不拿旧图假称已切换。
+- `scripts/ui/SettingsOverlay.lua` / `ProfilePageOverlay.lua` / `LifeCardsOverlay.lua`：设置层三入口
+  （新故事 / 换一段人生 / 查看档案）、只读档案页（城市当地钟点、身份、关系起点、当前场景与状态、
+  近期生活线索 ≤3、当前痕迹）与人生卡片选择层。聊天顶栏「城市档案」按钮改挂「设置」。
+- Maker MCP `batch_generate_images` 产 25 张原创资产：16 张 1296×864 背景（两批，第二批以第一批
+  成品锁风格）+ 9 张 512×512 透明底痕迹，全部登记 `docs/asset-provenance.md`（md5/字节/构图纪律）。
+- `DevSelfTest` 场景 AB–AF（自检扩到 32 场景）：AB=三段互不串写（第四段拒建、段文件各写各的、
+  lifeId 串写嫌疑不被劫持）；AC=旧档收编 + 冷启动最近打开段（隔离注册表路径）；
+  AD=16 包字段齐/背景全局唯一/四城 96 小时作息全落真包/退役 sceneId 显式 nil/sceneVocab 同源/
+  事件实例 traceKey 有效；AE=痕迹全生命周期（真实交付链路绑定、已结束不动、 occurrenceKey 去重、
+  注册表往返、按计划补挂只补空、痕迹只随绑定场景出现）；AF=切换/重进后无旧城市/旧景/旧痕。
+
+### Changed
+
+- **存档升到 v6**：`lifeId` 随存档落盘，读回不匹配当前人生槽打 WARN（串写可见化）。
+  v5 档原样读，v1–v4 迁移规则不变（LA×陌生网友、不弹初始化）。
+- `TimeState` 四城作息收敛为每城 4 档 place（与 16 包严格同集，杜绝第五景）；
+  `EventService` 五个模板改挂正确的包场景（`la_commute_voice_notes→la_commute` 等，变体文案同步重写），
+  事件实例与 `EventFact` 携带 `traceKey`；`ProfileService.sceneVocab` 每城换成四包 id。
+- `StatusWindow`：场景切换统一走 `ApplySceneState`（背景 PrepareTexture 成功才换、失败回退旧景并上屏
+  说明），主光/冷补光/太阳方向按包内 `keyLightDirection`+色温着色，相机按 `characterPlacement` 让位；
+  无骨骼微动改撤销式逐帧偏移（呼吸/重心/朝向/轻微推拉，永不漂移）；接地阴影用 NanoVG 径向渐变椭圆
+  画在背景与角色 RT 之间。
+- `main.lua`：冷启动接 `LifeService`（活跃段→最近打开段→干净安装）；`RefreshSnapshot` 推进当前痕迹，
+  `EnsureTraceSeeded` 给旧档/新段按当日计划补挂；换段/替换/新故事都走 `RebuildChatForLife`
+  （先隐痕迹、重挂该段存档、重建聊天流、重放场景）。自检借同一批活函数（`reinit/updateTrace/
+  ensureTrace/reinitLife` 注入），不另开旁路。
+
+### 状态边界
+
+- 本地门禁已过：Lua LSP 0 Error、`git diff --check` 干净；**32 场景自检、云端构建与真机验证未做**
+  （自检只在 Maker 启动时跑，判据仍是 `runtime.log` 的结论行「场景=32/32 … 全部通过」）。
+- 骨骼动画仍未接入（硬门槛不变：GLB→MDL skin/动画轨/真机播放三关全过才谈）；
+  M4 全部动效为无骨骼程序化微动。`future3D` 只是预留字段，运行时无消费方。
+- 包体预警：16 张背景约 45.8 MB PNG，全可达不会裁包——真机分发前需降采样或压缩
+  （`docs/asset-provenance.md` 待办 #10）。
+
 ## 2026-09-24 — M3：四城初始化与关系档案（上海 / 成都 / 洛杉矶 / 伦敦 × 四种关系 + 随机）
 
 ### Added
@@ -33,6 +83,7 @@
 
 ### 状态边界
 
+- **已提交并推送 maker**（`329bad2` + 评审修正 `48758ea`，2026-09-24），但云端构建与真机验证仍未做。
 - **未经真机构建验证**：U–Z 与四城链路只过了 LSP（0 Error）、`tools/m3-node-crosscheck.js`
   独立实现对照（29/29，覆盖 DST 边界、可回复计划、随机掷点）与静态检查；构建与二维码待用户明确授权。
 - M2-B 网关口径不变：未部署、`GatewayEnabled=false`、零外发。

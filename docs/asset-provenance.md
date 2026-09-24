@@ -124,6 +124,50 @@ Maker 云端在 2026-09-19 自动回填了 `raw-assets/` 下的源 GLB、解包�
 | 为何不改配置指向 `assets/image/` | `assets/` 在 `build.asset_dirs` 内，图标会被打进运行包；且 `.project/project.json` 属 Maker 托管元数据，改指过去有被后续构建覆写的风险 |
 | 画面内容 | 洛杉矶咖啡馆傍晚窗景：暖黄吊灯、冰咖啡、窗外棕榈树与暮色街景，与 M0-0 冻结的美术方向一致 |
 
+## M4 场景静帧与生活痕迹（Maker MCP 批量生成，2026-09-24）
+
+16 张背景由 `batch_generate_images` 分两批生成（洛杉矶+上海 `_20260924155332` 批、成都+伦敦 `_20260924155606` 批），
+`aspect_ratio="4:3"`、`target_size=1296x864`，全部 RGB（无 alpha，colorType=2）；
+9 张生活痕迹同工具 `_20260924155918` 批，512×512 RGBA（colorType=6，透明底）。
+两批背景用首批成品作 `reference_images` 锁风格（同一角色同一美术语言的空景）。
+路径与 `scripts/SceneService.lua` 的 `BG`/`TRACES` 表一一对应，命中即入包（`image/**` 已在
+`.project/resources.json` 的 `groups.default`，增强引用模式）；旧一轮 `_202609241322xx` 候选图不再被代码引用，
+按增强模式会被裁出包，仓库内暂留作风格对照。
+
+构图纪律（M4 验收 3）：16 张统一「主活动区与留白在右」，唯一例外 `lon-recordshop-interior`
+（柜台上在左）——该包的人物站位、接地阴影、痕迹锚点三处一起翻到左侧，与静帧留白同侧。
+
+| 场景包 id | 文件（`assets/image/`） | 字节 | md5 |
+| --- | --- | --- | --- |
+| la_apartment | la-apartment-night_20260924155332.png | 2,757,226 | `f03cd45a60ac64dce2666a4c2ffb086b` |
+| la_studio | la-studio-day_20260924155332.png | 2,922,208 | `d1d32dfe75052e3d1963242c8d44e872` |
+| la_cafe | la-cafe-night_20260924155332.png | 2,719,048 | `c79f7219f9b1378730dc47e1d0269744` |
+| la_commute | la-street-dusk_20260924155332.png | 2,872,950 | `97dcae182e02a4b869622a2832dc2807` |
+| sha_apartment | sha-apartment-morning_20260924155332.png | 2,937,184 | `9a22728a38f33b50b94b6c4797a5b245` |
+| sha_office | sha-office-day_20260924155332.png | 2,670,759 | `ac45f1a803b65d21f68172b8e0707124` |
+| sha_bookstore | sha-bookstore-night_20260924155332.png | 2,647,031 | `7c2c25540eb693f2aa50d721de779490` |
+| sha_commute | sha-street-morning_20260924155332.png | 3,158,723 | `f7fc91e94408ef0f7af26dd78d96b28f` |
+| cdu_apartment | cdu-apartment-day_20260924155606.png | 2,973,825 | `33762b9c98e99a312b5a4d5c1933ab4b` |
+| cdu_studio | cdu-studio-day_20260924155606.png | 3,055,545 | `cf02f1e8c8b4ef97d8c961a4539f32b8` |
+| cdu_cafe | cdu-teahouse-day_20260924155606.png | 3,146,689 | `75273de7782719603f3449e892f4a08b` |
+| cdu_commute | cdu-nightmarket-street_20260924155606.png | 3,001,203 | `9a8b0fa750550377c08519abe066d006` |
+| lon_apartment | lon-apartment-rain-night_20260924155606.png | 2,241,427 | `6f6bb1e419221a242acb521ac1a0233b` |
+| lon_studio | lon-studio-recording_20260924155606.png | 2,859,583 | `e9eef31405870e69ec721cface064dcf` |
+| lon_recordshop | lon-recordshop-interior_20260924155606.png | 3,019,178 | `83a649718aa251498bcd60b0f51c1039` |
+| lon_commute | lon-street-rain-dusk_20260924155606.png | 3,082,534 | `f8eb75569f265840151f981e24b244ff` |
+
+| 痕迹键 | 文件（`assets/image/`） | 字节 | md5 |
+| --- | --- | --- | --- |
+| note | trace-note_20260924155918.png | 232,605 | `f8ce64c8e836e96de9f5c2d33fb9a3e5` |
+| coffee | trace-coffee_20260924155918.png | 258,402 | `6ad535b2cf4b1401639a636abe3570fa` |
+| vinyl | trace-vinyl_20260924155918.png | 317,755 | `f3e76bb43383de5177c3d7e5480eed67` |
+| umbrella | trace-umbrella_20260924155918.png | 105,068 | `0eade39cc473a56c9f895e3d930038b3` |
+| postcard | trace-postcard_20260924155918.png | 300,213 | `b550f8622d26473dd014e0ebe152824f` |
+| proofs | trace-proofs_20260924155918.png | 321,195 | `f9d366997b49c16af46e96c146a034d6` |
+| grocery | trace-grocery_20260924155918.png | 336,977 | `d43965150fe2b9ef2dd931520695bfec` |
+| oldbook | trace-oldbook_20260924155918.png | 336,039 | `d4da3417db75b72d933f89b5aed7d4aa` |
+| gaiwan | trace-gaiwan_20260924155918.png | 227,041 | `f0e25fa82c0f8082be621cf1acbb6071` |
+
 ## 待办（阻塞项，按优先级）
 
 1. **恢复 normal 贴图槽**：材质改回 `Techniques/PBR/PBRDiffNormal.xml` 并接上 `Textures/lin-ruoxi_00_N.png`，否则 3.23 MB 的法线图白备着，角色表面细节全平。
@@ -151,6 +195,10 @@ Maker 云端在 2026-09-19 自动回填了 `raw-assets/` 下的源 GLB、解包�
    `assets.icon` 指向 `./game_material/la-cafe-icon.png` —— 该目录被远端 pre-receive 排除，图标只能走 Maker 网页侧。
    ⚠️ 这两张截图上状态文案仍是 `洛杉矶 18:20`，那是被抄成常量的规格举例值（真机时刻应为约 22:21），
    M0-1 起时间由 `common.get_server_time()` + 偏移表算出，云端日志实测已随真实时刻变化（02:10 / 03:03 / 03:59）。
+10. **M4 背景包体预算（2026-09-24 新增）**：16 张背景合计约 45.8 MB PNG（单张 2.2–3.2 MB），痕迹 9 张合计约 2.5 MB。
+   全部被 `SceneService` 可达引用，增强模式下不会被裁，构建包体将显著变大。
+   进真机分发前需确认：降采样到 ≤720p、转 8-bit 索引色或走 Maker 侧纹理压缩；
+   旧一轮 `_202609241322xx` / `_202609241323xx` 候选图已无代码引用，可择机删出仓库。
 
 ## 原始留档（MarkItDown 转换记录，自 `poc/art/source/lin-ruoxi/*.md` 收拢）
 

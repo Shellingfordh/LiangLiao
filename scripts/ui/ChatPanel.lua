@@ -108,7 +108,7 @@ local onDraftChange_ = function() end
 ---@type fun(msg: MsgEntry): nil
 local onQuote_ = function() end
 ---@type fun(): nil
-local onProfileEntry_ = function() end
+local onSettingsEntry_ = function() end
 ---@type fun(): nil
 local onResetConversation_ = function() end
 ---@type fun(): MsgEntry[]
@@ -164,19 +164,19 @@ end
 ---@field onSkip? fun() 点击跳过等待
 ---@field onDraftChange? fun(text: string) 输入变化，回写草稿
 ---@field onQuote? fun(msg: MsgEntry) 点击某条气泡上的「引用」
----@field onProfileEntry? fun() 点击顶栏「换档案」
+---@field onSettingsEntry? fun() 点击顶栏「设置」（M4：查看档案/换一段人生/新故事）
 ---@field onResetConversation? fun() 用户二次确认后清空聊天记录
 ---@field getMessages? fun(): MsgEntry[]
 ---@field getVersion? fun(): integer
 
---- 顶栏「换档案」入口：换城市/关系不销毁聊天流，只是重挂一份档案（设计 §7）。
+--- 顶栏「设置」入口（M4 §3）：打开设置层，三个明确入口都在 SettingsOverlay。
 --- 与发送/引用同一条按钮链路：focusable=false + OnPointerDown 直接回调，
 --- 避免「失焦收键盘 → 布局位移 → OnClick 静默丢失」（AGENTS 实测坑）。
 ---@return Widget
 local function MakeProfileEntryButton()
     local btn = UI.Button {
         id = "chatProfileEntry",
-        text = "城市档案",
+        text = "设置",
         variant = "primary",
         fontSize = 10,
         height = 26,
@@ -192,8 +192,8 @@ local function MakeProfileEntryButton()
         end
         self:SetState({ pressed = true })
         self:TransitionToStateBgColor()
-        logInfo("换档案入口按下")
-        onProfileEntry_()
+        logInfo("设置入口按下")
+        onSettingsEntry_()
     end
     return btn
 end
@@ -395,7 +395,7 @@ function ChatPanel.Build(opts)
     onSkip_ = opts.onSkip or onSkip_
     onDraftChange_ = opts.onDraftChange or onDraftChange_
     onQuote_ = opts.onQuote or onQuote_
-    onProfileEntry_ = opts.onProfileEntry or onProfileEntry_
+    onSettingsEntry_ = opts.onSettingsEntry or onSettingsEntry_
     onResetConversation_ = opts.onResetConversation or onResetConversation_
     messagesProvider_ = opts.getMessages or messagesProvider_
     versionProvider_ = opts.getVersion or versionProvider_
@@ -848,7 +848,7 @@ function ChatPanel.SetMemoryLine(line)
     end
 end
 
---- 换档案后刷新顶栏「关系 · 城市」一行（历史气泡不重建，旧城市戳保留原样）
+--- 换人生/换档案后刷新顶栏「关系 · 城市」一行（历史气泡不重建，旧城市戳保留原样）
 ---@param line string
 function ChatPanel.SetProfileLine(line)
     if profileLabel_ then

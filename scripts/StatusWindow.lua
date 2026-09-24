@@ -1,6 +1,9 @@
 -- ============================================================================
--- StatusWindow.lua — M0-0 若夕 3D 状态窗
--- 固定相机、无交互。将独立预览场景渲染到 Texture2D，再由 UI 绘制。
+-- StatusWindow.lua — M0-0 若夕 3D 状态窗（M4：场景状态包驱动）
+-- 固定镜头、无交互。将独立预览场景渲染到 Texture2D，再由 UI 绘制。
+-- M4 起背景、色温、主光、站位、接地阴影与无骨骼微动全部来自 SceneService 的
+-- 16 个场景状态包（同一份 SceneState 也供档案页与回复事实使用）；
+-- 骨骼动画未通过「GLB→MDL→真机」三道验证门前不接入，微动一律程序化、无骨骼。
 -- ============================================================================
 
 local Widget = require("urhox-libs/UI/Core/Widget")
@@ -23,9 +26,8 @@ local PREFAB_CANDIDATES = {
 
 local GLB_PATH = "models/characters/lin-ruoxi/lin-ruoxi.glb"
 local MATERIAL_PATH = "Materials/lin-ruoxi_00_tripo_mat_8ae16fc0-7a3a-402e-9a6e-1180f6c269f7.xml"
--- 唯一背景路径：与 .project/resources.json 的 groups.default 白名单一致。
--- 多候选回退在这里没有意义——不在白名单里的候选在设备上永远取不到，只会误导排查。
-local BACKGROUND_PATH = "image/la-cafe-grounded_20260924132347.png"
+-- M4：背景不再写死。16 张 4:3 静帧由 SceneService 的场景状态包给出
+-- （ApplySceneState 是唯一入口），路径都在 .project/resources.json 的 image/** 白名单内。
 -- 角色漫反射贴图：DWP 资源，设备冷启动时材质内引用可能是占位，需异步补载
 local CHARACTER_DIFFUSE_TEXTURE = "Textures/lin-ruoxi_00_D.jpg"
 
@@ -63,6 +65,31 @@ local usingPlaceholderCharacter_ = false
 local modelError_ = ""
 ---@type string
 local backgroundError_ = ""
+--- 当前生效的场景状态（SceneService.StateFor 的产物）：光照、站位、阴影、微动都读它。
+---@type SceneState?
+local sceneState_ = nil
+---@type Zone|nil
+local zone_ = nil
+---@type Node|nil
+local sunNode_ = nil
+---@type Light|nil
+local coolLight_ = nil
+---@type Light|nil
+local warmLight_ = nil
+---@type Node|nil
+local warmLightNode_ = nil
+---@type Node|nil
+local coolLightNode_ = nil
+-- 无骨骼微动的基准与相位：只记录「上一帧施加了多少」，每帧先撤销再施加新偏移，
+-- 基准姿态永远是 framing 那一刻的原值，不会累积漂移。
+---@type Vector3|nil
+local baseCharPos_ = nil
+---@type number
+local baseCamY_ = 0
+---@type number
+local microTime_ = 0
+---@type number
+local microPrev_ = 0
 --- 角色漫反射贴图单独一个槽位：bindCharacterMaterial 是在 tryLoadPrefab/tryLoadModelFile
 --- 里调的，那两条路随后都会把 modelError_ 清空，写进去会被覆盖；贴图失败要单独上屏。
 ---@type string
@@ -304,6 +331,7 @@ local function createLighting(scene)
             -- 近景状态窗：拉开雾距，避免角色被雾吃掉
             zone.fogStart = 40.0
             zone.fogEnd = 120.0
+            zone_ = zone
             -- 把预设实际生效的环境光档位打出来：AMBIENT_PREBAKED 会把 cAmbientColor
             -- 硬清零，那种情况下背光侧只能靠补光救，改 ambientColor 是空操作。
             -- ambientSource 用 tostring 读：不同绑定层可能给枚举名也可能给整数。
@@ -331,6 +359,7 @@ local function createLighting(scene)
             zone:SetBoundingBox(BoundingBox(Vector3(-8.0, -1.0, -8.0), Vector3(8.0, 8.0, 8.0)))
             zone.priority = 0
         end
+        zone_ = zone
         zone.ambientSource = AMBIENT_COLOR
         -- 室内暖黄为主、掺一点冷调当天光：背光面有层次而不是死黑
         zone.ambientColor = Color(0.34, 0.31, 0.28)
@@ -349,6 +378,7 @@ local function createLighting(scene)
         sun.color = Color(1.0, 0.82, 0.68)
         sun.brightness = 3.2
         sun.castShadows = true
+        sunNode_ = sunNode
     end
 
     -- 两盏补光两个分支都挂：「背光侧死黑」是共性问题，兜底分支有环境光也仍旧偏硬，
@@ -356,6 +386,8 @@ local function createLighting(scene)
     -- 主光只认一盏——兜底分支现造的 Sun 或预设自带的那盏方向光。这里再造一盏方向光
     -- 会跟它打架（两个方向各投一遍阴影，中间反而发灰），所以补光一律用点光、不投影。
     -- 一冷一暖是为了让受光侧与背光侧分得开：全是暖光只会把侧脸糊成一团。
+    -- M4：两盏补光的节点与灯都留引用——ApplySceneLighting 按场景包的主光方向/色温改它们，
+    -- 人物受光才跟着场景走，不再像独立贴图。
     local coolNode = scene:CreateChild("CoolFillLight")
     coolNode.position = Vector3(-2.2, 1.4, 1.8)
     local cool = coolNode:CreateComponent("Light")
@@ -364,6 +396,8 @@ local function createLighting(scene)
     cool.brightness = 1.55
     cool.range = 9.0
     cool.castShadows = false
+    coolLightNode_ = coolNode
+    coolLight_ = cool
 
     -- 右前暖面光：把面部和夹克的细节拉出来，亮度略高于冷补光，
     -- 保持「右前是主受光面」的方向感
@@ -375,6 +409,8 @@ local function createLighting(scene)
     fill.brightness = 2.10
     fill.range = 8.0
     fill.castShadows = false
+    warmLightNode_ = fillNode
+    warmLight_ = fill
 
     -- 布光结果进 boot trace：真机上要判断「改这几个数够不够」还是「得换 Technique」，
     -- 凭的是这一行，不是截图
@@ -569,13 +605,17 @@ local function normalizeCharacterScale()
     end
 end
 
---- 固定镜头：人物在画面右侧约占 60% 高度（留头量），背景静帧留在左侧
+--- 固定镜头：人物按场景包的站位入画（默认画面右侧约 60% 高度，留头量），背景留白在另一侧。
+--- M4：站位与让位方向来自 SceneState.characterPlacement —— 唱片行那种
+--- 「留白在左」的场景，人物、相机与阴影一起翻边，不靠改文案凑图。
 local function frameFixedCamera()
     if not cameraNode_ or not characterRoot_ then
         return
     end
+    local placement = sceneState_ and sceneState_.characterPlacement or nil
+    local side = placement and placement.side or "right"
     local bbox = computeWorldBounds(characterRoot_)
-    local center = Vector3(0.55, 0.84, 0.0)
+    local center = Vector3(placement and placement.x or 0.55, 0.84, 0.0)
     local height = CHARACTER_TARGET_HEIGHT
     if bbox then
         center = bbox.center
@@ -597,8 +637,9 @@ local function frameFixedCamera()
     local hfov = 2.0 * math.atan(math.tan(vfov * 0.5) * aspect)
     local viewW = 2.0 * dist * math.tan(hfov * 0.5)
 
-    -- 将注视点左移，使人物落在画面右侧约 71% 处；背景留在左侧
-    local look = Vector3(center.x - viewW * 0.21, bbox and (bbox.min.y + height * 0.52) or 0.86, center.z)
+    -- 将注视点朝留白的反方向挪，使人物落在画面约 71%（右）或 29%（左）处
+    local shift = viewW * 0.21 * (side == "left" and -1 or 1)
+    local look = Vector3(center.x - shift, bbox and (bbox.min.y + height * 0.52) or 0.86, center.z)
     local camPos = Vector3(look.x, look.y + height * 0.04, center.z + dist)
 
     cameraNode_.position = camPos
@@ -610,14 +651,17 @@ local function frameFixedCamera()
     local charPos = characterRoot_.position
     characterRoot_:LookAt(Vector3(camPos.x, charPos.y, camPos.z), Vector3.UP, TS_WORLD)
     characterRoot_:Rotate(Quaternion(180, Vector3.UP))
+    baseCharPos_ = characterRoot_.position
+    baseCamY_ = camPos.y
+    microPrev_ = 0
 
     if surface_ then
         surface_:QueueUpdate()
     end
 
     logInfo(string.format(
-        "固定相机 pos=(%.2f,%.2f,%.2f) look=(%.2f,%.2f,%.2f) dist=%.2f",
-        camPos.x, camPos.y, camPos.z, look.x, look.y, look.z, dist
+        "固定相机 pos=(%.2f,%.2f,%.2f) look=(%.2f,%.2f,%.2f) dist=%.2f side=%s",
+        camPos.x, camPos.y, camPos.z, look.x, look.y, look.z, dist, side
     ))
 end
 
@@ -693,42 +737,14 @@ local function PrepareBackground(path, onReady, onFail)
     end)
 end
 
-function StatusWindow.WarmUpBackground(onReady)
-    PrepareBackground(BACKGROUND_PATH, onReady, function(path)
-        backgroundError_ = "4:3 咖啡馆背景未下载成功，当前状态窗只有角色。"
-        logError(backgroundError_ .. " path=" .. path)
-        if noticesChanged_ then
-            noticesChanged_()
-        end
-    end)
+--- 把资源先弄到手再交给 UI（ImageCache 会把首次失败永久缓存，DWP 冷启动不能提前挂）。
+--- 公开给 main.lua 的生活痕迹覆盖物用：痕迹贴图走与背景完全相同的装载纪律。
+---@param path string
+---@param onReady fun(path: string)
+---@param onFail fun(path: string)
+function StatusWindow.PrepareTexture(path, onReady, onFail)
+    PrepareBackground(path, onReady, onFail)
 end
-
--- 场景资产清单：scene_id → 远景静帧。作息表里的 campus / commute 目前没有原创静帧
--- （见 BLOCKED.md），缺资产就显式留在当前画面，不伪称已经切换。
----@type table<string, string>
-local SCENE_BACKGROUNDS = {
-    la_cafe = BACKGROUND_PATH,
-    -- 四城静帧均为 Maker 内生成的原创资产。每城用两张构图明确的画面覆盖其日程场景；
-    -- 场景事实仍由 TimeState/EventService 决定，静帧只承担状态窗的可见空间。
-    la_apartment = "image/la-cafe-grounded_20260924132347.png",
-    la_studio = "image/la-cafe-grounded_20260924132347.png",
-    sha_apartment = "image/sha-apartment-evening_20260924132208.png",
-    sha_commute = "image/sha-apartment-evening_20260924132208.png",
-    sha_office = "image/sha-bookstore-rain_20260924132208.png",
-    sha_cafe = "image/sha-bookstore-rain_20260924132208.png",
-    sha_bookstore = "image/sha-bookstore-rain_20260924132208.png",
-    cdu_apartment = "image/cdu-apartment-morning_20260924132208.png",
-    cdu_studio = "image/cdu-apartment-morning_20260924132208.png",
-    cdu_cafe = "image/cdu-apartment-morning_20260924132208.png",
-    cdu_commute = "image/cdu-nightmarket_20260924132208.png",
-    cdu_nightmarket = "image/cdu-nightmarket_20260924132208.png",
-    lon_apartment = "image/lon-apartment-rain_20260924132208.png",
-    lon_commute = "image/lon-apartment-rain_20260924132208.png",
-    lon_campus = "image/lon-recordshop-golden_20260924132208.png",
-    lon_cafe = "image/lon-recordshop-golden_20260924132208.png",
-    lon_studio = "image/lon-recordshop-golden_20260924132208.png",
-    lon_recordshop = "image/lon-recordshop-golden_20260924132208.png",
-}
 
 ---@type string
 local currentSceneId_ = ""
@@ -745,39 +761,117 @@ function StatusWindow.GetCurrentSceneId()
     return currentSceneId_
 end
 
---- 按 scene_id 尝试切换远景。无资产时保留当前静帧并留下可上屏的说明。
----@param sceneId string
----@param onApplied fun(path: string)
----@return string result unchanged | pending | missing-asset
-function StatusWindow.RequestScene(sceneId, onApplied)
-    if sceneId == "" or sceneId == currentSceneId_ then
-        return "unchanged"
+--- 场景包光照/站位落地：暖面光跟着主光来向与色温走，冷补光在对面，
+--- 环境光按色温压暗——人物受光必须与背景光源同一方向同一颜色，
+--- 否则就是「独立贴图」（M4 验收 3 点名的缺陷形态）。
+---@param state SceneState
+local function applySceneLighting(state)
+    local k = state.keyLightRGB
+    local d = state.keyLightDirection
+    local px = (characterRoot_ and characterRoot_.position.x) or 0.55
+    if warmLightNode_ and warmLight_ then
+        warmLightNode_.position = Vector3(px + d.x, d.y + 0.6, d.z + 1.0)
+        warmLight_.color = Color(k.r, k.g, k.b)
     end
-    local path = SCENE_BACKGROUNDS[sceneId]
-    currentSceneId_ = sceneId
-    if not path then
-        sceneNotice_ = "场景 " .. sceneId .. " 暂无原创静帧，状态窗沿用当前画面"
-        logWarn("场景未切换（缺资产）: " .. sceneId)
+    if coolLightNode_ and coolLight_ then
+        coolLightNode_.position = Vector3(px - d.x * 1.2, d.y * 0.7 + 0.5, -d.z * 0.4 + 1.6)
+    end
+    if sunNode_ then
+        sunNode_.direction = Vector3(-d.x, -d.y, -d.z)
+        local sun = sunNode_:GetComponent("Light")
+        if sun then
+            sun.color = Color(k.r, k.g, k.b)
+        end
+    end
+    -- 只在 AMBIENT_COLOR 档改环境光：PREBAKED 会把 cAmbientColor 硬清零，写了也是空操作。
+    -- 夜晚场景（低色温低亮度）压到 0.16，白天偏冷光抬到 0.34，和静帧的明暗一致。
+    if zone_ and tostring(zone_.ambientSource) == "AMBIENT_COLOR" then
+        local lift = 0.16 + math.min(state.colorTemperature, 6500) / 6500 * 0.18
+        zone_.ambientColor = Color(k.r * lift, k.g * lift, k.b * lift)
+    end
+    trace(string.format("场景光照 %s 色温=%d 主光=(%.2f,%.2f,%.2f) 站位=%s",
+        state.sceneId, state.colorTemperature, d.x, d.y, d.z,
+        state.characterPlacement.side))
+end
+
+--- 应用一份 SceneState：背景、光照、站位、接地阴影与微动一次换齐。
+--- 缺包必须显式回退（保留当前画面 + 上屏说明），绝不沿用旧图假称已切换；
+--- 换人生时调用方带 force=true，同 sceneId 也要把光照/阴影/痕迹重挂一遍。
+---@param state SceneState?
+---@param onApplied fun(path: string)
+---@param force? boolean
+---@return string result applied-pending | unchanged | missing-package
+function StatusWindow.ApplySceneState(state, onApplied, force)
+    if not state then
+        sceneNotice_ = "当前事件缺少对应场景状态包，状态窗沿用现有画面"
+        logWarn("场景包缺失（未切换），沿用当前画面")
         if noticesChanged_ then
             noticesChanged_()
         end
-        return "missing-asset"
+        return "missing-package"
     end
+    if state.sceneId == currentSceneId_ and not force then
+        return "unchanged"
+    end
+    currentSceneId_ = state.sceneId
     sceneNotice_ = ""
-    logInfo("切换状态窗场景: " .. sceneId .. " → " .. path)
-    PrepareBackground(path, function(ready)
+    logInfo("切换状态窗场景包: " .. state.sceneId .. " → " .. state.backgroundPath)
+    PrepareBackground(state.backgroundPath, function(ready)
+        sceneState_ = state
+        applySceneLighting(state)
+        if characterRoot_ then
+            local p = characterRoot_.position
+            characterRoot_.position = Vector3(state.characterPlacement.x, p.y, p.z)
+        end
+        frameFixedCamera()
         onApplied(ready)
         if noticesChanged_ then
             noticesChanged_()
         end
     end, function(failed)
-        backgroundError_ = "场景 " .. sceneId .. " 的静帧未下载成功，状态窗沿用上一帧画面。"
+        -- 背景没到手就不切：光照/站位/阴影都保持原场景那一套，
+        -- 绝不允许「新光照打在旧背景上」这种半切状态出现在画面上。
+        currentSceneId_ = ""
+        backgroundError_ = "场景 " .. state.sceneId .. " 的静帧未下载成功，状态窗沿用上一帧画面。"
         logError(backgroundError_ .. " path=" .. failed)
         if noticesChanged_ then
             noticesChanged_()
         end
     end)
-    return "pending"
+    return "applied-pending"
+end
+
+-- ---------------------------------------------------------------------------
+-- 无骨骼微动（M4 §7）：呼吸 / 重心 / 朝向 / 镜头四种程序化微动。
+-- 骨骼动作的三道验证门（源 GLB 骨骼动画 → MDL 保留 → 真机播放）未全过，
+-- 这里一行都不许依赖 AnimatedModel 的动画轨道；撤销式增量变换保证不漂移。
+-- ---------------------------------------------------------------------------
+local function HandleMicroMotionUpdate(eventType, eventData)
+    if not sceneState_ or not eventData then
+        return
+    end
+    local dt = eventData["TimeStep"]:GetFloat()
+    microTime_ = microTime_ + dt
+    local undo = microPrev_
+    local nextv = 0
+    local mode = sceneState_.microMotion
+    if mode == "breathe" and baseCharPos_ and characterRoot_ then
+        nextv = math.sin(microTime_ * 1.7) * 0.006
+        characterRoot_.position = Vector3(baseCharPos_.x, baseCharPos_.y - undo + nextv, baseCharPos_.z)
+    elseif mode == "sway" and characterRoot_ then
+        nextv = math.sin(microTime_ * 0.55) * 0.9
+        characterRoot_:Rotate(Quaternion(-undo, Vector3(0, 0, 1)))
+        characterRoot_:Rotate(Quaternion(nextv, Vector3(0, 0, 1)))
+    elseif mode == "turn" and characterRoot_ then
+        nextv = math.sin(microTime_ * 0.32) * 2.6
+        characterRoot_:Rotate(Quaternion(-undo, Vector3(0, 1, 0)))
+        characterRoot_:Rotate(Quaternion(nextv, Vector3(0, 1, 0)))
+    elseif mode == "dolly" and cameraNode_ then
+        nextv = math.sin(microTime_ * 0.25) * 0.012
+        local p = cameraNode_.position
+        cameraNode_.position = Vector3(p.x, baseCamY_ - undo + nextv, p.z)
+    end
+    microPrev_ = nextv
 end
 
 local function createRenderTarget()
@@ -851,6 +945,9 @@ function StatusWindow.Init()
     -- 状态窗 RenderTarget 走 NanoVG 采样，关闭 HDR 避免贴图被当成乱码 atlas
     renderer.hdrRendering = false
 
+    -- 无骨骼微动逐帧推进（撤销式增量，见 HandleMicroMotionUpdate）
+    SubscribeToEvent("Update", HandleMicroMotionUpdate)
+
     startBootEcho(3)
 end
 
@@ -923,8 +1020,47 @@ function StatusWindow.Draw(nvg, x, y, w, h)
     nvgRestore(nvg)
 end
 
+--- 接地阴影：径向渐变的椭圆软黑影，画在背景之上、角色 RT 之下。
+--- 3D 场景里没有投影接收面（castShadows 全关，真机帧率优先），
+--- 接地感由这一格 UI 合成提供，锚点与浓度全部来自场景包。
+---@param nvg NVGContextWrapper
+---@param x number
+---@param y number
+---@param w number
+---@param h number
+function StatusWindow.DrawGroundShadow(nvg, x, y, w, h)
+    local st = sceneState_
+    if not st or not st.groundShadow or w <= 1 or h <= 1 then
+        return
+    end
+    local sh = st.groundShadow
+    local cx = x + w * sh.anchorX
+    local cy = y + h * sh.anchorY
+    local rx = w * sh.rx
+    local ry = h * sh.ry
+    nvgSave(nvg)
+    nvgIntersectScissor(nvg, x, y, w, h)
+    local paint = nvgRadialGradient(nvg, cx, cy, math.min(rx, ry) * 0.1, math.max(rx, ry),
+        nvgRGBA(0, 0, 0, sh.alpha), nvgRGBA(0, 0, 0, 0))
+    nvgBeginPath(nvg)
+    nvgEllipse(nvg, cx, cy, rx, ry)
+    nvgFillPaint(nvg, paint)
+    nvgFill(nvg)
+    nvgRestore(nvg)
+end
+
 function StatusWindow.Shutdown()
     stopBootEcho()
+    sceneState_ = nil
+    baseCharPos_ = nil
+    microTime_ = 0
+    microPrev_ = 0
+    zone_ = nil
+    sunNode_ = nil
+    coolLight_ = nil
+    warmLight_ = nil
+    coolLightNode_ = nil
+    warmLightNode_ = nil
     if nvgImage_ ~= 0 and nvgImageCtx_ then
         nvgDeleteVideo(nvgImageCtx_, nvgImage_)
     end
@@ -971,6 +1107,7 @@ end
 function StatusPreview:Render(nvg)
     self:RenderFullBackground(nvg)
     local l = self:GetAbsoluteLayout()
+    StatusWindow.DrawGroundShadow(nvg, l.x, l.y, l.w, l.h)
     StatusWindow.Draw(nvg, l.x, l.y, l.w, l.h)
 end
 

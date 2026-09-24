@@ -22,7 +22,7 @@ local CLOUD_KEY = "companion_memory_la"
 local CLOUD_FLUSH_EVERY_TURNS = 5
 -- 落盘的消息条数上限：只裁「已回复」的旧记录，任何未回复的排队消息都不会被裁掉
 local MESSAGE_CAP = 120
-local SAVE_VERSION = 5
+local SAVE_VERSION = 6
 local EVENT_LEDGER_CAP = 40
 -- 落盘的事件计划天数：与 EventService 的窗口一致，跨日补回要看昨天。
 local EVENT_PLAN_CAP = 4
@@ -50,6 +50,8 @@ local EVENT_PLAN_CAP = 4
 ---@class CompanionMemory
 ---@field version integer
 ---@field cityId string
+---@field lifeId? string M4 人生槽 id（life-1|life-2|life-3）；读回不匹配当前槽时打 WARN，
+---   文件路径才是隔离真源，这一格只负责把「串写」从静默变成可见证据
 ---@field turns integer
 ---@field firstServerTime integer
 ---@field lastServerTime integer
@@ -65,6 +67,7 @@ local EVENT_PLAN_CAP = 4
 local mem_ = {
     version = SAVE_VERSION,
     cityId = "los_angeles",
+    lifeId = nil,
     turns = 0,
     firstServerTime = 0,
     lastServerTime = 0,
@@ -306,6 +309,7 @@ end
 ---@field cityId? string
 ---@field cloud? CloudAdapter
 ---@field saveFile? string 存档路径（开发自检用独立文件，不碰玩家的历史）
+---@field lifeId? string M4 人生槽 id；落盘后读回不匹配即打 WARN（串写可见化）
 ---@field maxMessages? integer 落盘消息条数上限
 
 ---@param opts? MemoryInitOptions
@@ -316,6 +320,7 @@ function MemoryService.Init(opts)
     mem_.cityId = opts.cityId or mem_.cityId
     cloud_ = opts.cloud
     saveFile_ = opts.saveFile or DEFAULT_SAVE_FILE
+    mem_.lifeId = opts.lifeId
     messageCap_ = opts.maxMessages or MESSAGE_CAP
     logInfo("初始化，本地存档路径 " .. saveFile_ .. " 云适配器=" .. (cloud_ and "有" or "无"))
 end
@@ -351,6 +356,15 @@ function MemoryService.Load()
         local data = decoded ---@type any
         mem_.turns = math.floor(data.turns or 0)
         mem_.cityId = data.cityId or mem_.cityId
+        local fileLifeId = asString(data.lifeId)
+        if mem_.lifeId and fileLifeId and fileLifeId ~= mem_.lifeId then
+            -- 文件路径是隔离真源；这一格把「A 段历史挂到 B 段」从静默变成显式 WARN
+            logWarn(string.format("存档 lifeId=%s 与当前人生槽 %s 不一致（按文件路径继续，串写嫌疑）",
+                fileLifeId, mem_.lifeId))
+        end
+        if not mem_.lifeId then
+            mem_.lifeId = fileLifeId
+        end
         mem_.version = asInteger(data.version) or 1
         mem_.firstServerTime = math.floor(data.firstServerTime or 0)
         mem_.lastServerTime = math.floor(data.lastServerTime or 0)
@@ -419,6 +433,7 @@ function MemoryService.Save()
         local encoded = cjson.encode({
             version = mem_.version,
             cityId = mem_.cityId,
+            lifeId = mem_.lifeId,
             profile = mem_.profile,
             turns = mem_.turns,
             firstServerTime = mem_.firstServerTime,
@@ -635,6 +650,11 @@ function MemoryService.RecordTurn(userMsg, replyMsg, fact, topics, messages)
     return mem_
 end
 
+---@return string? 当前存档挂接的人生槽 id
+function MemoryService.GetLifeId()
+    return mem_.lifeId
+end
+
 ---@return CompanionMemory
 function MemoryService.Get()
     return mem_
@@ -649,6 +669,7 @@ end
 function MemoryService.ResetInMemory()
     mem_.version = SAVE_VERSION
     mem_.cityId = "los_angeles"
+    mem_.lifeId = nil
     mem_.profile = nil
     mem_.turns = 0
     mem_.firstServerTime = 0

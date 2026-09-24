@@ -61,11 +61,14 @@ TimeState.CITIES = {
 -- 洛杉矶这张表是 M0-1/M1/M2 已验收的那一份，原样迁移为一个键，一行不改。
 -- 每城至少两处可见差异（早晨 / 忙碌·碎片 / 傍晚·深夜），且事件 id 与 ProfileService 的
 -- 城市叙事摘要、EventService 的事件模板严格同名——作息行仍是「这一档她在做什么」的唯一声明处。
+-- M4：每城可见地点恰好四类（居所 / 工作场所 / 公共停留处 / 街区或通勤过渡处），
+-- 与 SceneService 的 16 个场景包一一对应；place 直接决定 sceneId = 前缀_place，
+-- 所以这里绝不允许出现第五种 place —— 那会指向一张不存在的背景。
 TimeState.SCHEDULE_BY_CITY = {
     los_angeles = {
         { from = 0,  to = 6,  availability = "offline",    place = "apartment", event = "la_apartment_night_rest",   phrase = "已经睡下了" },
         { from = 6,  to = 8,  availability = "idle",       place = "apartment", event = "la_apartment_morning_inbox", phrase = "在煮咖啡" },
-        { from = 8,  to = 12, availability = "busy",       place = "campus",    event = "la_campus_workshop",         phrase = "在上课" },
+        { from = 8,  to = 12, availability = "busy",       place = "studio",    event = "la_campus_workshop",         phrase = "在备课" },
         { from = 12, to = 13, availability = "fragments",  place = "cafe",      event = "la_cafe_midday",             phrase = "在吃午饭" },
         { from = 13, to = 17, availability = "busy",       place = "studio",    event = "la_studio_zine_layout",      phrase = "在赶项目" },
         { from = 17, to = 19, availability = "fragments",  place = "commute",   event = "la_commute_voice_notes",     phrase = "在路上" },
@@ -77,7 +80,7 @@ TimeState.SCHEDULE_BY_CITY = {
         { from = 6,  to = 8,  availability = "idle",       place = "apartment", event = "sha_apartment_morning_balcony", phrase = "在阳台浇花" },
         { from = 8,  to = 9,  availability = "fragments",  place = "commute",   event = "sha_commute_rush",            phrase = "在挤地铁" },
         { from = 9,  to = 12, availability = "busy",       place = "office",    event = "sha_office_topic_meeting",    phrase = "在开选题会" },
-        { from = 12, to = 13, availability = "fragments",  place = "cafe",      event = "sha_cafe_midday",             phrase = "在吃午饭" },
+        { from = 12, to = 13, availability = "fragments",  place = "office",    event = "sha_cafe_midday",             phrase = "在吃午饭" },
         { from = 13, to = 17, availability = "busy",       place = "office",    event = "sha_office_layout",           phrase = "在盯排版" },
         { from = 17, to = 19, availability = "fragments",  place = "commute",   event = "sha_commute_market",          phrase = "在绕菜场" },
         { from = 19, to = 22, availability = "idle",       place = "bookstore", event = "sha_bookstore_evening",       phrase = "在书店值班" },
@@ -90,15 +93,15 @@ TimeState.SCHEDULE_BY_CITY = {
         { from = 12, to = 14, availability = "idle",       place = "cafe",      event = "cdu_cafe_midday",             phrase = "在茶馆" },
         { from = 14, to = 18, availability = "busy",       place = "studio",    event = "cdu_studio_color",            phrase = "在调颜色" },
         { from = 18, to = 20, availability = "fragments",  place = "commute",   event = "cdu_commute_supplies",        phrase = "在路上" },
-        { from = 20, to = 23, availability = "idle",       place = "nightmarket", event = "cdu_nightmarket_supper",    phrase = "在夜市" },
+        { from = 20, to = 23, availability = "idle",       place = "commute",   event = "cdu_nightmarket_supper",      phrase = "在夜市" },
         { from = 23, to = 24, availability = "idle",       place = "apartment", event = "cdu_apartment_letters",       phrase = "回到公寓了" },
     },
     london = {
         { from = 0,  to = 6,  availability = "offline",    place = "apartment", event = "lon_apartment_night_rest",    phrase = "已经睡下了" },
         { from = 6,  to = 7,  availability = "idle",       place = "apartment", event = "lon_apartment_morning_tea",   phrase = "在煮茶" },
         { from = 7,  to = 8,  availability = "fragments",  place = "commute",   event = "lon_commute_early_train",     phrase = "在赶火车" },
-        { from = 8,  to = 13, availability = "busy",       place = "campus",    event = "lon_campus_lecture",          phrase = "在有讲座" },
-        { from = 13, to = 14, availability = "fragments",  place = "cafe",      event = "lon_cafe_midday",             phrase = "在吃三明治" },
+        { from = 8,  to = 13, availability = "busy",       place = "studio",    event = "lon_campus_lecture",          phrase = "在学院棚里" },
+        { from = 13, to = 14, availability = "fragments",  place = "commute",   event = "lon_cafe_midday",             phrase = "在吃三明治" },
         { from = 14, to = 18, availability = "busy",       place = "studio",    event = "lon_studio_field_recording",  phrase = "在录音棚" },
         { from = 18, to = 19, availability = "fragments",  place = "commute",   event = "lon_commute_dark",            phrase = "在路上" },
         { from = 19, to = 22, availability = "idle",       place = "recordshop", event = "lon_recordshop_shift",       phrase = "在唱片行" },
