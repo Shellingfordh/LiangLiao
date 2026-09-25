@@ -626,6 +626,13 @@ function InitServices(saveFile, lifeSlot)
             isRandom = lifeSlot.isRandom,
             initialized = true,
         })
+        -- 注册表那张卡就是这一段的档案来源，建档/换卡当场就得收进段存档：
+        -- `MemoryService.SetProfile` 原先只在开发测试台的 `ApplyProfile` 里被调过，
+        -- 新故事这条路的存档一直「带记录却缺 profile」，于是下一次读取按迁移规则
+        -- 补成「本城 × 陌生网友」——选前同事/高中同学/久未联系的朋友建的段，
+        -- 聊过一轮再重进就变成陌生网友，回复的关系语气壳也跟着换掉
+        -- （2026-09-25 换卡跨进程取证 D/E 实测，见 CHANGELOG）。
+        MemoryService.SetProfile(ProfileService.Get())
     else
         ProfileService.Set(CONFIG.City, "stranger", { initialized = false })
     end
