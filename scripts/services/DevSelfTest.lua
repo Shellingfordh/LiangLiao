@@ -62,7 +62,7 @@ local SEGMENT_GAP_SECONDS = MessageService.SEGMENT_GAP_SECONDS
 ---@field cityId string
 ---@field idleWaitSeconds number
 ---@field makeSendContext fun(snap: TimeSnapshot, quote?: QuoteRef): SendContext
----@field reinit fun(saveFile: string|nil, lifeSlot: LifeSlot|nil)
+---@field reinit fun(saveFile: string|nil, lifeSlot: LifeSlot|nil, freshSlot: boolean|nil)
 ---@field updateTrace fun(fact: EventFact?)
 ---@field ensureTrace fun()
 ---@field reinitLife fun()
@@ -74,7 +74,7 @@ local idleWait_ = 10
 -- 未赋值的函数槽按 AGENTS 规则 #11 标注类型源头，调用点才有推导
 ---@type fun(snap: TimeSnapshot, quote?: QuoteRef): SendContext
 local makeSendContext_
----@type fun(saveFile: string|nil, lifeSlot: LifeSlot|nil)
+---@type fun(saveFile: string|nil, lifeSlot: LifeSlot|nil, freshSlot: boolean|nil)
 local reinit_
 ---@type fun(fact: EventFact?)
 local updateTrace_
@@ -100,7 +100,7 @@ local failures_ = {}
 local summary_ = "自检未运行"
 
 --- Run 里 runScenario 的调用条数；结论行拿它判断「有没有场景被整批日志丢掉」
-local SCENARIO_TOTAL = 33
+local SCENARIO_TOTAL = 34
 
 local function logInfo(msg)
     print(TAG .. " " .. msg)
@@ -1934,9 +1934,13 @@ local function ScenarioLifeIsolation(dateKey)
 
     local rawA = readRawSave(LifeService.SlotSaveFile("life-1"))
     local rawB = readRawSave(LifeService.SlotSaveFile("life-2"))
-    check("AB6 段存档文件各写各的：life-1 文件里才有 life-1 的记录，life-2 还没写过文件",
+    -- life-2 的文件现在可能在挂载时就因「卡片档案落档」而出现（M5 起 InitServices 当场
+    -- 写一次），所以判据不是「有没有文件」，而是「它带的是不是自己那一段的东西」
+    check("AB6 段存档文件各写各的：life-1 文件里才有 life-1 的记录，life-2 不带着 life-1 的东西",
         rawA ~= nil and rawA.lifeId == "life-1" and rawA.messages ~= nil and #rawA.messages == #msgsA
-        and rawB == nil and LifeService.SlotSaveFile("life-1") ~= LifeService.SlotSaveFile("life-2"),
+        and (rawB == nil or (rawB.lifeId == "life-2"
+            and (rawB.messages == nil or #rawB.messages == 0)))
+        and LifeService.SlotSaveFile("life-1") ~= LifeService.SlotSaveFile("life-2"),
         string.format("A=%s B=%s", tostring(rawA and rawA.lifeId), tostring(rawB and rawB.lifeId)))
 
     LifeService.OpenSlot("life-1", t0 + 13)
@@ -2366,6 +2370,188 @@ local function ScenarioRelationPersisted(dateKey)
     resetLifeRegistry()
 end
 
+--- 该城当天的事件事实是否落在本城可见的场景里（「事件/场景事实用同一对选择值」的判据）。
+---@param cityId string
+---@param sceneId string
+---@return boolean
+local function SceneBelongsToCity(cityId, sceneId)
+    local city = ProfileService.CityFor(cityId)
+    local vocab = city and city.sceneVocab or nil
+    if not vocab or type(sceneId) ~= "string" then
+        return false
+    end
+    for i = 1, #vocab do
+        if vocab[i] == sceneId then
+            return true
+        end
+    end
+    return false
+end
+
+--- 快照一张卡片的全部档案字段，用来证明「替换只动点选那张卡」。
+---@param slotId string
+---@return string
+local function SlotFingerprint(slotId)
+    local slot = LifeService.SlotById(slotId)
+    if not slot then
+        return "缺失"
+    end
+    return string.format("%s|%s|%s|%s|%d|%d|%s",
+        slot.cityId, slot.relationId, slot.seedText, tostring(slot.isRandom),
+        slot.createdAtUtc, slot.lastOpenedUtc,
+        slot.trace and slot.trace.occurrenceKey or "无痕迹")
+end
+
+--- 场景 AH（M5「可控的新故事」）：显式选的城市×关系必须 100% 落地，随机只在随机入口生效。
+--- 缺陷原形：预览里点「上海 × 前同事」，落成「成都 × 高中同学」——
+--- 选择层丢点击（OnClick 撞布局位移）与段存档里的旧档案盖掉刚建的卡片，两条都被这里堵住。
+local function ScenarioExplicitStoryAdopted(dateKey)
+    logInfo("场景 AH 显式选择落地与随机入口独占")
+    beginScenario()
+    local t0 = TimeState.NowUtc()
+
+    -- 一、显式「上海 × 前同事」：卡片 / 当前档案 / 段存档 profile 三处必须同一对
+    resetLifeRegistry()
+    local sha = LifeService.CreateSlot("shanghai", "ex_colleague", nil, t0)
+    reinit_(LifeService.SlotSaveFile("life-1"), sha, true)
+    goLocalHour(15, dateKey)
+    local rawSha = readRawSave(LifeService.SlotSaveFile("life-1"))
+    local profSha = rawSha and rawSha.profile or nil
+    check("AH0 显式建「上海×前同事」：卡片/当前档案/段存档 profile 三处同一对",
+        sha ~= nil and sha.cityId == "shanghai" and sha.relationId == "ex_colleague"
+        and ProfileService.GetCityId() == "shanghai"
+        and ProfileService.GetRelationId() == "ex_colleague"
+        and profSha ~= nil and profSha.cityId == "shanghai"
+        and profSha.relationId == "ex_colleague",
+        string.format("卡片=%s/%s 档案=%s/%s 存档=%s/%s",
+            tostring(sha and sha.cityId), tostring(sha and sha.relationId),
+            ProfileService.GetCityId(), ProfileService.GetRelationId(),
+            tostring(profSha and profSha.cityId), tostring(profSha and profSha.relationId)))
+    check("AH1 聊天顶部标签与档案页那行都读这一对（同源，没有第二处默认值）",
+        ProfileService.ProfileLine() == "前同事 · 上海"
+        and ProfileService.RelationCityLine():find("前同事 × 上海", 1, true) ~= nil,
+        ProfileService.ProfileLine())
+
+    local factSha = EventService.FactFor("shanghai", TimeState.NowUtc())
+    check("AH2 事件事实的场景属于上海（事件/场景不跟着别的城或旧指针走）",
+        factSha ~= nil and SceneBelongsToCity("shanghai", factSha.sceneId),
+        factSha and (tostring(factSha.sceneId) .. "/" .. tostring(factSha.id)) or "无事实")
+
+    -- 二、非随机入口绝不随机：isRandom=false，seedText 就是选定的那一对
+    check("AH3 非随机入口不抽档：isRandom=false 且 seedText=上海|前同事",
+        sha ~= nil and sha.isRandom == false and sha.seedText == "shanghai|ex_colleague",
+        string.format("随机=%s 种子=%s", tostring(sha and sha.isRandom),
+            tostring(sha and sha.seedText)))
+
+    -- 三、重启读回：显式那一对落在磁盘上，重进不许变成别的对
+    reinitLife_()
+    LifeService.Load(TimeState.NowUtc())
+    local againSha = LifeService.OpenSlot("life-1", TimeState.NowUtc())
+    reinit_(LifeService.SlotSaveFile("life-1"), againSha)
+    check("AH4 重进后读回的还是上海×前同事（不重抽、不被兜底改掉）",
+        againSha ~= nil and againSha.cityId == "shanghai"
+        and againSha.relationId == "ex_colleague"
+        and ProfileService.GetCityId() == "shanghai"
+        and ProfileService.GetRelationId() == "ex_colleague",
+        string.format("卡片=%s/%s 档案=%s/%s",
+            tostring(againSha and againSha.cityId), tostring(againSha and againSha.relationId),
+            ProfileService.GetCityId(), ProfileService.GetRelationId()))
+
+    -- 四、反向对照「成都 × 高中同学」：两城的默认关系恰好互换（上海=高中同学、成都=前同事），
+    -- 任何一处残留默认值都会在这一条上暴露，不会被上一条掩盖
+    resetLifeRegistry()
+    local cdu = LifeService.CreateSlot("chengdu", "classmate", nil, t0 + 60)
+    reinit_(LifeService.SlotSaveFile("life-1"), cdu, true)
+    local rawCdu = readRawSave(LifeService.SlotSaveFile("life-1"))
+    local profCdu = rawCdu and rawCdu.profile or nil
+    check("AH5 显式建「成都×高中同学」同样三处落地（反向对照互换默认关系）",
+        cdu ~= nil and cdu.cityId == "chengdu" and cdu.relationId == "classmate"
+        and ProfileService.GetCityId() == "chengdu"
+        and ProfileService.GetRelationId() == "classmate"
+        and ProfileService.ProfileLine() == "高中同学 · 成都"
+        and profCdu ~= nil and profCdu.cityId == "chengdu"
+        and profCdu.relationId == "classmate",
+        string.format("档案=%s/%s 标签=%s 存档=%s/%s",
+            ProfileService.GetCityId(), ProfileService.GetRelationId(),
+            ProfileService.ProfileLine(),
+            tostring(profCdu and profCdu.cityId), tostring(profCdu and profCdu.relationId)))
+
+    -- 五、脏 id 宁可不建：不能悄悄回落成「洛杉矶×陌生网友」
+    local before = LifeService.Count()
+    local dirty, dirtyReason = LifeService.CreateSlot("atlantis", "ex_colleague", nil, t0 + 120)
+    local dirtyRel, dirtyRelReason = LifeService.CreateSlot("shanghai", "school_buddy", nil, t0 + 121)
+    check("AH6 不在四城×四关系矩阵里的 id 直接拒建（不回落成默认档案）",
+        dirty == nil and dirtyReason == "invalid" and dirtyRel == nil
+        and dirtyRelReason == "invalid" and LifeService.Count() == before,
+        string.format("理由=%s/%s 段数=%d→%d", tostring(dirtyReason),
+            tostring(dirtyRelReason), before, LifeService.Count()))
+
+    -- 六、新故事挂载前必须作废该路径上残留的旧段内容（段存档 profile 盖掉卡片那条洞）
+    MemoryService.Init({ cityId = "chengdu", saveFile = SELFTEST_SAVE, lifeId = "life-1" })
+    MemoryService.SetProfile({
+        cityId = "chengdu", relationId = "classmate", seedText = "stale",
+        isRandom = false, initialized = true,
+    })
+    MemoryService.Save()
+    MemoryService.Init({ cityId = "shanghai", saveFile = SELFTEST_SAVE, lifeId = "life-2" })
+    local wiped = MemoryService.ResetForNewLife()
+    check("AH7 新故事挂载前作废旧段存档：档案与消息不残留、lifeId 归属保留",
+        wiped and MemoryService.GetProfile() == nil
+        and #MemoryService.Get().messages == 0
+        and MemoryService.GetLifeId() == "life-2",
+        string.format("档案=%s 消息=%d lifeId=%s",
+            tostring(MemoryService.GetProfile() and MemoryService.GetProfile().cityId),
+            #MemoryService.Get().messages, tostring(MemoryService.GetLifeId())))
+
+    -- 七、满三段后的替换：只动用户点选那张卡，另两槽逐字段不变
+    resetLifeRegistry()
+    LifeService.CreateSlot("los_angeles", "stranger", { seedText = "la|stranger" }, t0 + 200)
+    local slot2 = LifeService.CreateSlot("london", "old_friend", { seedText = "lon|old_friend" }, t0 + 201)
+    LifeService.CreateSlot("chengdu", "ex_colleague", { seedText = "cdu|ex_colleague" }, t0 + 202)
+    -- 先让 life-2 真的带上「伦敦×久未联系的朋友」这段历史，替换才有东西可作废
+    reinit_(LifeService.SlotSaveFile("life-2"), slot2)
+    MemoryService.Save()
+    local fp1 = SlotFingerprint("life-1")
+    local fp3 = SlotFingerprint("life-3")
+    local cleared = LifeService.ClearSlotSaveFile("life-2")
+    local rawCleared = readRawSave(LifeService.SlotSaveFile("life-2"))
+    local rep = LifeService.ReplaceSlot("life-2", "shanghai", "ex_colleague",
+        { seedText = "shanghai|ex_colleague" }, t0 + 300)
+    reinit_(LifeService.SlotSaveFile("life-2"), rep, true)
+    local rawRep = readRawSave(LifeService.SlotSaveFile("life-2"))
+    local profRep = rawRep and rawRep.profile or nil
+    check("AH8 满三段替换：旧段存档作废，目标槽换成新选择（卡片与存档同一对）",
+        rep ~= nil and rep.slotId == "life-2" and rep.cityId == "shanghai"
+        and rep.relationId == "ex_colleague" and rep.isRandom == false
+        and cleared
+        and (rawCleared == nil or (rawCleared.profile == nil and rawCleared.messages == nil))
+        and ProfileService.GetCityId() == "shanghai"
+        and ProfileService.GetRelationId() == "ex_colleague"
+        and profRep ~= nil and profRep.cityId == "shanghai"
+        and profRep.relationId == "ex_colleague",
+        string.format("清理=%s 清后文件=%s 卡片=%s/%s 存档=%s/%s", tostring(cleared),
+            tostring(rawCleared == nil and "已无" or "仍在"),
+            tostring(rep and rep.cityId), tostring(rep and rep.relationId),
+            tostring(profRep and profRep.cityId), tostring(profRep and profRep.relationId)))
+    check("AH9 替换只动那一张卡：life-1 与 life-3 逐字段不变",
+        fp1 == SlotFingerprint("life-1") and fp3 == SlotFingerprint("life-3")
+        and LifeService.Count() == 3,
+        string.format("前=[%s | %s] 后=[%s | %s]", fp1, fp3,
+            SlotFingerprint("life-1"), SlotFingerprint("life-3")))
+
+    -- 八、随机入口仍然可复现：同一创建秒同一结果，seedText 带上抽中的那一对
+    local pickA = ProfileService.RandomPick(RANDOM_SEC_0)
+    local pickB = ProfileService.RandomPick(RANDOM_SEC_0)
+    check("AH10 随机入口仍按既有 seedText 可复现（同秒同结果，两轴都同）",
+        pickA.cityId == pickB.cityId and pickA.relationId == pickB.relationId
+        and pickA.seedText == pickB.seedText
+        and ProfileService.IsValidCityId(pickA.cityId)
+        and ProfileService.IsValidRelationId(pickA.relationId)
+        and pickA.seedText:find(pickA.cityId .. "|" .. pickA.relationId, 1, true) ~= nil,
+        string.format("%s/%s 种子=%s", pickA.cityId, pickA.relationId, pickA.seedText))
+    resetLifeRegistry()
+end
+
 --- 一个场景独立跑完再进下一个，并落一行「本场景判定几条」。
 --- 2026-09-22 云端实测：开机那一瞬的突发日志会被管道整批丢掉（suite 只剩 PASS A0…A6，
 --- 同批的 开场事件 / M1 已就绪 一起缺席），而调用点本来就有 pcall，所以不是断言抛出吞掉后续场景。
@@ -2488,6 +2674,7 @@ function DevSelfTest.Run(options)
     runScenario("AE", ScenarioTraceBinding, dateKey)
     runScenario("AF", ScenarioSwitchNoResidue, dateKey)
     runScenario("AG", ScenarioRelationPersisted, dateKey)
+    runScenario("AH", ScenarioExplicitStoryAdopted, dateKey)
 
     MemoryService.ClearSavedData()
     -- M4 场景的注册表与段文件同理收尾清掉：自检不在设备上留人生

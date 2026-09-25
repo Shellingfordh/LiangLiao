@@ -295,7 +295,7 @@ UrhoXRuntime.exe <entry.lua> -tapcode_dir=<source> -skip_login -p=Res -w -width=
 3. **整游本地可跑，条件是自己钉时钟**（2026-09-25 实测，取代旧「完整游戏本地跑不起来」结论）：
    本地 `common.get_server_time()` 返回的是 **0**（不是越界值），旧失败其实是 `TimeState` 拿 0 当 UTC 用。
    `common` 表可写，PoC 入口里 `common.get_server_time = function() return <真实 UTC 秒> end`
-   再 `require("main")` + `Start()`，`main.lua` 全流程就能跑完：33 场景自检、正式会话、`InitUI`、
+   再 `require("main")` + `Start()`，`main.lua` 全流程就能跑完：34 场景自检、正式会话、`InitUI`、
    `StatusWindow.Init`（模型 `IsModelLoaded=true`、非占位）全部通过。
    **`Update` 只有按全局名字订阅才派发**（`SubscribeToEvent("Update", "HandleUpdate")`）——
    这条对 PoC 和玩法模块**同时成立**：同日取证发现 StatusWindow 自己在 `Init` 里按函数订阅的两条

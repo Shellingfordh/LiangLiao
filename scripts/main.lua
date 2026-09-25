@@ -424,7 +424,7 @@ function Start()
         end
         -- 开机那一瞬的整批日志会被日志管道丢掉（2026-09-22 实测：自检只上来 PASS A0…A6，
         -- 同批的尾巴连同 M1 已就绪 一起没落盘），所以结论行要在之后几个真实帧里原样重发，
-        -- 让它落进别的抓取窗口。判据是结论行里的 场景=N/总数（当前 33，含 M4 的 AB–AG）。
+        -- 让它落进别的抓取窗口。判据是结论行里的 场景=N/总数（当前 34，含 M4 的 AB–AG 与 M5 的 AH）。
         -- 屏上也挂一份短结论（面板那行 nowrap，长文本会被裁）：日志整批丢了也能肉眼读数。
         local p, f, d, total = DevSelfTest.Result()
         -- 全绿时面板那行不变长；只有真没过才多挂一段名字，避免 nowrap 那行被裁
@@ -581,7 +581,9 @@ end
 
 ---@param saveFile? string 独立存档路径（开发自检用），省略则用玩家的历史
 ---@param lifeSlot? LifeSlot M4 人生槽；nil = 自检/干净安装的临时会话
-function InitServices(saveFile, lifeSlot)
+---@param freshSlot? boolean true = 这一段刚按用户的选择创建/替换出来：
+---   该路径下现有的东西一律作废，注册表那张卡才是档案的唯一来源
+function InitServices(saveFile, lifeSlot, freshSlot)
     -- 会话槽与段存档在同一条线上定：此后痕迹/档案的读写都只认这一段
     sessionSlotId_ = lifeSlot and lifeSlot.slotId or nil
     TimeState.SetReplyDelay("idle", CONFIG.ReplyWaitSeconds)
@@ -608,12 +610,23 @@ function InitServices(saveFile, lifeSlot)
         saveFile = saveFile,
         lifeId = lifeSlot and lifeSlot.slotId or nil,
     })
-    local _, source = MemoryService.Load()
+    local source = ""
+    if freshSlot then
+        -- 刚按用户选择建出来（或替换出来）的一段：这个存档路径上现有的东西整段作废，
+        -- 于是下面的 `saved` 必为 nil，档案只能从注册表那张卡进来。缺这一步时，
+        -- 槽号复用或旧档没删掉就会让上一段的城市×关系盖掉本次选择
+        -- （2026-09-25 M5 缺陷：选上海×前同事落成成都×高中同学）。
+        MemoryService.ResetForNewLife()
+        source = "fresh"
+    else
+        local _, loadedSource = MemoryService.Load()
+        source = loadedSource
+    end
     logInfo("记忆装载来源: " .. source)
     -- 档案在记忆之后、事件层之前接：存档带 profile 就原样恢复；v1–v4 旧档由
     -- MemoryService 迁移成 LA×陌生网友（initialized=true，不弹初始化）；
     -- 新人生槽还没有存档 → 用注册表卡片里的档案（initialized=true）。
-    local saved = MemoryService.GetProfile()
+    local saved = freshSlot and nil or MemoryService.GetProfile()
     if saved then
         ProfileService.Set(saved.cityId, saved.relationId, {
             seedText = saved.seedText,
@@ -633,6 +646,9 @@ function InitServices(saveFile, lifeSlot)
         -- 聊过一轮再重进就变成陌生网友，回复的关系语气壳也跟着换掉
         -- （2026-09-25 换卡跨进程取证 D/E 实测，见 CHANGELOG）。
         MemoryService.SetProfile(ProfileService.Get())
+        -- 当场落盘一次：段存档里的那一对必须与卡片同源，不能等开场白那条路
+        -- （`WriteBootGreeting` → `PublishEventPlans`）顺带把它写进去。
+        MemoryService.Save()
     else
         ProfileService.Set(CONFIG.City, "stranger", { initialized = false })
     end
@@ -732,16 +748,13 @@ end
 --- 已上屏的历史不重建行，旧城市戳原样保留。注册表卡片摘要同步更新。
 ---@param cityId string
 ---@param relationId string
----@param opts? { isRandom?: boolean, firstTime?: boolean }
+---@param opts? { firstTime?: boolean }
 function ApplyProfile(cityId, relationId, opts)
     opts = opts or {}
     local oldLabel = ProfileService.Get().cityLabel
-    local p
-    if opts.isRandom then
-        p = ProfileService.ApplyRandom(NowUtc())
-    else
-        p = ProfileService.Set(cityId, relationId, { initialized = true })
-    end
+    -- 这里没有随机分支：随机只从「新故事 → 随机」那一枚 chip 进来
+    -- （HandleNewStoryConfirm 是唯一调用 ProfileService.RandomPick 的地方）。
+    local p = ProfileService.Set(cityId, relationId, { initialized = true })
 
     MemoryService.SetProfile(p)
     MemoryService.Save()
@@ -786,10 +799,22 @@ function HandleNewStoryConfirm(cityId, relationId, isRandom)
     ProfileOverlay.Hide()
     local now = NowUtc()
     local pickCity, pickRel, seedText = cityId, relationId, nil
+    -- 随机是唯一允许抽档的入口（M5）：只有玩家点了「随机」那枚 chip 才走 RandomPick，
+    -- 显式选中的两轴一律原样落地，不再有任何第二处会换掉它。
     if isRandom then
         local picked = ProfileService.RandomPick(now)
         pickCity, pickRel, seedText = picked.cityId, picked.relationId, picked.seedText
     end
+    if not ProfileService.IsValidCityId(pickCity)
+        or not ProfileService.IsValidRelationId(pickRel) then
+        -- 脏 id 宁可不建也不建：带下去会被 compose 悄悄换成洛杉矶×陌生网友，
+        -- 玩家看到的就是一段自己没选过的人生
+        logError(string.format("新故事未创建：城市=%s 关系=%s 不在四城×四关系矩阵内",
+            tostring(pickCity), tostring(pickRel)))
+        return
+    end
+    logInfo(string.format("新故事确认 城市=%s 关系=%s 随机=%s",
+        pickCity, pickRel, tostring(isRandom == true)))
     if LifeService.IsFull() then
         pendingNewStory_ = {
             cityId = pickCity, relationId = pickRel,
@@ -799,11 +824,11 @@ function HandleNewStoryConfirm(cityId, relationId, isRandom)
         logInfo("人生槽已满：等待用户点名替换卡片")
         return
     end
-    local slot = LifeService.CreateSlot(pickCity, pickRel, {
+    local slot, reason = LifeService.CreateSlot(pickCity, pickRel, {
         seedText = seedText, isRandom = isRandom == true,
     }, now)
     if not slot then
-        logError("创建人生槽失败（意外分支），本次不写开场白")
+        logError("创建人生槽失败（" .. tostring(reason) .. "），本次不写开场白")
         return
     end
     StartLifeSession(slot, true)
@@ -815,7 +840,8 @@ end
 ---@param firstTime boolean
 function StartLifeSession(slot, firstTime)
     PolishService.CancelAll()
-    InitServices(LifeService.SlotSaveFile(slot.slotId), slot)
+    -- firstTime 即「这一段刚按用户选择创建/替换」：段存档路径上现有的东西整段作废
+    InitServices(LifeService.SlotSaveFile(slot.slotId), slot, firstTime)
     clockCacheKey_ = nil
     RefreshSnapshot()
     EnsureTraceSeeded()
@@ -892,16 +918,17 @@ function HandleReplacePick(slotId)
     end
     pendingNewStory_ = nil
     MemoryService.Persist(MessageService.GetMessages())
-    LifeService.ClearSlotSaveFile(slotId)
-    local slot = LifeService.ReplaceSlot(slotId, pending.cityId, pending.relationId, {
+    local cleared = LifeService.ClearSlotSaveFile(slotId)
+    local slot, reason = LifeService.ReplaceSlot(slotId, pending.cityId, pending.relationId, {
         seedText = pending.seedText, isRandom = pending.isRandom,
     }, NowUtc())
     if not slot then
-        logError("替换人生槽失败: " .. tostring(slotId))
+        logError("替换人生槽失败（" .. tostring(reason) .. "）: " .. tostring(slotId))
         return
     end
     StartLifeSession(slot, true)
-    logInfo("用户点名替换卡片 槽=" .. slotId)
+    logInfo(string.format("用户点名替换卡片 槽=%s 城市=%s 关系=%s 随机=%s 旧档清理=%s",
+        slotId, slot.cityId, slot.relationId, tostring(slot.isRandom), tostring(cleared)))
 end
 
 --- 卡片摘要：城市 × 关系 + 那一段自己的当地钟点/状态/痕迹/最近打开。

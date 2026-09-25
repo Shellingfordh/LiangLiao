@@ -33,7 +33,7 @@ Tripothon S1 原创参赛项目：一位生活在另一座城市、与你共处�
 
 ## 实施顺序
 
-M0-0 → M0-1 → M1 → M2-A → M2-B → M3 → M4 逐阶段推进。**每阶段的真实状态只以 `CHANGELOG.md` 为准**，
+M0-0 → M0-1 → M1 → M2-A → M2-B → M3 → M4 → M5 逐阶段推进。**每阶段的真实状态只以 `CHANGELOG.md` 为准**，
 本文不复制进度台账（免得两处打架）。要点：
 
 - M0-0（状态窗）与 M0-1（聊天闭环）于 2026-09-21 真机验收 + 云端实测。
@@ -47,6 +47,10 @@ M0-0 → M0-1 → M1 → M2-A → M2-B → M3 → M4 逐阶段推进。**每阶�
   Lua LSP `Errors: 0`、`git diff --check`、Node 独立对拍 15/15、十余支本地引擎取证探针），
   云端构建与 Maker 编辑器预览验收完成。二维码不可读导致 Android 强杀冷启动仅以页面重载等效验证；
   该项转为发布前真实设备回归，见 [`BLOCKED.md`](BLOCKED.md) B-6。
+- **M5（当前阶段，2026-09-26）**：可控的新故事 —— 修「建段时选的城市×关系没被采纳」。
+  选择层改为按下即回调 + 预览行高度写死（消除点选引起的布局位移丢/串点击）+ 两轴都要亲手点过
+  才可确认（默认关系降为预填）；新建/替换段挂载前先作废旧存档，注册表卡片成为档案唯一来源；
+  创建入口按四城×四关系矩阵硬校验，随机只留「随机」chip 一个入口。自检 34 场景 / 280 断言全绿。
 
 ## 怎么跑起来
 
@@ -78,7 +82,7 @@ UrhoXRuntime.exe <entry.lua> -tapcode_dir=<source> -skip_login -p=Res -w -width=
 # 1) Lua LSP：--mode check 要 emmylua_check（本机没有），用 watch + 显式 ls-path
 maker-lua-lsp --mode watch --path scripts --output-dir .tmp/lsp \
   --ls-path "<venv>/Lib/site-packages/maker_lua_lsp/bin/emmylua_ls.exe"   # 判据：lua_errors.log 出现 "No errors"
-# 2) 项目自检（本地引擎真跑）：.tmp/poc/m4_selftest_local.lua → 判据 "通过=269 失败=0 场景=33/33"
+# 2) 项目自检（本地引擎真跑）：.tmp/poc/m5_selftest_local.lua → 判据 "通过=280 失败=0 场景=34/34"
 # 3) Node 独立对拍：node tools/m4-node-crosscheck.js → 判据 "通过=15 失败=0"
 git diff --check                                                           # 判据：exit 0
 ```
@@ -137,7 +141,7 @@ git diff --check                                                           # 判
   详见 [3D 场景与角色移动分层方案](docs/3d-scene-character-movement.md)。
 - **发布前仍需人工回归（不阻塞 M4）**：
   ① **真实 Android 强杀验证**——二维码可用时补做。判据清单（她有没有踩在自己那片阴影上、
-  无骨骼微动看不看得见、主光跟着场景包转好不好看、`runtime.log` 的启动行与「场景=33/33」）
+  无骨骼微动看不看得见、主光跟着场景包转好不好看、`runtime.log` 的启动行与「场景=34/34」）
   在 [`BLOCKED.md`](BLOCKED.md) B-6；两张旧测试码都已失效，要判就得按最新构建重新出码。
   ② 图标需在 Maker 网页「发布到 TapTap → 游戏基本信息 → 游戏 icon」生效
   （`game_material/*` 被远端 pre-receive 排除）。

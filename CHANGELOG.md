@@ -1,6 +1,123 @@
 # Changelog
 
+## 2026-09-26 — M5：可控的新故事（显式选择 100% 落地 · 随机只留一个入口）
+
+修复 M4 收尾登记的产品缺陷：预览里点「上海 × 前同事」创建新故事，实际落成「成都 × 高中同学」
+（见下方 M4「完成判定」）。本轮不改任何既有段的人生数据，不引入运行时 LLM、外部后端、
+自由探索、骨骼动画或新资产。
+
+### 根因（两条独立通道，任一条都能造出这个现象）
+
+1. **选择层根本没拿到用户点的那一对值。** `scripts/ui/ProfileOverlay.lua` 是全工程唯一把
+   主操作挂在 `OnClick` 上的覆盖层（原 90/177/194 行）。引擎事实
+   `urhox-libs/UI/Core/UI.lua:2379`：`OnClick` 只在「抬起时命中控件 == 按下时命中控件」才派发。
+   而该卡片 `justifyContent="center"`（原 126 行）垂直居中，`RefreshPreview()`（原 49-72 行）
+   每次点选都重写会换行的预览/提示文本 → **卡片内容高度随点选变化 → 全部 chip 一起挪位** →
+   用户下一拍瞄的是已不在原位的布局：落在隔壁 chip = 静默提交错值，落在空白 = 静默丢弃，
+   两者都不报任何错。城市 chip 1→2（上海→成都）、关系 chip 3→2（前同事→高中同学）正是这个形状。
+   `ChatPanel.lua:189`、`SettingsOverlay.lua:46`、`LifeCardsOverlay.lua:72` 都已因同一条实测坑
+   改用按下即回调的 `OnPointerDown`，只有这个文件漏改。
+2. **城市 chip 会清掉用户已选的关系。** 原 139 行 `pickedRelation_ = city.defaultRelation` 无条件覆盖，
+   所以「先点关系再点城市」时刚选的关系被静默丢弃；原 181 行 `pickedRelation_ or "stranger"`
+   又允许从未点过的关系以默认值提交。M3/M4 规格从未授权「城市决定关系起点」
+   （`docs/2026-09-24-m3-four-city-init-design.md:57` 明确关系是独立一轴），chip 上也没有
+   任何「已选中」状态，用户看不出到底哪个值生效了。
+
+排查过程中另外抓到三条会让「已经拿对的选择」在落盘时被换掉的洞（都不是 M4 已修的那条）：
+
+3. `scripts/main.lua:616` `InitServices` 的 `if saved then` 先认**段存档文件里的 profile**，
+   其次才看刚创建的注册表卡片。槽号复用或旧档没删掉时，上一段的城市×关系就盖掉本次选择，
+   卡片与屏幕上的一切从此不一致。
+4. `HandleReplacePick`（原 895 行）忽略 `LifeService.ClearSlotSaveFile` 的 `false` 返回：
+   删除失败照旧挂载旧段历史与旧档案。
+5. `ApplyProfile`（原 740 行）只要 `opts.isRandom` 就丢弃传入的 cityId/relationId 去抽档 ——
+   随机存在第二个入口；`LifeService.UpdateSlotProfile` 在 `opts` 省略时把 `isRandom` 静默重置。
+   另外 `ProfileService.compose` 对未知 id 静默回落成洛杉矶×陌生网友，作为**创建入口**的行为
+   会把脏字段变成一段玩家没选过的人生。
+
+### Changed
+
+- `scripts/ui/ProfileOverlay.lua`（重写）：三条硬规则写进文件头。① chips/确认/取消一律
+  `OnPointerDown` 按下即回调（`focusable` 属性与实例两处照旧都写）；② 预览行 `height=36`、
+  提示行 `height=18` 写死，卡片内容高度在任何点选组合下不变，把 ① 那条位移通道从根上封掉；
+  ③ 城市与关系两轴都必须被用户亲手点过才可确认（未齐时确认按钮 `disabled` 且回调直接不写任何值），
+  `defaultRelation` 降级为「预填」——既不覆盖已显式选过的关系，也不代替用户提交，
+  预览行明说「关系起点未选（预填 X）」；chip 新增 idle/预填/已选三态配色；随机仍是唯一免两轴入口。
+  children 字面量无 nil 空洞（城市/关系 chips 用 `if city then` 收数组）。
+- `scripts/main.lua`：`InitServices(saveFile, lifeSlot, freshSlot)` 新增第三参 —— 新建/替换出来的那一段
+  先 `MemoryService.ResetForNewLife()` 作废该路径上的现有内容，于是注册表那张卡成为档案唯一来源；
+  卡片档案当场 `SetProfile` + `Save()`（不再等开场白那条路顺带写盘）；`HandleNewStoryConfirm` 在两轴
+  解析后立刻按矩阵校验，脏 id 直接拒建并 `logError`，且显式打出「新故事确认 城市=… 关系=… 随机=…」；
+  `HandleReplacePick` 收下 `ClearSlotSaveFile` 的结果并连同选定对一起落日志；
+  `ApplyProfile` 删掉 `opts.isRandom` 分支 —— `ProfileService.RandomPick` 现在只有 `HandleNewStoryConfirm` 一个调用点。
+- `scripts/ProfileService.lua`：新增 `IsValidCityId` / `IsValidRelationId` 供创建入口判定；
+  `compose` 那套逐项回落原样保留（它是脏存档的迁移行为，不是给显式选择用的）。
+- `scripts/services/MemoryService.lua`：新增 `ResetForNewLife()` —— 清文件+清内存但保留本次挂载的
+  `saveFile`/`lifeId`（`ClearSavedData` 会连 `lifeId` 一起清掉，不能直接用）。
+- `scripts/services/LifeService.lua`：`CreateSlot`/`ReplaceSlot` 增加 `isKnownPair` 入闸，不在
+  四城×四关系矩阵内返回 `invalid`；`UpdateSlotProfile` 只在 `opts` 显式给出时才改
+  `seedText`/`isRandom`（省略不再等于重置）；`ClearSlotSaveFile` 删不掉时把文件覆盖成 `{}` 桩，
+  使下一次 `Load` 结构判定不过而退回干净内存，替换后的那一段不会带着上一段的档案与聊天重新挂载。
+
+### Added
+
+- `scripts/services/DevSelfTest.lua` 场景 **AH「显式选择落地与随机入口独占」**（11 条判定，
+  自检总数 33 → 34）：AH0 显式建上海×前同事时卡片/当前档案/段存档 profile 三处同一对；
+  AH1 顶部标签与档案页那行同源；AH2 事件事实的场景属于上海；AH3 非随机入口不抽档
+  （`isRandom=false`、`seedText=shanghai|ex_colleague`）；AH4 重进读回仍是选定对；
+  AH5 反向对照成都×高中同学（两城默认关系恰好互换，任何残留默认值都会被这条暴露）；
+  AH6 矩阵外的 id 拒建且段数不变；AH7 新故事挂载前作废旧段存档（档案 nil、消息 0、`lifeId` 保留）；
+  AH8/AH9 满三段替换只动点选那张卡、另两槽逐字段全等（新增 `SlotFingerprint` 全字段指纹）；
+  AH10 随机入口同秒同结果、`seedText` 带上抽中的那一对。
+- 新增本地取证入口 `.tmp/poc/m5_selftest_local.lua`（M4 那份的 M5 变体，落盘 `m5-selftest-local.txt`）。
+
+### Verified
+
+- **本地引擎真跑项目自检（UrhoXRuntime，真实服务链路）**：`判决 通过=280 失败=0 已跑场景=34 总数=34`，
+  未过场景 (无)。AH 逐条实据（`.cli/rt/logs/lua/lua-2026-09-26 00_03_06_635.log`）：
+  `AH0 … 卡片=shanghai/ex_colleague 档案=shanghai/ex_colleague 存档=shanghai/ex_colleague`、
+  `AH1 … 前同事 · 上海`、`AH2 … sha_apartment/sha_apartment_morning_balcony`、
+  `AH5 … 档案=chengdu/classmate 标签=高中同学 · 成都 存档=chengdu/classmate`、
+  `AH6 … 理由=invalid/invalid 段数=1→1`、`AH7 … 档案=nil 消息=0 lifeId=life-2`、
+  `AH8 … 清理=true 清后文件=已无 卡片=shanghai/ex_colleague 存档=shanghai/ex_colleague`。
+  首轮曾暴露 1 条失败 `AB6`（该判据写的是「life-2 还没写过文件」，而卡片档案现在挂载当场落盘，
+  文件会提前存在）——判据按新语义收紧为「life-2 的文件不得带着 life-1 的 lifeId 或消息」后复跑全绿，
+  这不是放松：跨段串写仍然会被抓到。
+- `node tools/m4-node-crosscheck.js` → `M4 对拍结论 通过=15 失败=0`；
+  `node tools/m3-node-crosscheck.js` → `ALL 29 NODE-CROSSCHECKS PASS`。
+- `maker-lua-lsp --mode watch` → `Lua Errors: 0`（2026-09-26 00:07:51，全部改动之后最后一次读数）。
+  余下只有仓库既有类别的 WARN/HINT（`inject-field` 恰是 `focusable` 实例赋值那条硬边界要求的写法）。
+- `git diff --check` 退出 0。
+
+### 证据边界（不要越界读）
+
+- 上面是**本地 Windows 引擎**跑出来的自检判决，不是云端构建，也不是真机。本轮**没有**跑
+  `maker_build_current_directory`，**没有** Android 真机证据。
+- 根因 ①（`OnClick` 撞自身引起的布局位移丢/串点击）依据是引擎源码
+  `urhox-libs/UI/Core/UI.lua:2379` + 仓库既有的同一条实测结论（AGENTS §13、
+  `docs/maker-lua-api-verification.md`），本轮**没有**为这一条重做真机 A/B 点击取证；
+  修复本身是结构性的（按下即回调 + 内容高度写死），AH 场景验证的是「选定值一路落到五处」，
+  不是「手指点击命中哪枚 chip」。
+- 「重进后读回不变」是自检内的跨进程模拟（`reinitLife_` → `Load` → `OpenSlot` → 重新挂载）
+  与本地引擎整轮真跑，**不等于** Android 强杀冷启动，也不等于 Maker 编辑器页面重载。
+- 用户可见的观感（chip 三态配色是否读得出来、确认按钮置灰是否被理解成「坏了」）仍需人眼在预览里判。
+
+### 仍需人工验证
+
+1. 云端构建 + 真机：在真机上分别建「上海 × 前同事」「成都 × 高中同学」两段，确认卡片、档案页、
+   聊天顶部标签、状态窗场景、`memory/life-N.json` 里的 `profile` 五处同一对，且强杀冷启动不串段。
+2. 真机验证「先点关系再点城市」「只点城市不点关系」两条路径：前者关系不许被换掉，
+   后者确认按钮保持置灰、什么都不写。
+3. 满三段后走一次替换，确认只有点选那张卡被换、另两槽逐字段不变（AH8/AH9 已本地判过，缺真机一次）。
+4. 「随机」入口抽一次，重启读回同一对（AH10 判的是派生可复现，落盘后的不变性靠 AH4 同族路径）。
+
 ## 2026-09-25 — M4：可感知的平行人生（三段人生槽 · 设置层三入口 · 16 场景状态包 · 2.5D 生活痕迹）
+
+### 完成判定（用户预览验收，2026-09-25）
+
+用户在 Maker 编辑器预览完成 M4 回归：夜间接地阴影、压暗与中文地点通过；档案页字段正确；换段时城市、聊天与痕迹隔离；新故事不会残留旧段内容；页面重载后恢复最近人生且不串段。创建时所选“上海 × 前同事”实际落为“成都 × 高中同学”，记录为后续产品修复项，不否定本轮的存档隔离结论。用户决定将 **M4 标记为完成**。
+
+证据边界：本轮是 Maker 编辑器预览；测试二维码在该环境不可读，Android 真机强杀冷启动没有实测，以页面重载作等效验证。该限制保留为发布前回归项，不再阻塞 M4 阶段完成。
 
 ### Added
 

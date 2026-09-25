@@ -700,6 +700,21 @@ function MemoryService.ClearSavedData()
     return true
 end
 
+--- 新建或替换出来的一段人生专用：把这个存档路径上现有的内容整段作废（文件与内存都清），
+--- 但保留本次 Init 挂上的存档路径与 lifeId —— 新故事绝不允许读回上一段的消息、
+--- 事件计划或档案（2026-09-25 M5 缺陷：InitServices 先认存档里的 profile，
+--- 于是槽号复用/删除失败时上一段的城市×关系盖掉了用户刚选的那一对）。
+--- 删除失败也照样给出干净内存态，下一次写盘就把文件覆盖掉。
+---@return boolean cleared
+function MemoryService.ResetForNewLife()
+    local lifeId = mem_.lifeId
+    local cleared = MemoryService.ClearSavedData()
+    mem_.lifeId = lifeId
+    source_ = "memory"
+    logInfo("新人生：旧存档内容已作废 落删=" .. tostring(cleared))
+    return cleared
+end
+
 --- 清空用户明确要求重置的对话记忆，但保留当前城市/关系档案与当天已生成的日程事实。
 --- 与 ClearSavedData 不同：这里不是开发自检的「恢复出厂」，不能让用户重新选择档案，
 --- 也不能重算已经发生的事件计划。写盘失败时仍清空本轮内存，避免旧聊天继续留在屏幕上。

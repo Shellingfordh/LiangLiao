@@ -13,6 +13,8 @@
 
 local LifeService = {}
 
+local ProfileService = require("ProfileService")
+
 local REGISTRY_FILE = "memory/lives.json"
 local SAVE_PREFIX = "memory/life-"
 local LEGACY_SAVE_FILE = "memory/m0-1-la-stranger.json"
@@ -84,8 +86,7 @@ end
 
 ---@param raw any
 ---@return LifeSlot?
-local function readSlot(raw)
-    if type(raw) ~= "table" then
+local function readSlot(raw)    if type(raw) ~= "table" then
         return nil
     end
     local slotId = asString(raw.slotId)
@@ -338,6 +339,16 @@ local function nextFreeSlotId()
     return nil
 end
 
+--- 创建/替换的入闸判定：id 必须命中 ProfileService 那张四城×四关系矩阵。
+--- 不在矩阵里就返回 invalid，绝不落一张「玩家没选过」的卡片
+--- （ProfileService.compose 那套 LA×陌生网友 回落是给脏存档做迁移用的，不是给选择用的）。
+---@param cityId any
+---@param relationId any
+---@return boolean
+local function isKnownPair(cityId, relationId)
+    return ProfileService.IsValidCityId(cityId) and ProfileService.IsValidRelationId(relationId)
+end
+
 ---@class LifeCreateOptions
 ---@field seedText? string
 ---@field isRandom? boolean
@@ -354,7 +365,8 @@ function LifeService.CreateSlot(cityId, relationId, opts, utcNow)
     if not loaded_ then
         LifeService.Load(utcNow)
     end
-    if type(cityId) ~= "string" or type(relationId) ~= "string" then
+    if not isKnownPair(cityId, relationId) then
+        logWarn("拒绝创建：城市=" .. tostring(cityId) .. " 关系=" .. tostring(relationId) .. " 不在矩阵内")
         return nil, "invalid"
     end
     if #registry_.slots >= MAX_SLOTS then
@@ -401,6 +413,10 @@ function LifeService.ReplaceSlot(slotId, cityId, relationId, opts, utcNow)
     if not slot then
         return nil, "missing"
     end
+    if not isKnownPair(cityId, relationId) then
+        logWarn("拒绝替换：城市=" .. tostring(cityId) .. " 关系=" .. tostring(relationId) .. " 不在矩阵内")
+        return nil, "invalid"
+    end
     opts = opts or {}
     slot.cityId = cityId
     slot.relationId = relationId
@@ -435,6 +451,8 @@ function LifeService.OpenSlot(slotId, utcNow)
 end
 
 --- 开发链路（HandleDevCity）切城市时同步卡片摘要：注册表与存档说的是同一份档案。
+--- isRandom/seedText 只在 opts 显式给出时才改：省略不等于「清成非随机」，
+--- 否则一次切城就把随机段的派生记录抹掉，重进时说法就不一致了。
 ---@param slotId string
 ---@param cityId string
 ---@param relationId string
@@ -448,8 +466,12 @@ function LifeService.UpdateSlotProfile(slotId, cityId, relationId, opts)
     opts = opts or {}
     slot.cityId = cityId
     slot.relationId = relationId
-    slot.seedText = opts.seedText or slot.seedText
-    slot.isRandom = opts.isRandom == true
+    if opts.seedText ~= nil then
+        slot.seedText = opts.seedText
+    end
+    if opts.isRandom ~= nil then
+        slot.isRandom = opts.isRandom == true
+    end
     LifeService.Save()
     return true
 end
@@ -488,17 +510,30 @@ function LifeService.GetTrace(slotId)
 end
 
 --- 删除某段的独立存档文件（替换卡片时先毁旧历史；注册表条目由 ReplaceSlot 覆盖）。
+--- 删不掉就把文件覆盖成一个「不是存档」的桩：MemoryService.Load 读回时结构判定不过，
+--- 会退回干净内存态 —— 替换后的那一段绝不能带着上一段的档案/聊天重新挂载。
 ---@param slotId string
 ---@return boolean cleared
 function LifeService.ClearSlotSaveFile(slotId)
     local path = LifeService.SlotSaveFile(slotId)
     local ok, err = pcall(function()
+        if not fileSystem:FileExists(path) then
+            return
+        end
+        fileSystem:Delete(path)
         if fileSystem:FileExists(path) then
-            fileSystem:Delete(path)
+            local file = File(path, FILE_WRITE)
+            if not file:IsOpen() then
+                error("既删不掉也覆盖不了")
+            end
+            file:WriteString("{}")
+            file:Close()
+            file:Dispose()
+            logWarn("存档删不掉，已用空档覆盖: " .. path)
         end
     end)
     if not ok then
-        logWarn("删除人生段存档失败: " .. path .. " " .. tostring(err))
+        logWarn("清理人生段存档失败: " .. path .. " " .. tostring(err))
         return false
     end
     return true

@@ -198,6 +198,21 @@ function ProfileService.RelationFor(relationId)
     return RELATIONS[relationId]
 end
 
+--- 创建入口的合法性判定：id 不在矩阵里就必须当场失败，不能像 compose 那样
+--- 悄悄回落成「洛杉矶 × 陌生网友」——那是给脏存档兜底的迁移行为，不是给用户
+--- 的显式选择用的。用户选过什么，落盘就得是什么（M5）。
+---@param cityId any
+---@return boolean
+function ProfileService.IsValidCityId(cityId)
+    return type(cityId) == "string" and CITIES[cityId] ~= nil
+end
+
+---@param relationId any
+---@return boolean
+function ProfileService.IsValidRelationId(relationId)
+    return type(relationId) == "string" and RELATIONS[relationId] ~= nil
+end
+
 --- 该城某事件档的叙事短语（与 EventService 当日 occurrence 口径一致；查不到返回 nil，
 --- 由调用方回落 TimeState.phrase / occurrence.phrase，绝不返回别城的句子）。
 ---@param cityId string
