@@ -28,8 +28,9 @@
 --     睡眠排队 FIFO、引用她的回复、落盘重进（与洛杉矶用的完全是同一套 helper，不另开旁路）；
 --   * 场景 Z：v4 旧档迁移 —— 缺 profile 按「洛杉矶×陌生网友·已初始化」迁移，
 --     transcript 更名 messages，引用字段/排队计划/事件计划一条不丢、不弹初始化界面。
---   * 场景 AB–AF（M4）：三段人生槽互不串写与满员拒建、冷启动选段与旧档收编、
---     16 个场景状态包完整且背景不复用、2.5D 生活痕迹全生命周期、切换人生不残留旧城市/旧景/旧痕。
+--   * 场景 AB–AG（M4）：三段人生槽互不串写与满员拒建、冷启动选段与旧档收编、
+--     16 个场景状态包完整且背景不复用、2.5D 生活痕迹全生命周期、切换人生不残留旧城市/旧景/旧痕、
+--     建档时选的关系起点与种子必须落进段存档并在重进后原样接回。
 -- 不 mock 任何被测服务，也不依赖被测服务没有的能力：
 --   * 时间用 TimeState.DevClockOffset 投影（权威时间源不变，只是把 now 拨到某个当地整点）；
 --   * 推进用 MessageService.Update(utcNow) 这个正式入口；
@@ -99,7 +100,7 @@ local failures_ = {}
 local summary_ = "自检未运行"
 
 --- Run 里 runScenario 的调用条数；结论行拿它判断「有没有场景被整批日志丢掉」
-local SCENARIO_TOTAL = 32
+local SCENARIO_TOTAL = 33
 
 local function logInfo(msg)
     print(TAG .. " " .. msg)
@@ -1846,7 +1847,7 @@ end
 
 
 -- ---------------------------------------------------------------------------
--- M4 场景 AB–AF：平行人生槽、冷启动选段、场景状态包、生活痕迹与切换无残留。
+-- M4 场景 AB–AG：平行人生槽、冷启动选段、场景状态包、生活痕迹、切换无残留与建档关系落盘。
 -- 全部走自检专属的人生注册表（main.lua 注入三个路径），绝不碰玩家的
 -- lives.json、段存档与 M0–M3 旧档。
 -- ---------------------------------------------------------------------------
@@ -2320,6 +2321,51 @@ local function ScenarioSwitchNoResidue(dateKey)
     resetLifeRegistry()
 end
 
+--- 建档/换卡时选的关系起点与种子必须进段存档。
+--- 2026-09-25 换卡跨进程取证（`.tmp/poc/m4_replace_d.lua` / `_e.lua`）实测：`MemoryService.SetProfile`
+--- 原先只有开发测试台 `ApplyProfile` 一个调用点，新故事那条路只 `ProfileService.Set` 进内存，
+--- 于是第一次落盘的存档「带记录却没有 profile」，下一次读取命中旧档迁移兜底补成
+--- 「本城 × 陌生网友」——用 前同事/高中同学/久未联系的朋友 建的段，重进之后关系就变了，
+--- 档案页「关系起点」那行与回复的关系语气壳跟着错，seedText 也丢。
+---@param dateKey string
+local function ScenarioRelationPersisted(dateKey)
+    logInfo("场景 AG 建档关系落盘")
+    beginScenario()
+    resetLifeRegistry()
+    local t0 = TimeState.NowUtc()
+    LifeService.CreateSlot("chengdu", "ex_colleague", { seedText = "chengdu|ex_colleague" }, t0)
+    local slot = LifeService.OpenSlot("life-1", t0)
+    reinit_(LifeService.SlotSaveFile("life-1"), slot)
+    goLocalHour(12, dateKey)
+    sendNow("下班一起走吗？")
+    advance(30)
+    MemoryService.Persist(MessageService.GetMessages())
+
+    local raw = readRawSave(LifeService.SlotSaveFile("life-1"))
+    local p = raw and raw.profile or nil
+    check("AG0 建档时选的关系与种子写进了段存档",
+        p ~= nil and p.cityId == "chengdu" and p.relationId == "ex_colleague"
+        and tostring(p.seedText) == "chengdu|ex_colleague",
+        string.format("存档=%s/%s/%s 卡片=%s/%s", tostring(p and p.cityId),
+            tostring(p and p.relationId), tostring(p and p.seedText),
+            tostring(slot.cityId), tostring(slot.relationId)))
+
+    -- 再走一次「重启读盘」：档案必须从存档接回建段时那条关系，而不是被兜底改成陌生网友
+    reinitLife_()
+    LifeService.Load(TimeState.NowUtc())
+    local again = LifeService.OpenSlot("life-1", TimeState.NowUtc())
+    reinit_(LifeService.SlotSaveFile("life-1"), again)
+    local memProfile = MemoryService.GetProfile()
+    check("AG1 重进后关系起点还是建段时选的那条（回复用的也是这条关系的壳）",
+        ProfileService.GetRelationId() == "ex_colleague"
+        and again ~= nil and again.relationId == "ex_colleague"
+        and memProfile ~= nil and memProfile.relationId == "ex_colleague",
+        string.format("内存=%s 卡片=%s 存档=%s", ProfileService.GetRelationId(),
+            tostring(again and again.relationId),
+            tostring(memProfile and memProfile.relationId)))
+    resetLifeRegistry()
+end
+
 --- 一个场景独立跑完再进下一个，并落一行「本场景判定几条」。
 --- 2026-09-22 云端实测：开机那一瞬的突发日志会被管道整批丢掉（suite 只剩 PASS A0…A6，
 --- 同批的 开场事件 / M1 已就绪 一起缺席），而调用点本来就有 pcall，所以不是断言抛出吞掉后续场景。
@@ -2441,6 +2487,7 @@ function DevSelfTest.Run(options)
     runScenario("AD", ScenarioScenePackages, dateKey)
     runScenario("AE", ScenarioTraceBinding, dateKey)
     runScenario("AF", ScenarioSwitchNoResidue, dateKey)
+    runScenario("AG", ScenarioRelationPersisted, dateKey)
 
     MemoryService.ClearSavedData()
     -- M4 场景的注册表与段文件同理收尾清掉：自检不在设备上留人生
