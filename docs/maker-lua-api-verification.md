@@ -841,3 +841,74 @@ characterRoot_.position = Vector3(base.x, base.y - undo + nextv, base.z)
 ② 本地 `timeStep` 与真实时间基本对齐（2417 帧 / 40.83s 累计 dt，墙钟 42s，每帧 0.0169s），
 所以**微动在本地不会因时间膨胀而变慢**——量到的小幅度不要赖给运行时时钟，
 它就是你写下去的值。这条顺带否掉了「本地 dt 太小导致幅度看着小」的猜想。
+
+## 17. ⚠️ 引擎没有「世界→屏幕」投影 API，自己算的针孔投影会丢左右符号（2026-09-25 本地取证实测）
+
+要把「她的脚底落在画面哪一格」「阴影画在哪一格」变成可复算的判据
+（`CHANGELOG.md` 2026-09-25「角色悬空」与「阴影横向那 0.029」两条修复的前提），
+第一反应是问引擎要投影。答案是**没有**：
+
+- `.emmylua/Camera.d.lua` 全量点过一遍，只有 `GetView` / `GetProjection` / `GetGPUProjection` /
+  `GetFrustum` / `GetFrustumSize(near,far)` / `GetHalfViewSize` / `GetViewSpaceFrustum` 这一类，
+  **没有 `Project` / `Unproject` / `ToScreen`**；
+- `.emmylua/Node.d.lua` 同样没有任何屏幕坐标 API（`grep ToScreen|Project|Screen` 零命中）；
+  `Billboard` 只出现在 `BillboardSet` / `ParticleEmitter` / `GraphicsDefs` 那一族，
+  与 `Camera`、`Node` 都无关，不是换算工具；
+- `Matrix3x4.d.lua`（`Camera:GetView` 返回的就是它）全量点过：`new` / `SetTranslation` /
+  `SetRotation` / `SetScale` / `ToMatrix3` / `ToMatrix4` / `RotationMatrix` / `Translation` /
+  `Rotation` / `Scale` / `Equals` / `Decompose` / `Inverse` / `ToString`，
+  **没有任何「拿矩阵变换一个点/向量」的入口**（`Matrix4` 同）；
+  也就是说想拿到 NDC，只能自己从 `node.position` / `node.direction` / `node.up` 拼针孔式子。
+
+**自己拼的那一步会踩到一个不显眼但足以把判据做假的坑**：为了避免继承任何坐标系约定
+（本地 RT 与原生 Android 的 Y 朝向相反是 §12 已经付过学费的事实），侧向分量当时是用勾股从
+正交基里扣出来的——`side = √(d² − z² − y²)`。这式子**结构上没有符号**，于是投影出来的
+`x` 永远 ≥ 0.5，判据只能比「离画面中线多远」，比不了「在哪一侧」。后果不是小事：
+给 `side="right"` 的场景声明一个左半边的阴影（0.32 写反成镜像），旧判据照样放行。
+
+**符号不该靠猜约定，靠已证事实拼**。这次用的两条都在同一棵树上有独立证据：
+① 应用面取证 S10 逐张量到「相机 x − 人物 x」的符号与场景包声明的 `side` 一致（16/16，
+   `right` ⇒ 相机在世界 −X 一侧）；② 2026-09-21 真机截图判到她在画面右侧约 65%
+   （同一套 `frameFixedCamera` 产出的）。两条合起来就是一句不含坐标系假设的话：
+   **相机在人物 −X 一侧 ⇒ 人物落在画面中线右侧**。把它乘回勾股给出的距离，就得到带符号的屏幕 x。
+
+**给下一位的规矩**：本项目里凡是要把世界坐标换算成屏幕/UI 坐标做判据，
+① 先确认引擎确实没有现成投影 API（本节已确认，别重复找）；
+② 针孔式子要么用引擎给的基向量点积并**显式说明约定**，要么走勾股但**另外用实证把符号钉回来**，
+   绝不可把「距离一致」当成「位置一致」——那会把镜像写反的声明判成通过；
+③ 带符号之后容差可以也应该收紧（竖直那档要对齐美术地板线，留 0.03 画面高；
+   横向只要求「在她脚下」，收到 0.006 画面宽≈1152px 下 7px，否则逐张调完还是自查不过）。
+
+## 18. ✅ 成立：`pointerEvents` 读 `props`、`focusable` 读实例——两道读的层相反，不许互相外推（2026-09-25 本地命中测试 A/B 实测）
+
+PRD §5.3 要求 2.5D 生活痕迹是「**不可点击**的 2D 定位物」。既有取证（控件树取证 U9）只读到
+`traceOverlay.props.pointerEvents == "none"` 这一句声明；而 AGENTS 那条最贵的坑写着
+`focusable` **只有实例赋值才生效**，很容易顺手也给 `pointerEvents` 补一道实例赋值、
+或者反过来以为「属性那道是装饰」。源码给的答复是**两者读的层相反**：
+
+- 命中测试通篇读 `widget.props.pointerEvents`（`urhox-libs/UI/Core/UI.lua:2135`、`2188`、`2207`、
+  `2227`、`2240`），`Widget:SetStyle` 会把传入的 style **并进 `self.props`**（`Widget.lua:1771`），
+  所以构造期写 `UI.Panel{ pointerEvents = "none" }` 单独放着就生效；
+- 焦点派发读的是实例字段 `widget.focusable`（`UI.lua:2341`），构造期属性单独放着是装饰。
+
+**用引擎自己的公开入口做 A/B 把这句话钉成实测**（PoC `.tmp/poc/m4_hit_test.lua`，
+证据 `Documents/temp/savedata/unknown/0/m4-hit-test.txt`，`UI.FindWidgetAt(x,y)` 就是 Inspector 用的那个）：
+先把痕迹框钉在状态窗画框中心（`trace.absoluteLayout` 是库自己支持的显式几何入口，
+用它就不依赖本地那套不保证重绘的合成器），再对同一个坐标连打四枪：
+
+| 枪次 | 只改这一处 | `FindWidgetAt` 命中的那一支 |
+| --- | --- | --- |
+| H1 仪器有效性 | 什么都不改 | `chatSend < chatInputBar < chatPanel < page < root` |
+| H2 几何前提 | 痕迹 `props.pointerEvents="auto"` | `traceOverlay < statusWindowFrame < page < root` |
+| H3 生产声明 | 痕迹改回 `"none"` | `nil`（穿过痕迹；画框落在这一点上但 `box-none` 不接自己） |
+| H4 读的层 | 只写实例 `trace.pointerEvents="auto"`，`props` 留 `"none"` | `nil`（实例字段完全不被读取） |
+| H5 反向对照 | 把**发送按钮** `props` 改成 `"none"` | `chatInputBar < chatPanel …`（按钮自己消失，机制对普通控件同样说一不二） |
+
+7 条判据全过（H0/H0b 启动与控件在场）。H3 那个 `nil` 有两种可能（画框是 `box-none` 而穿过自己 /
+画框自己根本不落这一点），所以当场把画框也量了：**`statusWindowFrame.props.pointerEvents=box-none`
+而 `frame:HitTest(该点)=true`** —— 排除掉后者，结论是前者：状态窗画框只让孩子接事件、自己不吃点击，
+所以痕迹上屏之后**整块状态窗不接任何点击**——与「固定镜头状态展示、不做开放交互」的硬边界一致。
+
+**给下一位的规矩**：写控件时 `focusable` 要实例赋值、`pointerEvents` 要留在 props（构造参数或
+`SetStyle`），两条各自成立；拿其中一条去推另一条，就会写出「代码里设了、引擎不认、点下去静默无效」
+的控件——这一族的第三种表现。要证明「不可点击」，读声明不够，打一发 `UI.FindWidgetAt` 才算。

@@ -202,15 +202,22 @@ preserved for later edits and builds.
 - **API 依据只有本地 AI Dev Kit。** `engine-docs/`、`.emmylua/`、`examples/`、`templates/`、
   `urhox-libs/` 为准；`research/taptap-pages/` 是登录墙快照（38 份中 27 份内容相同），无效。
 - **软键盘输入框旁边的按钮必须 `focusable = false`。** 否则点按钮会先让输入框失焦、收起键盘，画布高度变化让
-  整棵布局位移，而 `UI.HandlePointerUp` 只在按下与抬起命中同一控件时才派发 `OnClick`（`UI.lua:2379`）——
-  结果是**点击静默无效、不报任何错**（2026-09-21 实测，见 §13）。日志区分不出点击与回车。
-  两条同族的引擎事实，2026-09-25 由控件树取证（`.tmp/poc/m4_ui_structure.lua`）抓到，写控件时必须照做：
-  ① **`focusable` 只有实例赋值才生效**——派发焦点时读的是 `widget.focusable`（`UI.lua:2341`），
+  整棵布局位移，而 `UI.lua` 的 `HandlePointerUp` 只在按下与抬起命中同一控件时才派发 `OnClick`——
+  结果是**点击静默无效、不报任何错**（2026-09-21 实测，见
+  `docs/maker-lua-api-verification.md` §13）。日志区分不出点击与回车。
+  两条同族的引擎事实，2026-09-25 由控件树取证抓到，写控件时必须照做：
+  ① **`focusable` 只有实例赋值才生效**——派发焦点时读的是实例上的 `widget.focusable`，
   属性 `UI.Button{ focusable = false }` 单独放着是**装饰**，必须补一句 `btn.focusable = false`
   （仓库里 `ProfileOverlay`/`SettingsOverlay`/`ChatPanel` 都是两道一起写，别只写属性那道）；
   只挂 `OnPointerDown` 的控件不受这条影响（按下即动作，不等抬起），可保持原样。
-  ② **`props.children` 里不许有可空项**：`Widget:ProcessChildren` 用 `ipairs` 遍历
-  （`urhox-libs/UI/Core/Widget.lua:752`），**碰到 nil 空洞直接停止**，其后所有子树都不再挂载，
+  **但别把这条外推到 `pointerEvents`——它读的层正好相反**：`UI.lua` 的 `findWidgetAt` 通篇读
+  `widget.props.pointerEvents`（`SetStyle` 会把 style 并进 `props`），所以
+  `UI.Panel{ pointerEvents = "none" }` 单独放着就**有效**，反过来只在实例上写
+  `w.pointerEvents = "none"` 是装饰。2026-09-25 用引擎自己的 `UI.FindWidgetAt` 做 A/B 实测过双向
+  （含把发送按钮改成 `none` 的反向对照），口径见
+  `docs/maker-lua-api-verification.md` §18。两条各自成立，一道管另一道会写出静默失效的控件。
+  ② **`props.children` 里不许有可空项**：`Widget.lua` 的 `ProcessChildren` 用 `ipairs` 遍历，
+  **碰到 nil 空洞直接停止**，其后所有子树都不再挂载，
   而 `IsVisible()` 之类只读控件自己的标记，照样返回 true——整层 UI 可以「代码里在建、日志里没有、
   屏幕上不存在」。条件产物（如 `CONFIG.DevTools` 关掉的测试台）请用 `parent:InsertChild(w, index)` 补挂，
   不进字面量。
@@ -233,6 +240,8 @@ preserved for later edits and builds.
 | 文件 | 用途 |
 | --- | --- |
 | `docs/2026-09-15-parallel-companion-design.md` | 产品、数据模型、时间状态、场景、PoC 范围与验收 |
+| `docs/PRD.md` | 分阶段产品需求；**§5 是 M4 的产品验收依据** |
+| `docs/superpowers/specs/2026-09-24-m4-perceivable-parallel-life-design.md` | M4 详细执行规范与验收（人生存档 / 三入口 / 16 场景包 / 2.5D 痕迹 / 骨骼边界） |
 | `docs/platform-capabilities.md` | Tripo、Marble、TapTap Maker 的能力、格式、资产流程与限制 |
 | `docs/3d-scene-character-movement.md` | 3D 场景与角色移动的分层方案（T1–T5）、每层的确定性证据、Tripo/Marble 本地可操作性、当前 3D 体量预算 |
 | `docs/maker-lua-api-verification.md` | Maker 平台假设逐项验证（时区 / 运行时 LLM / GLB→MDL / clientCloud / 全景 / 预览 0% 定性与收尾 runbook） |
@@ -246,31 +255,17 @@ preserved for later edits and builds.
 
 ## 实施起点
 
-1. M0-0（林若夕 A-pose + 洛杉矶咖啡馆状态窗）已在 Maker 云端工程实现，代码与资产均已取回到本地并
-   与云端同步：`scripts/main.lua`、`scripts/StatusWindow.lua`、`assets/`（MDL + 材质 + 贴图 + prefab）。
-2. M0-0 状态窗画面已于 2026-09-20 重构并连续五次通过 Maker 云端构建（最新 `5ac225f`）：远景改由 UI 层
-   `backgroundImage` 绘制、角色走透明底 RenderTarget、角色朝向与画框真 4:3 均已修。背景图
-   `assets/Textures/backgrounds/la-cafe-4x3.png` 已入 git 并随构建推到云端，且在
-   `.project/resources.json` 里显式列入 `groups.default` 与 `preload_groups`（该项目无独立 `**`，
-   属增强引用模式，不可达资源会被裁出包）。测试二维码已能生成，**不再被下列三项阻塞**。
-3. M0-0 **真机视觉确认已于 2026-09-21 完成**：扫码跑通 `5ac225f`，角色正立、位于画面右侧约 65%、
-   角色框无黑底（透明 RT 的 alpha 在原生生效）——`nvgRotate(math.pi)` 定案保留，
-   `engine-docs/recipes/scene-to-nanovg.md` 的「不需要额外翻转 Y」在原生 Android 不成立（判读表见
-   `docs/maker-lua-api-verification.md` §12）。
-4. M0-1 聊天竖切片（陌生网友 × 洛杉矶）**已于 2026-09-21 在 Maker 云端跑通**：上半部保留状态窗，下半部为
-   可滚动聊天流 + 可编辑输入 + 发送/跳过等待，正式链路固定 10 秒。后端是同工程内的 Lua 服务
-   （`scripts/services/` 的 MessageService / EventService / ContentService / MemoryService，
-   前端 `scripts/ui/ChatPanel.lua`），**没有外部后端、没有运行时 LLM**；记忆走本地文件，`clientCloud` 只留接口。
-   此后 M1/M2-A/M2-B/M3 各阶段进展一律只看 `CHANGELOG.md`（本节 1–4 条是 M0 时代快照，不再逐阶段更新）。
-5. 仍缺的交付物（都要人操作，git/MCP 都代不了）：**还差一张真机截图**（冷启动后隔一会儿再截同一画面，以证「稳定」；
-   同屏裁剪近景已于 2026-09-21 13:21 取到 `screenshots/device/m00-realdevice-02-crop.jpg`，但
-   `.project/project.json` 的 `assets.screenshots` 仍为 `[]`，浏览器预览抓取不算）；**图标需在 Maker 网页
-   「发布到 TapTap → 游戏基本信息 → 游戏 icon」生效**（`game_material/*` 被远端 pre-receive 排除，
-   连接器上传与 Computer Use 四条路均已证伪）。角色悬空构图缺陷已量化并修掉竖直那一半
-   （2026-09-25：投影实测她的脚底一律落在画面 y=0.814、而接地阴影声明在 0.86~0.88，
-   即她悬在自己阴影上方约 5.4% 画面高；`frameFixedCamera` 改成按场景包声明的锚点解算竖直
-   平移后本地 16/16 贴合，横向还剩已知未修的 0.029 画面宽，见 `CHANGELOG.md`。
-   仍需重新构建 + 重新扫码才算真机判定，会让当前真机基准失效）。
+1. 分层与入口：`scripts/main.lua`（唯一的 `Update` 订阅方，逐帧驱动各模块的 `Tick`）、
+   `scripts/StatusWindow.lua`（3D 状态窗与取景）、`scripts/services/`（Message / Event / Content /
+   Memory / Life / Scene 等服务）、`scripts/ui/`（ChatPanel + 三个覆盖层 + 只读档案页）。
+   后端就在同一工程内，**没有外部后端、没有运行时 LLM**；记忆走本地文件，`clientCloud` 只留接口。
+2. 随构建打包那条别忘：新背景要显式列进 `.project/resources.json` 的 `groups.default` 与
+   `preload_groups`（该项目无独立 `**`，属增强引用模式，不可达资源会被裁出包）。
+3. 各阶段进展与验收状态**只看 `CHANGELOG.md` 与 `BLOCKED.md`**：M0-0/M0-1（2026-09-21 真机确认）
+   → M1（09-22）→ M2-A/M2-B（09-23/24）→ M3（09-24）→ M4（09-25，构建账与真机待办见 B-6）。
+4. 仍缺的交付物都要人操作，git/MCP 代不了（清单与判据见 `BLOCKED.md` B-6）：一张「冷启动后隔一会儿
+   再截同一画面」的真机稳定截图、Maker 网页端「发布到 TapTap → 游戏基本信息 → 游戏 icon」生效
+   （`game_material/*` 被远端 pre-receive 排除）。
 
 不要恢复或引用已移除的旧"三位 NPC 小镇"方案、旧角色名或旧 PoC 模板。
 
