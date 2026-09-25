@@ -221,6 +221,13 @@ preserved for later edits and builds.
   而 `IsVisible()` 之类只读控件自己的标记，照样返回 true——整层 UI 可以「代码里在建、日志里没有、
   屏幕上不存在」。条件产物（如 `CONFIG.DevTools` 关掉的测试台）请用 `parent:InsertChild(w, index)` 补挂，
   不进字面量。
+  ③ **主操作一律挂 `OnPointerDown`，且点选不许改变自身容器的高度**。同一条 `OnClick`
+  抬起命中条件还有第二种触发方式，与软键盘无关：垂直居中（`justifyContent="center"`）的卡片里
+  任何随行数变化的文本（预览/提示行）都会**改卡片高度、把全部可点区一起挪位**，用户下一拍瞄的是
+  旧布局——落在隔壁控件 = **静默提交错值**（比丢点击更坏），落在空白 = 静默丢弃。
+  2026-09-26 M5「新故事选了上海×前同事落成成都×高中同学」就是这么来的（`ProfileOverlay` 当时是
+  全工程唯一把主操作挂在 `OnClick` 上的覆盖层）。写带选中态的 chips/列表时就做两件事：按下即回调，
+  以及给会变的文本写死 `height`（按窄屏换行留量，别按宽屏估）。
 
 ## Git 拓扑（2026-09-19 用户改定：只推 Maker）
 
@@ -240,7 +247,8 @@ preserved for later edits and builds.
 | 文件 | 用途 |
 | --- | --- |
 | `docs/2026-09-15-parallel-companion-design.md` | 产品、数据模型、时间状态、场景、PoC 范围与验收 |
-| `docs/PRD.md` | 分阶段产品需求；**§5 是 M4 的产品验收依据** |
+| `docs/PRD.md` | 产品范围与验收主文档（v2.2，2026-09-26 重写）：**§5.3 是 M4 产品验收与证据边界，§6 是 M5–M10 阶段路线**；实施状态一律以 `CHANGELOG.md` 为准 |
+| `docs/2026-09-26-stage-roadmap.md` | M5–M10 阶段卡：每阶段的手脚/资产/平台外部条件与「未交付」边界（PRD §6 的展开） |
 | `docs/superpowers/specs/2026-09-24-m4-perceivable-parallel-life-design.md` | M4 详细执行规范与验收（人生存档 / 三入口 / 16 场景包 / 2.5D 痕迹 / 骨骼边界） |
 | `docs/platform-capabilities.md` | Tripo、Marble、TapTap Maker 的能力、格式、资产流程与限制 |
 | `docs/3d-scene-character-movement.md` | 3D 场景与角色移动的分层方案（T1–T5）、每层的确定性证据、Tripo/Marble 本地可操作性、当前 3D 体量预算 |
@@ -262,7 +270,8 @@ preserved for later edits and builds.
 2. 随构建打包那条别忘：新背景要显式列进 `.project/resources.json` 的 `groups.default` 与
    `preload_groups`（该项目无独立 `**`，属增强引用模式，不可达资源会被裁出包）。
 3. 各阶段进展与验收状态**只看 `CHANGELOG.md` 与 `BLOCKED.md`**：M0-0/M0-1（2026-09-21 真机确认）
-   → M1（09-22）→ M2-A/M2-B（09-23/24）→ M3（09-24）→ M4（09-25，构建账与真机待办见 B-6）。
+   → M1（09-22）→ M2-A/M2-B（09-23/24）→ M3（09-24）→ M4（09-25，用户按编辑器预览判完成，
+   真机项转发布前回归见 B-6）→ M5（09-26，可控的新故事：显式选择落地；本地判过，真机未跑）。
 4. 仍缺的交付物都要人操作，git/MCP 代不了（清单与判据见 `BLOCKED.md` B-6）：一张「冷启动后隔一会儿
    再截同一画面」的真机稳定截图、Maker 网页端「发布到 TapTap → 游戏基本信息 → 游戏 icon」生效
    （`game_material/*` 被远端 pre-receive 排除）。
