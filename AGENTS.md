@@ -266,8 +266,11 @@ preserved for later edits and builds.
    同屏裁剪近景已于 2026-09-21 13:21 取到 `screenshots/device/m00-realdevice-02-crop.jpg`，但
    `.project/project.json` 的 `assets.screenshots` 仍为 `[]`，浏览器预览抓取不算）；**图标需在 Maker 网页
    「发布到 TapTap → 游戏基本信息 → 游戏 icon」生效**（`game_material/*` 被远端 pre-receive 排除，
-   连接器上传与 Computer Use 四条路均已证伪）。另有角色悬空构图缺陷待修（需重新构建 + 重新扫码，
-   会让当前真机基准失效）。
+   连接器上传与 Computer Use 四条路均已证伪）。角色悬空构图缺陷已量化并修掉竖直那一半
+   （2026-09-25：投影实测她的脚底一律落在画面 y=0.814、而接地阴影声明在 0.86~0.88，
+   即她悬在自己阴影上方约 5.4% 画面高；`frameFixedCamera` 改成按场景包声明的锚点解算竖直
+   平移后本地 16/16 贴合，横向还剩已知未修的 0.029 画面宽，见 `CHANGELOG.md`。
+   仍需重新构建 + 重新扫码才算真机判定，会让当前真机基准失效）。
 
 不要恢复或引用已移除的旧"三位 NPC 小镇"方案、旧角色名或旧 PoC 模板。
 
@@ -297,10 +300,20 @@ UrhoXRuntime.exe <entry.lua> -tapcode_dir=<source> -skip_login -p=Res -w -width=
 3. **整游本地可跑，条件是自己钉时钟**（2026-09-25 实测，取代旧「完整游戏本地跑不起来」结论）：
    本地 `common.get_server_time()` 返回的是 **0**（不是越界值），旧失败其实是 `TimeState` 拿 0 当 UTC 用。
    `common` 表可写，PoC 入口里 `common.get_server_time = function() return <真实 UTC 秒> end`
-   再 `require("main")` + `Start()`，`main.lua` 全流程就能跑完：32 场景自检、正式会话、`InitUI`、
-   `StatusWindow.Init`（模型 `IsModelLoaded=true`、非占位）全部通过。**引擎事件按名字在订阅时绑定**，
-   自建 `SubscribeToEvent("Update", ...)` 与事后替换 `_G.HandleUpdate` 都不派发 —— 要挂每帧驱动器
-   就包一张表上的方法（PoC 用的 `ChatPanel.Tick`，main.lua 每帧按字段调用）。
+   再 `require("main")` + `Start()`，`main.lua` 全流程就能跑完：33 场景自检、正式会话、`InitUI`、
+   `StatusWindow.Init`（模型 `IsModelLoaded=true`、非占位）全部通过。
+   **`Update` 只有按全局名字订阅才派发**（`SubscribeToEvent("Update", "HandleUpdate")`）——
+   这条对 PoC 和玩法模块**同时成立**：同日取证发现 StatusWindow 自己在 `Init` 里按函数订阅的两条
+   （无骨骼微动、开机 trace 重发）在同一进程里一次都没触发过，而 main 按名订阅那条逐帧在跑
+   （证据：同一份日志里 main 的重发行存在、那两条的日志一行都没有；
+   见 `CHANGELOG.md` 2026-09-25「无骨骼微动整块静默不跑」）。
+   所以：**任何逐帧逻辑都挂在 main 那条订阅上，由它显式调模块导出的 `Tick(dt)`；模块不要自己
+   `SubscribeToEvent("Update", fn)`，也不要事后替换 `_G.HandleUpdate`（同样不生效）**。
+   PoC 要观察每帧行为，就包一张表上的方法（用的正是 `ChatPanel.Tick`，main.lua 每帧按字段调用）。
+   逐帧写节点时还有一条同族陷阱：**撤销式增量（`基准 - undo + nextv`）只对相对写（`node:Rotate`）成立**，
+   绝对写（`position = 基准 + 偏移`）再减 `undo` 会把目标抵掉，每帧只落地 `A·ω·dt` 的增量
+   （2026-09-25 实测呼吸幅度 ±0.00017 而非声明 ±0.006，见 `docs/maker-lua-api-verification.md` §16）。
+   本地 `timeStep` 与真实时间基本对齐（2417 帧累计 40.8s / 墙钟 42s），所以量到的小幅度不能赖给时钟膨胀。
 4. **本地截图不能当画面验收依据**：`graphics:TakeScreenShot(image)` + `SavePNG` 能出图，但合成器
    **不保证按帧重绘** —— 16 个场景各连拍两张（间隔 2.5s），**15 组两张 md5 完全相同**，
    只有 `lon_studio` 一组不同；`engine.pauseMinimized = false` 不改变这一行为。

@@ -62,8 +62,15 @@ local BG = {
 ---@field future3D { sceneRef: string, anchorId: string } 未来 3D 场景复用同一锚点，不改事件/存档语义
 
 --- 16 个包的站位与阴影中心必须和静帧的留白侧一致：
---- 全部留白在右侧（side=right、站位 x=+0.55、阴影 anchorX≈0.68（裁到 4:3 后）），
---- 唯一例外是唱片行——柜台动线在左，人物与阴影一起走左侧（side=left）。
+--- 全部留白在右侧（side=right、站位 x=+0.55），唯一例外是唱片行——柜台动线在左，
+--- 人物与阴影一起走左侧（side=left）。
+--- 两格锚点不是一回事，别一起调：**anchorY 对齐静帧里画出来的地板线**，所以逐张不同
+--- （0.86/0.87/0.88），取景反过来要按它解算相机高度（见 StatusWindow.frameFixedCamera）；
+--- **anchorX 是她脚底的投影 x**，与美术无关。原来那对 0.68/0.32 把阴影往画面中心拉了
+--- 0.029~0.030 画面宽（约阴影半宽的 30%），她的脚落在阴影外侧，读起来仍是「没踩上」。
+--- 现值由 `.tmp/poc/m4_ground_contact.lua` 逐张量出（16 张只有 0.709/0.290 两个数：
+--- 取景位移是常量 viewW*0.21*side，站位 x 也只有 0.55/−0.5 两种），同支探针 K4 带符号
+--- 盯着这条，改取景或改站位就会红。
 ---@type table<string, ScenePackage>
 local PACKAGES = {
     la_apartment = {
@@ -71,7 +78,7 @@ local PACKAGES = {
         backgroundKey = "la_apartment", backgroundPath = BG.la_apartment,
         colorTemperature = 3000, keyLightDirection = { x = -1.2, y = 1.6, z = 1.0 },
         characterPlacement = { x = 0.55, y = 0.0, z = 0.0, side = "right" },
-        groundShadow = { anchorX = 0.68, anchorY = 0.86, rx = 0.0956, ry = 0.028, alpha = 88 },
+        groundShadow = { anchorX = 0.71, anchorY = 0.86, rx = 0.0956, ry = 0.028, alpha = 88 },
         microMotion = "breathe",
         traceAnchor = { x = 0.1175, y = 0.79, scale = 0.1575, layer = 2 },
         future3D = { sceneRef = "scene/la_apartment", anchorId = "la_apartment_desk_01" },
@@ -81,7 +88,7 @@ local PACKAGES = {
         backgroundKey = "la_studio", backgroundPath = BG.la_studio,
         colorTemperature = 5600, keyLightDirection = { x = 1.4, y = 1.5, z = 0.8 },
         characterPlacement = { x = 0.55, y = 0.0, z = 0.0, side = "right" },
-        groundShadow = { anchorX = 0.68, anchorY = 0.87, rx = 0.0956, ry = 0.026, alpha = 70 },
+        groundShadow = { anchorX = 0.71, anchorY = 0.87, rx = 0.0956, ry = 0.026, alpha = 70 },
         microMotion = "sway",
         traceAnchor = { x = 0.1625, y = 0.75, scale = 0.1687, layer = 2 },
         future3D = { sceneRef = "scene/la_studio", anchorId = "la_studio_table_01" },
@@ -91,7 +98,7 @@ local PACKAGES = {
         backgroundKey = "la_cafe", backgroundPath = BG.la_cafe,
         colorTemperature = 2900, keyLightDirection = { x = -0.8, y = 1.8, z = 0.9 },
         characterPlacement = { x = 0.55, y = 0.0, z = 0.0, side = "right" },
-        groundShadow = { anchorX = 0.68, anchorY = 0.86, rx = 0.0956, ry = 0.028, alpha = 96 },
+        groundShadow = { anchorX = 0.71, anchorY = 0.86, rx = 0.0956, ry = 0.028, alpha = 96 },
         microMotion = "breathe",
         traceAnchor = { x = 0.14, y = 0.78, scale = 0.1462, layer = 2 },
         future3D = { sceneRef = "scene/la_cafe", anchorId = "la_cafe_counter_01" },
@@ -101,7 +108,7 @@ local PACKAGES = {
         backgroundKey = "la_commute", backgroundPath = BG.la_commute,
         colorTemperature = 3500, keyLightDirection = { x = -1.6, y = 0.9, z = 0.6 },
         characterPlacement = { x = 0.55, y = 0.0, z = 0.0, side = "right" },
-        groundShadow = { anchorX = 0.68, anchorY = 0.88, rx = 0.1012, ry = 0.024, alpha = 78 },
+        groundShadow = { anchorX = 0.71, anchorY = 0.88, rx = 0.1012, ry = 0.024, alpha = 78 },
         microMotion = "turn",
         traceAnchor = { x = 0.1625, y = 0.82, scale = 0.1575, layer = 2 },
         future3D = { sceneRef = "scene/la_commute", anchorId = "la_commute_busstop_01" },
@@ -111,7 +118,7 @@ local PACKAGES = {
         backgroundKey = "sha_apartment", backgroundPath = BG.sha_apartment,
         colorTemperature = 3400, keyLightDirection = { x = -1.3, y = 1.4, z = 0.9 },
         characterPlacement = { x = 0.55, y = 0.0, z = 0.0, side = "right" },
-        groundShadow = { anchorX = 0.68, anchorY = 0.86, rx = 0.0956, ry = 0.028, alpha = 84 },
+        groundShadow = { anchorX = 0.71, anchorY = 0.86, rx = 0.0956, ry = 0.028, alpha = 84 },
         microMotion = "breathe",
         traceAnchor = { x = 0.1288, y = 0.77, scale = 0.1575, layer = 2 },
         future3D = { sceneRef = "scene/sha_apartment", anchorId = "sha_apartment_balcony_01" },
@@ -121,7 +128,7 @@ local PACKAGES = {
         backgroundKey = "sha_office", backgroundPath = BG.sha_office,
         colorTemperature = 5000, keyLightDirection = { x = 0.2, y = 2.0, z = 0.7 },
         characterPlacement = { x = 0.55, y = 0.0, z = 0.0, side = "right" },
-        groundShadow = { anchorX = 0.68, anchorY = 0.87, rx = 0.0956, ry = 0.026, alpha = 66 },
+        groundShadow = { anchorX = 0.71, anchorY = 0.87, rx = 0.0956, ry = 0.026, alpha = 66 },
         microMotion = "sway",
         traceAnchor = { x = 0.1625, y = 0.75, scale = 0.1687, layer = 2 },
         future3D = { sceneRef = "scene/sha_office", anchorId = "sha_office_typesetting_01" },
@@ -131,7 +138,7 @@ local PACKAGES = {
         backgroundKey = "sha_bookstore", backgroundPath = BG.sha_bookstore,
         colorTemperature = 2800, keyLightDirection = { x = 1.2, y = 1.3, z = 0.8 },
         characterPlacement = { x = 0.55, y = 0.0, z = 0.0, side = "right" },
-        groundShadow = { anchorX = 0.68, anchorY = 0.86, rx = 0.0956, ry = 0.028, alpha = 96 },
+        groundShadow = { anchorX = 0.71, anchorY = 0.86, rx = 0.0956, ry = 0.028, alpha = 96 },
         microMotion = "breathe",
         traceAnchor = { x = 0.14, y = 0.78, scale = 0.1575, layer = 2 },
         future3D = { sceneRef = "scene/sha_bookstore", anchorId = "sha_bookstore_counter_01" },
@@ -141,7 +148,7 @@ local PACKAGES = {
         backgroundKey = "sha_commute", backgroundPath = BG.sha_commute,
         colorTemperature = 4500, keyLightDirection = { x = -1.5, y = 1.0, z = 0.7 },
         characterPlacement = { x = 0.55, y = 0.0, z = 0.0, side = "right" },
-        groundShadow = { anchorX = 0.68, anchorY = 0.88, rx = 0.1012, ry = 0.024, alpha = 72 },
+        groundShadow = { anchorX = 0.71, anchorY = 0.88, rx = 0.1012, ry = 0.024, alpha = 72 },
         microMotion = "turn",
         traceAnchor = { x = 0.1625, y = 0.83, scale = 0.1687, layer = 2 },
         future3D = { sceneRef = "scene/sha_commute", anchorId = "sha_commute_station_01" },
@@ -151,7 +158,7 @@ local PACKAGES = {
         backgroundKey = "cdu_apartment", backgroundPath = BG.cdu_apartment,
         colorTemperature = 4000, keyLightDirection = { x = 1.3, y = 1.5, z = 0.9 },
         characterPlacement = { x = 0.55, y = 0.0, z = 0.0, side = "right" },
-        groundShadow = { anchorX = 0.68, anchorY = 0.86, rx = 0.0956, ry = 0.028, alpha = 80 },
+        groundShadow = { anchorX = 0.71, anchorY = 0.86, rx = 0.0956, ry = 0.028, alpha = 80 },
         microMotion = "breathe",
         traceAnchor = { x = 0.14, y = 0.77, scale = 0.1575, layer = 2 },
         future3D = { sceneRef = "scene/cdu_apartment", anchorId = "cdu_apartment_desk_01" },
@@ -161,7 +168,7 @@ local PACKAGES = {
         backgroundKey = "cdu_studio", backgroundPath = BG.cdu_studio,
         colorTemperature = 4800, keyLightDirection = { x = 1.4, y = 1.6, z = 0.8 },
         characterPlacement = { x = 0.55, y = 0.0, z = 0.0, side = "right" },
-        groundShadow = { anchorX = 0.68, anchorY = 0.87, rx = 0.0956, ry = 0.026, alpha = 70 },
+        groundShadow = { anchorX = 0.71, anchorY = 0.87, rx = 0.0956, ry = 0.026, alpha = 70 },
         microMotion = "sway",
         traceAnchor = { x = 0.1625, y = 0.75, scale = 0.1575, layer = 2 },
         future3D = { sceneRef = "scene/cdu_studio", anchorId = "cdu_studio_easel_01" },
@@ -171,7 +178,7 @@ local PACKAGES = {
         backgroundKey = "cdu_cafe", backgroundPath = BG.cdu_cafe,
         colorTemperature = 3600, keyLightDirection = { x = -1.2, y = 1.7, z = 0.7 },
         characterPlacement = { x = 0.55, y = 0.0, z = 0.0, side = "right" },
-        groundShadow = { anchorX = 0.68, anchorY = 0.87, rx = 0.0956, ry = 0.027, alpha = 82 },
+        groundShadow = { anchorX = 0.71, anchorY = 0.87, rx = 0.0956, ry = 0.027, alpha = 82 },
         microMotion = "breathe",
         traceAnchor = { x = 0.1625, y = 0.79, scale = 0.1462, layer = 2 },
         future3D = { sceneRef = "scene/cdu_cafe", anchorId = "cdu_cafe_bamboo_table_01" },
@@ -181,7 +188,7 @@ local PACKAGES = {
         backgroundKey = "cdu_commute", backgroundPath = BG.cdu_commute,
         colorTemperature = 2700, keyLightDirection = { x = -1.5, y = 1.1, z = 0.8 },
         characterPlacement = { x = 0.55, y = 0.0, z = 0.0, side = "right" },
-        groundShadow = { anchorX = 0.68, anchorY = 0.88, rx = 0.1012, ry = 0.024, alpha = 96 },
+        groundShadow = { anchorX = 0.71, anchorY = 0.88, rx = 0.1012, ry = 0.024, alpha = 96 },
         microMotion = "turn",
         traceAnchor = { x = 0.1625, y = 0.8, scale = 0.1575, layer = 2 },
         future3D = { sceneRef = "scene/cdu_commute", anchorId = "cdu_commute_stall_01" },
@@ -191,7 +198,7 @@ local PACKAGES = {
         backgroundKey = "lon_apartment", backgroundPath = BG.lon_apartment,
         colorTemperature = 2900, keyLightDirection = { x = -1.2, y = 1.4, z = 0.9 },
         characterPlacement = { x = 0.55, y = 0.0, z = 0.0, side = "right" },
-        groundShadow = { anchorX = 0.68, anchorY = 0.86, rx = 0.0956, ry = 0.028, alpha = 92 },
+        groundShadow = { anchorX = 0.71, anchorY = 0.86, rx = 0.0956, ry = 0.028, alpha = 92 },
         microMotion = "breathe",
         traceAnchor = { x = 0.14, y = 0.76, scale = 0.1575, layer = 2 },
         future3D = { sceneRef = "scene/lon_apartment", anchorId = "lon_apartment_desk_01" },
@@ -201,7 +208,7 @@ local PACKAGES = {
         backgroundKey = "lon_studio", backgroundPath = BG.lon_studio,
         colorTemperature = 6500, keyLightDirection = { x = 0.1, y = 2.0, z = 0.7 },
         characterPlacement = { x = 0.55, y = 0.0, z = 0.0, side = "right" },
-        groundShadow = { anchorX = 0.68, anchorY = 0.87, rx = 0.0956, ry = 0.026, alpha = 64 },
+        groundShadow = { anchorX = 0.71, anchorY = 0.87, rx = 0.0956, ry = 0.026, alpha = 64 },
         microMotion = "sway",
         traceAnchor = { x = 0.1625, y = 0.77, scale = 0.1575, layer = 2 },
         future3D = { sceneRef = "scene/lon_studio", anchorId = "lon_studio_console_01" },
@@ -213,7 +220,7 @@ local PACKAGES = {
         backgroundKey = "lon_recordshop", backgroundPath = BG.lon_recordshop,
         colorTemperature = 3200, keyLightDirection = { x = 1.1, y = 1.6, z = 0.8 },
         characterPlacement = { x = -0.5, y = 0.0, z = 0.0, side = "left" },
-        groundShadow = { anchorX = 0.32, anchorY = 0.86, rx = 0.0956, ry = 0.028, alpha = 90 },
+        groundShadow = { anchorX = 0.29, anchorY = 0.86, rx = 0.0956, ry = 0.028, alpha = 90 },
         microMotion = "breathe",
         traceAnchor = { x = 0.815, y = 0.76, scale = 0.1575, layer = 2 },
         future3D = { sceneRef = "scene/lon_recordshop", anchorId = "lon_recordshop_turntable_01" },
@@ -223,7 +230,7 @@ local PACKAGES = {
         backgroundKey = "lon_commute", backgroundPath = BG.lon_commute,
         colorTemperature = 3000, keyLightDirection = { x = 1.5, y = 1.2, z = 0.7 },
         characterPlacement = { x = 0.55, y = 0.0, z = 0.0, side = "right" },
-        groundShadow = { anchorX = 0.68, anchorY = 0.88, rx = 0.1012, ry = 0.024, alpha = 94 },
+        groundShadow = { anchorX = 0.71, anchorY = 0.88, rx = 0.1012, ry = 0.024, alpha = 94 },
         microMotion = "turn",
         traceAnchor = { x = 0.14, y = 0.8, scale = 0.1687, layer = 2 },
         future3D = { sceneRef = "scene/lon_commute", anchorId = "lon_commute_booth_01" },
