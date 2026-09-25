@@ -820,8 +820,13 @@ function StatusWindow.ApplySceneState(state, onApplied, force)
         sceneState_ = state
         applySceneLighting(state)
         if characterRoot_ then
-            local p = characterRoot_.position
-            characterRoot_.position = Vector3(state.characterPlacement.x, p.y, p.z)
+            -- 站位三个轴都取场景包声明值，不从「当前值」继承 y/z：当前值可能正带着这一帧的微动
+            -- 偏移（breathe 每帧改写 position），继承下来会被 frameFixedCamera 里的
+            -- `baseCharPos_ = 当前位置` 钉成新基准，于是每次换景都可能把一点偏移永久固化（棘形漂移）。
+            -- 16 个包声明的都是 y=0/z=0，而 loadCharacter 落地后本来也是「bbox.minY 归零的 y=0」
+            -- （见同文件 pos.y - minY 那条），所以这条改动对当前画面等值，不是调构图。
+            local place = state.characterPlacement
+            characterRoot_.position = Vector3(place.x, place.y, place.z)
         end
         frameFixedCamera()
         onApplied(ready)

@@ -189,6 +189,25 @@ E 是一次全新的冷启动，只靠磁盘上的注册表与 `memory/life-2.js
 - **这道缺陷已经进项目自检**（不再只活在 gitignore 的 PoC 里）：`DevSelfTest` 新增场景 **AG 建档关系落盘** —— `AG0` 读段存档原始 JSON 要求 `profile.relationId`/`seedText` 与注册表卡片一致，`AG1` 走一次「重启读盘」要求档案接回建段时那条关系。判据有效性做了 A/B：把那行修复临时注掉，AG 立刻 **2 条全挂**并把缺陷原样复现（`AG0 存档=nil/nil/nil 卡片=chengdu/ex_colleague`、`AG1 内存=stranger 卡片=ex_colleague 存档=stranger`），恢复后 **269/0 场景 33/33**。场景总数从 32 变 **33**，结论行判据随之改成「场景=33/33 … 全部通过」（真机核对按这个数看）。
 
 
+### 修复（站位三个轴都取场景包声明值，不再继承当前 y/z）
+
+`StatusWindow.ApplySceneState` 装载背景回调里那句站位写入原先是 `Vector3(placement.x, 当前 y, 当前 z)`：
+x 用包里的声明值，y/z 却从「节点此刻在哪」继承。而此刻正是微动在改写 position 的时刻
+（`breathe` 每帧 `base.y - 撤销 + 新偏移`），换景那一瞬的瞬时偏移因此会被当成新基准写回去，
+紧接着 `frameFixedCamera` 里的 `baseCharPos_ = 当前位置` 把它钉死 ——
+每换一次景就可能把一点偏移永久固化（棘形漂移），也让场景包声明的 `characterPlacement.y/z` 形同虚设
+（PRD §5.3 要求每个包统一提供「人物站位」）。
+
+改为三个轴都取包声明值。这条**对当前画面等值**，不是调构图：16 个包声明的都是 `y=0 / z=0`，
+而 `loadCharacter` 落地后本来就是「bbox.minY 归零的 y=0」（同文件 `pos.y - minY`），
+本地引擎改前改后的固定相机读数逐位相同（`pos=(-0.23,0.94,4.83) look=(-0.23,0.87,-0.00) dist=4.83`）。
+复跑门禁：项目自检 **269/0 场景 33/33**、痕迹残留逐帧 **7/0**、跨进程重进 A **6/0** ＋ 跨时点 C **20/0**、
+`git diff --check` 干净、Lua LSP `Errors: 0`（16:39:10）。
+
+AGENTS.md 里挂着的「角色悬空」那条真机缺陷不在本条范围内（它要的是按各静帧地面线调
+`characterPlacement`，属画面调参、必须真机看）；本轮只把「包里声明的站位真的生效」这条路打通，
+使那种调参有处可写。
+
 ### 状态边界
 
 - 本地门禁已过：`git diff --check` 干净、`tools/m4-node-crosscheck.js`
