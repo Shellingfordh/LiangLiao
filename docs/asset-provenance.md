@@ -141,12 +141,90 @@ Maker 云端在 2026-09-19 自动回填了 `raw-assets/` 下的源 GLB、解包�
 构图纪律（M4 验收 3）：16 张统一「主活动区与留白在右」，唯一例外 `lon-recordshop-interior`
 （柜台上在左）——该包的人物站位、接地阴影、痕迹锚点三处一起翻到左侧，与静帧留白同侧。
 
+**这条纪律已量过，不再只是人眼判断**（2026-09-25，PoC `.tmp/poc/m4_composition_measure.lua`，
+证据 `Documents/temp/savedata/unknown/0/m4-composition-measure.txt`）：用引擎自己的
+`Image:GetPixel` 对 16 张 1152×864 静帧按 12px 步长采样（96×72 点），分别求左右两半的
+**边缘能量**（相邻采样点亮度差，代理「有多忙」）与平均亮度，判「留白较多的一侧」是否等于
+`characterPlacement.side`。结果 **15/16 一致**，含左置例外 `lon_recordshop`（留白在左）：
+
+| 场景包 | 左半边缘能量 | 右半边缘能量 | 两侧差 | 站位侧 | 判定 |
+| --- | --- | --- | --- | --- | --- |
+| la_apartment | 0.1865 | 0.1005 | 1.86× | right | OK |
+| la_studio | 0.2628 | 0.1505 | 1.75× | right | OK |
+| la_cafe | 0.1536 | 0.1158 | 1.33× | right | OK |
+| la_commute | 0.1719 | 0.1220 | 1.41× | right | OK |
+| sha_apartment | 0.2943 | 0.0962 | 3.06× | right | OK |
+| sha_office | 0.2344 | 0.1334 | 1.76× | right | OK |
+| sha_bookstore | 0.1192 | 0.0666 | 1.79× | right | OK |
+| **sha_commute** | 0.2474 | 0.2675 | **1.08×** | right | **不符（留白实测偏左）** |
+| cdu_apartment | 0.2652 | 0.1336 | 1.99× | right | OK |
+| cdu_studio | 0.2517 | 0.1356 | 1.86× | right | OK |
+| cdu_cafe | 0.2736 | 0.1725 | 1.59× | right | OK |
+| cdu_commute | 0.1993 | 0.1770 | 1.13× | right | OK（边际） |
+| lon_apartment | 0.0895 | 0.0345 | 2.59× | right | OK |
+| lon_studio | 0.1295 | 0.1151 | 1.12× | right | OK（边际） |
+| lon_recordshop | 0.1721 | 0.1866 | 1.08× | **left** | OK（例外按预期成立） |
+| lon_commute | 0.1983 | 0.1823 | 1.09× | right | OK（边际） |
+
+判读边界（不夸大）：边缘能量是**方向性代理**，不是物体检测。≥1.3× 的 11 张可以放心说「留白在右」；
+`cdu_commute`/`lon_studio`/`lon_commute`/`lon_recordshop` 四张只有 1.08~1.13×，属于「两侧差不多忙」，
+方向对但证据弱。唯一方向反了的是 **`sha_commute`**（左右几乎等忙、且右侧略忙 1.08×）。
+
+**这条整幅粒度的结论随后被更细的身体框测量推翻**（`.tmp/poc/m4_occlusion_measure.lua`，
+证据 `Documents/temp/savedata/unknown/0/m4-occlusion-measure.txt`）：按真正上屏的位置量
+（身体框=以阴影 anchorX 为中心、宽 0.24、脚在 anchorY 的竖条；痕迹框=traceAnchor 边长 scale 的方块；
+step=8），框内边缘能量 ÷ 全图 = 遮挡风险比。`sha_commute` 身体框 **0.95**、镜像位 0.90，
+即她脚下这条带子并不比全图忙，翻边只省 5% —— 判为**指标粒度问题，不是美术缺陷**，站位保持。
+同一份测量反而是「站位与留白同侧」的正面证据：**12/16 景的身体框 ≤0.98 而镜像位高达 1.21~1.81**，
+也就是说当前站位明显就是更空的那一侧。次级观察（非阻塞）：`lon_studio` 身体框 1.34（镜像 1.09），
+`sha_apartment`/`sha_office` 的**痕迹框** 1.74/1.71 落在较忙处 —— 属 2D 小物可读性，真机看片顺带确认。
+
 装载取证（2026-09-25，本地引擎运行时 `.cli/rt/UrhoXRuntime.exe`，PoC `.tmp/poc/m4_asset_probe.lua`）：
 25 个声明路径以资源根（`<tapcode_dir>/assets`，与 M0 `Meshes/lin-ruoxi.mdl` 同一条规则）
 `cache:GetResource("Texture2D", path)` 全量解析 **25/25 OK**，尺寸逐张核对
 （背景 1152×864、痕迹 512×512），证据文件 `Documents/temp/savedata/unknown/0/m4-asset-probe.txt`。
 即 `image/...` 写法在真实引擎资源系统里可解析，真机侧只剩打包裁剪与 GPU 内存两项运行时变量。
+
+**16 个状态包的运行时读数（2026-09-25，`.tmp/poc/m4_scene_capture.lua` 在本地引擎里逐包
+`StatusWindow.ApplySceneState`，证据 `Documents/temp/savedata/unknown/0/m4-scene-capture.txt`）**：
+每一行都是引擎当场读回的值（不是从源码表里抄的），16/16 应用成功、
+`GetCurrentSceneId()` 与目标包一致、`IsModelLoaded=true`、非占位模型、模型与背景错误皆空。
+主光列取 `keyLightDirection.x` 的符号（负=从左来、正=从右来）；站位与阴影列体现「留白在右」
+的构图纪律，唯一左置例外是唱片行（`-0.5/left` + 阴影 0.32）。
+
+| 场景包 | 背景文件（`assets/image/`） | 色温 | 主光 x | 站位/侧 | 微动 | 阴影 anchorX |
+| --- | --- | --- | --- | --- | --- | --- |
+| la_apartment | la-apartment-night_20260924155332.png | 3000 | -1.2 | 0.55/right | breathe | 0.68 |
+| la_studio | la-studio-day_20260924155332.png | 5600 | 1.4 | 0.55/right | sway | 0.68 |
+| la_cafe | la-cafe-night_20260924155332.png | 2900 | -0.8 | 0.55/right | breathe | 0.68 |
+| la_commute | la-street-dusk_20260924155332.png | 3500 | -1.6 | 0.55/right | turn | 0.68 |
+| sha_apartment | sha-apartment-morning_20260924155332.png | 3400 | -1.3 | 0.55/right | breathe | 0.68 |
+| sha_office | sha-office-day_20260924155332.png | 5000 | 0.2 | 0.55/right | sway | 0.68 |
+| sha_bookstore | sha-bookstore-night_20260924155332.png | 2800 | 1.2 | 0.55/right | breathe | 0.68 |
+| sha_commute | sha-street-morning_20260924155332.png | 4500 | -1.5 | 0.55/right | turn | 0.68 |
+| cdu_apartment | cdu-apartment-day_20260924155606.png | 4000 | 1.3 | 0.55/right | breathe | 0.68 |
+| cdu_studio | cdu-studio-day_20260924155606.png | 4800 | 1.4 | 0.55/right | sway | 0.68 |
+| cdu_cafe | cdu-teahouse-day_20260924155606.png | 3600 | -1.2 | 0.55/right | breathe | 0.68 |
+| cdu_commute | cdu-nightmarket-street_20260924155606.png | 2700 | -1.5 | 0.55/right | turn | 0.68 |
+| lon_apartment | lon-apartment-rain-night_20260924155606.png | 2900 | -1.2 | 0.55/right | breathe | 0.68 |
+| lon_studio | lon-studio-recording_20260924155606.png | 6500 | 0.1 | 0.55/right | sway | 0.68 |
+| lon_recordshop | lon-recordshop-interior_20260924155606.png | 3200 | 1.1 | **-0.5/left** | breathe | **0.32** |
+| lon_commute | lon-street-rain-dusk_20260924155606.png | 3000 | 1.5 | 0.55/right | turn | 0.68 |
+
+⚠️ 这份读数**不等于画面验收**：本地引擎的合成器不保证按帧重绘（每包连拍两张、间隔 2.5s，
+15 组两张 md5 完全相同，只有 `lon_studio` 一组不同），且角色 RT 层在本地盖住了背景静帧、
+RT 的 Y 朝向与原生 Android 相反（`AGENTS.md` 本地运行时一节）。
+「人物光影是否真的融进对应空间」仍待真机判定。
 4:3 裁剪后重跑一次，仍是 **25/25 OK、1152×864**。
+
+上面那份读数是「按包强行驱动」的，只证明包装得起来；**真实作息会不会走到这些画面**另测一次
+（2026-09-25，PoC `.tmp/poc/m4_scene_reachability.lua`，证据 `Documents/temp/savedata/unknown/0/m4-scene-reachability.txt`）：
+4 城 × 未来 14 天 × 15 分钟步长共 5376 个采样点现算 `EventService.FactFor`，
+**空场景=0、未知场景=0、不可达包=0**，`home/work/public/transit` × 4 城的类型矩阵每格恰好 1 个包。
+每城 24 小时被自己那 4 个包分完，最少的 `la_commute`、`cdu_cafe` 也有 **2 小时/日**，各城 home 位 **10 小时/日**——
+16 张背景没有一张是「做了但玩家看不到」。
+同一次采样顺手确认：模板 `sha_cafe_midday` 的 `sceneId` 是 `sha_office`（不是配错背景：它的正文本就写版房，
+只是 id 沿用旧名）。该 id 会以 `occurrenceKey` 落进存档与记忆，改名会打断旧档的事实引用，因此**保留原名**。
 
 | 场景包 id | 文件（`assets/image/`） | 字节 | md5 |
 | --- | --- | --- | --- |
@@ -221,6 +299,13 @@ Maker 云端在 2026-09-19 自动回填了 `raw-assets/` 下的源 GLB、解包�
    本地运行时实测（`.tmp/poc/anim_probe.lua`，经 `File` API 落盘）：`skeleton = true`、`numBones = 0.0`、
    `GetNumAnimations` 报 `attempt to call a nil value` ⇒ 运行时只能走 `StaticModel` 分支。
    要查 `import-gltf` 的绑定参数，或改用 FBX 通路。
+   ✅ **M4 阶段复测（2026-09-25，`.tmp/poc/m4_skeleton_probe.lua`，证据
+   `Documents/temp/savedata/unknown/0/m4-skeleton-probe.txt`）**：结论未变且更细——
+   `Meshes/lin-ruoxi.mdl` 解析成功、`GetSkeleton()` 非 nil，但 `GetNumBones()=0.0`、`GetRootBone()=nil`，
+   `Hips`/`mixamorig:Hips`/`Armature`/`Spine`/`mixamorig:Spine`/`Head`/`mixamorig:Head` 七个名字
+   `GetBone` 全不命中、`GetBoneIndex` 全返回 4294967295（=NONE）；几何 1、morph 0、包围盒 0.51×0.98×0.20。
+   即「转换器丢 skin」在 M4 出厂资产上仍然成立 → 规格 §6 的回退分支（无骨骼程序化微动）是**有测量的选择**，
+   不是默认假设。
    ⚠️ **这是两条独立阻塞项，不是一个**：第二条见下，修好 skin 也不会自动获得动画。
 3. **动画数据（2026-09-23 新增，与上一条独立）**：源 GLB 本身 `animations | 无`——**即使 skin 修好了，也没有 idle/walk 可播**。
    引擎侧 API 面是齐全的（`AnimatedModel`、`AnimationController:PlayExclusive`、`AnimationState` 都在 `.emmylua/`），缺的是数据。
@@ -243,6 +328,16 @@ Maker 云端在 2026-09-19 自动回填了 `raw-assets/` 下的源 GLB、解包�
    合计 26.4 MB（单张 1.3–1.9 MB），痕迹 9 张合计约 2.5 MB，包体压力减半；
    真机分发前视 GPU 表现决定是否再降采样或转 8-bit 索引色。
    旧一轮 `_202609241322xx` / `_202609241323xx` 候选图已无代码引用，可择机删出仓库。
+11. ~~`sha_commute` 留白侧与站位相反~~ **已于同日撤销（判据粒度不够，非美术缺陷）**：
+    左右半对比是整幅粒度，街道本身两侧都忙（`sha_commute` 全图边缘能量 0.228 是 16 景里最高的），
+    「哪侧更空」在这种景上没有意义。改用真正上屏的身体框重测
+    （`.tmp/poc/m4_occlusion_measure.lua`，证据 `m4-occlusion-measure.txt`）：
+    `sha_commute` 身体框 0.95、镜像位 0.90 —— 她脚下这条带子**不比全图忙**，翻边也只差 5%，
+    翻了没有收益。结论：保持现站位。
+    顺带量出来的两件事留作真机看片时的次级检查（都不是阻塞项）：
+    `lon_studio` 身体框 1.34（镜像 1.09，差 19%，未过「明显该翻」的线）；
+    `sha_apartment` 1.74 与 `sha_office` 1.71 的**痕迹框**落在较忙处，是 2D 小物的可读性问题，
+    不是站位问题。
 
 ## 原始留档（MarkItDown 转换记录，自 `poc/art/source/lin-ruoxi/*.md` 收拢）
 

@@ -1200,15 +1200,26 @@ function CreatePage()
                     noteLabel_,
                 },
             },
-            devTestPanel_,
             -- 初始化/新故事覆盖层 + M4 设置层/档案页/人生卡片层：
-            -- 绝对定位铺满整页，默认不可见，最后挂保证压在一切之上
+            -- 绝对定位铺满整页，默认不可见，最后挂保证压在一切之上。
+            -- 这一串里**不许放可能为 nil 的项**：引擎 Widget:ProcessChildren 用 ipairs 遍历
+            -- props.children，遇到空洞就停止挂载 —— 2026-09-25 本地控件树取证实测到，
+            -- DevTools=false 时测试台那一格是 nil，后面四个覆盖层全都没挂上根节点，
+            -- 点「设置」只是把一棵不在屏幕上的树标记为可见（静默无效，不报任何错）。
             ProfileOverlay.Build(),
             SettingsOverlay.Build(),
             ProfilePageOverlay.Build(),
             LifeCardsOverlay.Build(),
         },
     }
+
+    -- 测试台是条件产物，单独补挂在第 2 格（聊天页之上、四个覆盖层之下），保持原来的压层顺序
+    if devTestPanel_ then
+        uiRoot_:InsertChild(devTestPanel_, 2)
+    end
+    -- 挂载结果进启动日志：真机 runtime.log 里这一行是「三入口确实在屏幕上」的证据把手
+    logInfo(string.format("根节点子层=%d（页 1 + 测试台 %s + 覆盖层 4）",
+        #uiRoot_.children, devTestPanel_ and "1" or "0"))
 
     UI.SetRoot(uiRoot_)
     logInfo("竖屏页面已创建：顶部真 4:3 状态窗（场景包驱动）+ 下方可交互聊天区")

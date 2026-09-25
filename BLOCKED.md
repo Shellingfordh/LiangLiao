@@ -213,12 +213,42 @@ $ node .../@taptap/maker/dist/maker.js build --target-dir D:/Develop/ShanTianLia
   的真串写缺陷，已修（见 `CHANGELOG.md` M4「修复」节 + 自检 AF0 守卫）。
   这条只算逻辑与装载证据，**不算真机验证**：本地截图不可用于画面判定
   （`m4_scene_capture.lua` 实测同场景隔 2.5s 两张 md5 相同、RT 层盖住背景静帧、Y 朝向与原生相反）。
-- 云端构建已过两次：`bc53496`（M4 主体）与 `46206ea`（4:3 精确裁切 + 锚点重映射），
-  均 `previewRefresh 200`、「🎉 项目构建成功」；承载会话槽修复的第三次构建在跑，hash 补进
-  `CHANGELOG.md`。测试二维码随每次构建刷新（最新
-  `https://tapcode-sce.spark.xd.com/qrcode/m_c7s3_1790271329714.png`，指向 `46206ea`，
-  会话槽修复构建完成后需再刷一次）。
+- 云端构建已过三次：`bc53496`（M4 主体）、`46206ea`（4:3 精确裁切 + 锚点重映射）、
+  `5543638`（会话槽修复），均 `previewRefresh 200`、「🎉 项目构建成功」。
+  测试二维码已指向 `5543638`：`https://tapcode-sce.spark.xd.com/qrcode/m_c7s3_1790273127726.png`。
+- 三段入口的用户路径也在真引擎里跑通（`.tmp/poc/m4_e2e_lives.lua`：建档 / 满 3 段拒建 /
+  换段一起翻城市·场景·档案页 / 痕迹各回各段 / 冷启动取最近打开 / 档案页不吐内部键，12 项全过）。
+  这仍是**逻辑与同源性的本地证据**，不是画面证据。
 - **等待**：用户扫码/打开预览跑出真机会话 → 32 场景自检结论行落 `runtime.log` →
   核对「场景=32/32 … 全部通过」＋零 ERROR ＋换段/换景/痕迹证据，并肉眼确认 16 场景的静帧融合与
-  接地阴影。取到日志前 B-2 的口径原样适用：真机会话不开，云端就没有该构建的任何运行日志，
+  接地阴影。看片时的两个次级点（都不是阻塞项，已由像素测量排除）：`lon_studio` 身体框落在较忙处
+  （1.34 vs 镜像 1.09），`sha_apartment`/`sha_office` 的痕迹小图压在忙底上（1.74/1.71）；
+  上一轮按左右半粒度怀疑的 `sha_commute` 站位已被更细的身体框测量推翻（0.95，见
+  `docs/asset-provenance.md` 待办 #11）。取到日志前 B-2 的口径原样适用：真机会话不开，云端就没有该构建的任何运行日志，
   任何「真机已验证」的说法都不成立。
+- 抓取器游标（供下次接手，重启时**不要带 `--reset`**，否则连这段窗口之前的日志一起删掉）：
+  2026-09-25 10:48 按旧游标 `1790272453` 不带 `--reset` 重启成功，一次回补了
+  `1790272453 → 1790303883`（约 8.7 小时）整段窗口，`consecutiveFailures: 0`、`lastWrittenLogs: 0`
+  —— 即**三个构建至今没有任何一次真实会话**（这条本身是正面证据，不是缺日志的猜测）。
+  下次接手就从 `1790303883` 续；抓取器实测只活 4~8 分钟，扫码前先按同一游标拉起。
+
+## B-7 Maker 本地预览与本地控制台在本机起不来（2026-09-25 实测，别再重复试）
+
+用户问「能不能用 Maker 的 MCP 预览」跑真会话，两条本地路都探到底了，结论是**这台机器上不行**，
+且与项目代码无关：
+
+- `taptap-maker preview install`：3 次全部同一颗错
+  `Error: listen EACCES: permission denied 127.0.0.1:52297`，`install_state:"failed"`。
+  端口不是随机的（三次同值），来自 `recoveryMutex.ts` 的
+  `49152 + sha256(<锁文件路径>) % 16384`；而 `netsh interface ipv4 show excludedportrange protocol=tcp`
+  显示本机 Windows 保留了 **52247–52346**，52297 正落在里面。工具对 `EACCES` 没有换端口重试，
+  于是安装第一步就死在取锁上。
+- `taptap-maker console open --no-open`：`❌ TIMEOUT: Windows broker launch outcome is unverified`，
+  随后 `console status` 是 `{"ok":true,"running":false}` —— 同族症状（本地回环服务拉不起来）。
+- 云端网页预览这条路也试过：Playwright 现在可用（不再被宿主分类器拦），但
+  `https://maker.taptap.cn/app/<id>?localDev=1` 直接 302 到 `/intro?returnUrl=…`，
+  即需要浏览器里已登录 TapTap；自动化实例里没有这个会话，登录只能由人做。
+
+**可行的解法只有三条**：① 手机扫码跑真会话（最短，也是完成标准 5 认的口径）；
+② 重启 Windows（动态端口保留范围每次开机重排，之后 `preview install` 大概率落到未保留端口）；
+③ 由用户在已登录的浏览器里自己打开网页预览。三者都需要人，Lua/资产侧无事可做。

@@ -87,6 +87,23 @@ function ProfilePageOverlay.Build()
     recentLabel_ = Value()
     traceLabel_ = Value()
 
+    -- 关闭按钮：`focusable = false` 这条属性是**装饰性的** —— 引擎派发焦点时读的是控件实例上的
+    -- 字段（UI.lua 里 `widget.focusable ~= false`），而 Button 的 props.onClick 走的是
+    -- 「按下与抬起命中同一控件」的 OnClick 链路。少那句实例赋值，键盘收起造成的布局位移就会
+    -- 让这一点静默失效（AGENTS 实测坑；2026-09-25 本地控件树取证抓到）。
+    local closeButton = UI.Button {
+        id = "profilePageClose",
+        text = "关闭",
+        variant = "secondary",
+        fontSize = 12,
+        height = 34,
+        focusable = false,
+    }
+    closeButton.focusable = false
+    function closeButton:OnClick()
+        ProfilePageOverlay.Hide()
+    end
+
     root_ = UI.Panel {
         id = "profilePageOverlay",
         position = "absolute",
@@ -128,17 +145,7 @@ function ProfilePageOverlay.Build()
                     MakeRow("当前状态", statusLabel_),
                     MakeRow("近期生活线索", recentLabel_),
                     MakeRow("当前生活痕迹", traceLabel_),
-                    UI.Button {
-                        id = "profilePageClose",
-                        text = "关闭",
-                        variant = "secondary",
-                        fontSize = 12,
-                        height = 34,
-                        focusable = false,
-                        onClick = function()
-                            ProfilePageOverlay.Hide()
-                        end,
-                    },
+                    closeButton,
                 },
             },
         },

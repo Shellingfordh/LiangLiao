@@ -204,6 +204,16 @@ preserved for later edits and builds.
 - **软键盘输入框旁边的按钮必须 `focusable = false`。** 否则点按钮会先让输入框失焦、收起键盘，画布高度变化让
   整棵布局位移，而 `UI.HandlePointerUp` 只在按下与抬起命中同一控件时才派发 `OnClick`（`UI.lua:2379`）——
   结果是**点击静默无效、不报任何错**（2026-09-21 实测，见 §13）。日志区分不出点击与回车。
+  两条同族的引擎事实，2026-09-25 由控件树取证（`.tmp/poc/m4_ui_structure.lua`）抓到，写控件时必须照做：
+  ① **`focusable` 只有实例赋值才生效**——派发焦点时读的是 `widget.focusable`（`UI.lua:2341`），
+  属性 `UI.Button{ focusable = false }` 单独放着是**装饰**，必须补一句 `btn.focusable = false`
+  （仓库里 `ProfileOverlay`/`SettingsOverlay`/`ChatPanel` 都是两道一起写，别只写属性那道）；
+  只挂 `OnPointerDown` 的控件不受这条影响（按下即动作，不等抬起），可保持原样。
+  ② **`props.children` 里不许有可空项**：`Widget:ProcessChildren` 用 `ipairs` 遍历
+  （`urhox-libs/UI/Core/Widget.lua:752`），**碰到 nil 空洞直接停止**，其后所有子树都不再挂载，
+  而 `IsVisible()` 之类只读控件自己的标记，照样返回 true——整层 UI 可以「代码里在建、日志里没有、
+  屏幕上不存在」。条件产物（如 `CONFIG.DevTools` 关掉的测试台）请用 `parent:InsertChild(w, index)` 补挂，
+  不进字面量。
 
 ## Git 拓扑（2026-09-19 用户改定：只推 Maker）
 
@@ -292,9 +302,10 @@ UrhoXRuntime.exe <entry.lua> -tapcode_dir=<source> -skip_login -p=Res -w -width=
    自建 `SubscribeToEvent("Update", ...)` 与事后替换 `_G.HandleUpdate` 都不派发 —— 要挂每帧驱动器
    就包一张表上的方法（PoC 用的 `ChatPanel.Tick`，main.lua 每帧按字段调用）。
 4. **本地截图不能当画面验收依据**：`graphics:TakeScreenShot(image)` + `SavePNG` 能出图，但合成器
-   只在纹理失效时重绘 —— 同一场景间隔 2.5s 连拍两张 **md5 完全相同**，换场景才不同；
-   `engine.pauseMinimized = false` 不改变这一行为；且角色 RT 层在本地盖住了背景静帧、RT 的 Y 朝向
-   与原生 Android 相反（见 `docs/maker-lua-api-verification.md` §12）。所以微动、静帧融合、
+   **不保证按帧重绘** —— 16 个场景各连拍两张（间隔 2.5s），**15 组两张 md5 完全相同**，
+   只有 `lon_studio` 一组不同；`engine.pauseMinimized = false` 不改变这一行为。
+   且角色 RT 层在本地盖住了背景静帧、RT 的 Y 朝向与原生 Android 相反
+   （见 `docs/maker-lua-api-verification.md` §12）。所以微动、静帧融合、
    接地阴影观感仍只能靠真机/云端预览判定，本地截图只证明「装载与应用链路跑通」。
 
 **上真机 / 出交付物仍然只有云端一条路**：`maker_build_current_directory` → 读
