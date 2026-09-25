@@ -1362,7 +1362,10 @@ function RefreshStatusLine(force)
             infoCityLabel_:SetText(snap.cityLabel)
         end
         if infoPlaceLabel_ then
-            infoPlaceLabel_:SetText(snap.place)
+            -- 地点与回复事实同源：用事件事实的中文标签，不用作息表原始键
+            -- （2026-09-25 真机截图：卡片上裸露英文 "apartment"，就是这里取了 snap.place）。
+            -- TimeState 快照本身没有 placeLabel 字段；事实缺席（作息窗口漏模板）才退「外面」。
+            infoPlaceLabel_:SetText((lastFact_ and lastFact_.placeLabel) or "外面")
         end
         if infoStateLabel_ then
             infoStateLabel_:SetText(snap.phrase)
@@ -1371,6 +1374,9 @@ function RefreshStatusLine(force)
             local p = ProfileService.Get()
             infoRelationLabel_:SetText(p.relationLabel .. " · " .. p.identityShort)
         end
+        -- 夜间压暗罩的小时数跟着这条 20 秒一次的整点刷新走（SceneState 同场景会早退，
+        -- 不能把 localHour 塞进场景应用链路，否则同一场景里跨过 21 点罩子不更新）
+        StatusWindow.SetNightHour(snap.hour)
         ApplyScene()
     end
 end

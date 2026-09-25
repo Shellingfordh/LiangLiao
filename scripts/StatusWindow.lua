@@ -68,6 +68,10 @@ local backgroundError_ = ""
 --- 当前生效的场景状态（SceneService.StateFor 的产物）：光照、站位、阴影、微动都读它。
 ---@type SceneState?
 local sceneState_ = nil
+--- 当地小时（0–23），main 的整点刷新喂进来，驱动夜间压暗罩；
+--- 不放进 SceneState：同场景的 ApplySceneState 会早退，罩子会卡在换景那一刻的小时上。
+---@type integer?
+local nightHour_ = nil
 ---@type Zone|nil
 local zone_ = nil
 ---@type Node|nil
@@ -1157,7 +1161,10 @@ function StatusWindow.DrawGroundShadow(nvg, x, y, w, h)
     local ry = h * sh.ry
     nvgSave(nvg)
     nvgIntersectScissor(nvg, x, y, w, h)
-    local paint = nvgRadialGradient(nvg, cx, cy, math.min(rx, ry) * 0.1, math.max(rx, ry),
+    -- 内核半径 0.4·ry：渐变若从 0.1 起步，峰值浓度只存在于 1px 的圆心，
+    -- 2026-09-25 真机截图实测整片阴影淡到不可见（她像贴在地板上）；内核撑到四成
+    -- 才让接触区真正拿到声明 alpha，边缘仍是渐隐软边。
+    local paint = nvgRadialGradient(nvg, cx, cy, math.min(rx, ry) * 0.4, math.max(rx, ry),
         nvgRGBA(0, 0, 0, sh.alpha), nvgRGBA(0, 0, 0, 0))
     nvgBeginPath(nvg)
     nvgEllipse(nvg, cx, cy, rx, ry)
@@ -1166,9 +1173,48 @@ function StatusWindow.DrawGroundShadow(nvg, x, y, w, h)
     nvgRestore(nvg)
 end
 
+--- 夜间压暗罩：按当地小时给整个状态窗画面叠一层冷色暗纱，让 22:00 的公寓
+--- 不再顶着一张晨光图当夜景。这是「时刻 → 画面」的新维度，与场景包的色温
+--- （打在人物上的光）正交：罩子统一压背景、阴影与角色，保持互相之间的光影关系。
+--- 深夜（21–5 点）最重，19–20 点傍晚给一半，白天不罩。
+---@param nvg NVGContextWrapper
+---@param x number
+---@param y number
+---@param w number
+---@param h number
+function StatusWindow.DrawNightVeil(nvg, x, y, w, h)
+    if not nightHour_ or w <= 1 or h <= 1 then
+        return
+    end
+    local hour = nightHour_
+    local alpha = 0
+    if hour >= 21 or hour < 6 then
+        alpha = 76
+    elseif hour >= 19 then
+        alpha = 38
+    end
+    if alpha <= 0 then
+        return
+    end
+    nvgSave(nvg)
+    nvgIntersectScissor(nvg, x, y, w, h)
+    nvgBeginPath(nvg)
+    nvgRect(nvg, x, y, w, h)
+    nvgFillColor(nvg, nvgRGBA(8, 12, 28, alpha))
+    nvgFill(nvg)
+    nvgRestore(nvg)
+end
+
+--- main 的整点刷新（约 20 秒一次）喂当地小时；nil 由 Shutdown 清。
+---@param hour integer?
+function StatusWindow.SetNightHour(hour)
+    nightHour_ = hour
+end
+
 function StatusWindow.Shutdown()
     stopBootEcho()
     sceneState_ = nil
+    nightHour_ = nil
     baseCharPos_ = nil
     microTime_ = 0
     microPrev_ = 0
@@ -1226,6 +1272,9 @@ function StatusPreview:Render(nvg)
     local l = self:GetAbsoluteLayout()
     StatusWindow.DrawGroundShadow(nvg, l.x, l.y, l.w, l.h)
     StatusWindow.Draw(nvg, l.x, l.y, l.w, l.h)
+    -- 压暗罩最后画：盖住背景、阴影与角色 RT 三层，信息卡与痕迹是后续
+    -- 兄弟控件不受影响（纸上便签夜里保持可读）。
+    StatusWindow.DrawNightVeil(nvg, l.x, l.y, l.w, l.h)
 end
 
 function StatusPreview:IsStateful()
