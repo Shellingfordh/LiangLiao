@@ -455,13 +455,19 @@ function Start()
     end
     InitUI()
     StatusWindow.Init()
+    -- M4：先把「存档接管后的那一份事实」算出来，再建页面。CreatePage 末尾那次 ApplyScene
+    -- 用的就是这一刻的 lastFact_ —— 顺序反了会把自检留下的旧事实钉上屏，而冷启动这条路径
+    -- 不经过 StartLifeSession，之后再没人重刷（2026-09-25 逐帧取证实测：跨零点重进后事件、
+    -- 痕迹、档案页都已是公寓「已经睡下了」，状态窗却还挂着昨夜那间咖啡馆，信息卡四格整场
+    -- 保持 `--:--`）。
+    RefreshSnapshot()
     CreatePage()
     SubscribeToEvents()
     StatusWindow.SetNoticesChanged(RefreshResourceNotices)
     RefreshResourceNotices()
-    -- 正式会话的服务与计划都在 InitServices 里重建过，开场前再取一次事实，
-    -- 这样 BootChat 与状态窗引用的是存档接管后的那一份事件实例
-    RefreshSnapshot()
+    -- 状态窗四格（钟点/城市/地点/状态）在换段与新故事那条路由 StartLifeSession 强制刷；
+    -- 冷启动同样要刷一次，否则它们停在字面量里的占位符。
+    RefreshStatusLine(true)
     -- 真机上没有 console，时间状态这条是「状态算错时」的唯一线索（M1 起保留的取证行）
     if lastSnap_ then
         local snap = lastSnap_

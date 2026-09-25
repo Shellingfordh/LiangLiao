@@ -206,23 +206,23 @@ $ node .../@taptap/maker/dist/maker.js build --target-dir D:/Develop/ShanTianLia
 
 ## B-6 唯一未闭环项：一次真实会话的 runtime.log（与 B-2 同性质，机制已验证可成）
 
-- 本地门禁：`git diff --check` exit=0、`tools/m4-node-crosscheck.js` 15/15、控件树结构取证 12/12、
-  对话面一致性 27/27、跨进程重进 5/5 + 14/14、场景可达性 16/16。
-  **Lua LSP 这一轮没能复跑**：`maker-lua-lsp --mode check` 报「未找到 emmylua_check」，watch 进程也不在跑
-  （`logs/lua_errors.log` 最后一次 `Errors: 0` 是 2026-09-25 02:10，早于 11:26 的控件树修复）。
-  恢复它要跑 `taptap-maker lua-lsp setup`（会下载 emmylua 组件），属安装动作，未擅自执行；
-  替代证据是本轮改的 `main.lua` / `ProfilePageOverlay.lua` 都被本地引擎实际执行过，且云端构建本身会编译 Lua。
+- 本地门禁：Lua LSP **`Errors: 0`**（`logs/lua_errors.log` 2026-09-25 12:19:05，两次 UI 修复之后重扫）、
+  `git diff --check` exit=0、`tools/m4-node-crosscheck.js` 15/15、控件树结构取证 12/12、
+  对话面一致性 27/27、跨进程重进 5/5 + 14/14、场景可达性 16/16、痕迹残留逐帧 7/7。
+  LSP 差点被误判成装不上：`--mode check` 要 `emmylua_check`（本机没有，`lua-lsp setup` 也不提供），
+  但 `--mode watch --ls-path <venv>/Lib/site-packages/maker_lua_lsp/bin/emmylua_ls.exe` 能跑，
+  再 `touch` 改过的 lua 文件触发重扫即可（下次接手照这条命令，别再去装组件）。
 - **项目自检已在真实引擎里跑过一次并全绿**（本地 Windows 运行时，`.tmp/poc/m4_selftest_local.lua`：
   `通过=267 失败=0 场景=32/32`，11:31 修复后复跑仍是这个数）。首轮是 `264/2`，两条失败揪出「痕迹按注册表 active 写、不按会话槽写」
   的真串写缺陷，已修（见 `CHANGELOG.md` M4「修复」节 + 自检 AF0 守卫）。
   这条只算逻辑与装载证据，**不算真机验证**：本地截图不可用于画面判定
   （`m4_scene_capture.lua` 实测同场景隔 2.5s 两张 md5 相同、RT 层盖住背景静帧、Y 朝向与原生相反）。
-- 云端构建已过四次：`bc53496`（M4 主体）、`46206ea`（4:3 精确裁切 + 锚点重映射）、
-  `5543638`（会话槽修复）、**`0fe882e`（控件树修复：四个覆盖层挂载 + 档案页关闭按钮实例级 focusable）**，
+- 云端构建已过五次：`bc53496`（M4 主体）、`46206ea`（4:3 精确裁切 + 锚点重映射）、
+  `5543638`（会话槽修复）、`0fe882e`（控件树修复：四个覆盖层挂载 + 档案页关闭按钮实例级 focusable）、
+  `3d16005`（新故事路径补「先摘旧痕迹」），
   均 `previewRefresh ok`、「🎉 项目构建成功」。
-  ⚠️ 测试二维码目前仍指向 `5543638`（`https://tapcode-sce.spark.xd.com/qrcode/m_c7s3_1790273127726.png`），
-  **那一版带着「点设置没反应」的缺陷，不能当验收用**；真机检查前需要重新出一张指向 `0fe882e` 的码
-  （`generate_test_qrcode` 只在用户明确要求时调用，此处等用户点头）。
+  测试二维码已重新出码，指向 `3d16005`：`https://tapcode-sce.spark.xd.com/qrcode/m_c7s3_1790310057488.png`。
+  旧那张 `m_c7s3_1790273127726.png` 停在带缺陷的 `5543638`（点「设置」不会有反应），**不要再拿它验收**。
 - 三段入口的用户路径也在真引擎里跑通（`.tmp/poc/m4_e2e_lives.lua`：建档 / 满 3 段拒建 /
   换段一起翻城市·场景·档案页 / 痕迹各回各段 / 冷启动取最近打开 / 档案页不吐内部键，12 项全过）。
   这仍是**逻辑与同源性的本地证据**，不是画面证据。
@@ -240,8 +240,9 @@ $ node .../@taptap/maker/dist/maker.js build --target-dir D:/Develop/ShanTianLia
   2026-09-25 10:48 按旧游标 `1790272453` 不带 `--reset` 重启成功，一次回补了
   `1790272453 → 1790303883`（约 8.7 小时）整段窗口，`consecutiveFailures: 0`、`lastWrittenLogs: 0`
   —— 即**前三个构建至今没有任何一次真实会话**（这条本身是正面证据，不是缺日志的猜测）。
-  `0fe882e` 的构建按常规把抓取器 `--reset` 重启了，新游标是 **`1790306788`**（`lastWrittenLogs: 0`）；
-  下次接手从这一格续，抓取器实测只活 4~8 分钟，扫码前先按同一游标不带 `--reset` 拉起。
+  `3d16005` 与 `0fe882e` 两次构建都按常规把抓取器 `--reset` 重启了，当前游标 **`1790307315`**
+  （`lastWrittenLogs: 0`、最后成功轮询 03:55 —— 抓取器实测只活 4~8 分钟，已经掉了）；
+  **扫码前先不带 `--reset` 把它从这一格拉起来**，否则真机那段日志没人回补。
 
 ## B-7 Maker 本地预览与本地控制台在本机起不来（2026-09-25 实测，别再重复试）
 
