@@ -645,6 +645,27 @@ local function normalizeCharacterScale()
     end
 end
 
+--- 把世界点投影成「top-origin 归一化画面坐标」：y=0 在画面上沿、x=0.5 是画面中线 ——
+--- 与接地阴影那套 UI/NanoVG 坐标（`cy = y + h * anchorY`）同一制式，两边才能直接比。
+--- 用的是相机刚定好的 basis（direction/up/right），所以必须在摆好相机之后调用。
+---@return number? topY  投影失败（点在相机背后）时返回 nil
+---@return number  topX
+---@return number  z     沿视线方向的距离，给求解的步长用
+local function projectToFrame(camNode, p, tanV, tanH)
+    local c = camNode.position
+    local f = camNode.direction
+    local u = camNode.up
+    local r = camNode.right
+    local vx, vy, vz = p.x - c.x, p.y - c.y, p.z - c.z
+    local z = vx * f.x + vy * f.y + vz * f.z
+    if z <= 0.001 then
+        return nil, 0.5, 0
+    end
+    local ndcY = (vx * u.x + vy * u.y + vz * u.z) / (z * tanV)
+    local ndcX = (vx * r.x + vy * r.y + vz * r.z) / (z * tanH)
+    return (1 - ndcY) / 2, (1 + ndcX) / 2, z
+end
+
 --- 固定镜头：人物按场景包的站位入画（默认画面右侧约 60% 高度，留头量），背景留白在另一侧。
 --- M4：站位与让位方向来自 SceneState.characterPlacement —— 唱片行那种
 --- 「留白在左」的场景，人物、相机与阴影一起翻边，不靠改文案凑图。
@@ -681,6 +702,36 @@ local function frameFixedCamera()
     local shift = viewW * 0.21 * (side == "left" and -1 or 1)
     local look = Vector3(center.x - shift, bbox and (bbox.min.y + height * 0.52) or 0.86, center.z)
     local camPos = Vector3(look.x, look.y + height * 0.04, center.z + dist)
+
+    -- 取景锚点求解：把场景包声明的那格「接地阴影」当成她脚底该落的位置来平移相机，
+    -- 而不是拿一个固定取景值去对 16 张本来就不在同一格的地面线（home 0.86 / work 0.87
+    -- / street 0.88，唱片行还在左半边 0.32）。2026-09-25 投影实测：不 solve 时脚底
+    -- 一律落在 y=0.814，比声明的地面线高 4.6~6.6 画面高 —— 这就是「她像浮着」的来源。
+    -- **只解竖直方向**：camPos 与 look 一起平移，视线方向不变，所以她不会变成斜视；
+    -- 横向那一格实测只差 0.029（画面宽），而按同一条式子解横向会把相机推到人物同一侧
+    -- （x 从 -0.23 跑到 +1.22，「相机让位到留白反侧」这条直接破），那 0.029 该由声明调，
+    -- 不该由取景凑。
+    local tanV = math.tan(vfov * 0.5)
+    for _ = 1, 3 do
+        cameraNode_.position = camPos
+        cameraNode_:LookAt(look, Vector3.UP, TS_WORLD)
+        local sh = sceneState_ and sceneState_.groundShadow or nil
+        if not (sh and bbox) then
+            break
+        end
+        local feet = Vector3((bbox.min.x + bbox.max.x) * 0.5, bbox.min.y, (bbox.min.z + bbox.max.z) * 0.5)
+        local topY, _, z = projectToFrame(cameraNode_, feet, tanV, tanV * aspect)
+        if topY == nil then
+            break
+        end
+        -- 相机连着注视点一起抬：她就在画面里往下走（δ 与「锚点-脚底」同号）
+        local dy = 2 * (sh.anchorY - topY) * z * tanV
+        if math.abs(dy) < 0.0005 then
+            break
+        end
+        look = Vector3(look.x, look.y + dy, look.z)
+        camPos = Vector3(camPos.x, camPos.y + dy, camPos.z)
+    end
 
     cameraNode_.position = camPos
     cameraNode_:LookAt(look, Vector3.UP, TS_WORLD)
