@@ -91,8 +91,11 @@
 
 ### 证据边界（不要越界读）
 
-- 上面是**本地 Windows 引擎**跑出来的自检判决，不是云端构建，也不是真机。本轮**没有**跑
-  `maker_build_current_directory`，**没有** Android 真机证据。
+- 上面是**本地 Windows 引擎**跑出来的自检判决，不是真机。**2026-09-26 更新：云端构建已过**
+  （第十六次，经具名 MCP 工具 `maker_build_current_directory`，commit `6738032` 含本条 M5 交付
+  `e40fb21`，「🎉 项目构建成功」+ `preview_refresh_status: 200`），
+  绑定该构建的竖屏测试码 `m_c7s3_1790369514342.png` 已出（旧码 `m_c7s3_1790347402690` 停在
+  `66b1f23`、不含 M5 修复，作废）。**Android 真机证据仍为零，四条路径待人跑**（见 BLOCKED B-8）。
 - 根因 ①（`OnClick` 撞自身引起的布局位移丢/串点击）依据是引擎源码
   `urhox-libs/UI/Core/UI.lua:2379` + 仓库既有的同一条实测结论（AGENTS §13、
   `docs/maker-lua-api-verification.md`），本轮**没有**为这一条重做真机 A/B 点击取证；
