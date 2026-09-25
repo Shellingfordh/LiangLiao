@@ -219,13 +219,15 @@ $ node .../@taptap/maker/dist/maker.js build --target-dir D:/Develop/ShanTianLia
   的真串写缺陷，已修（见 `CHANGELOG.md` M4「修复」节 + 自检 AF0 守卫）。
   这条只算逻辑与装载证据，**不算真机验证**：本地截图不可用于画面判定
   （`m4_scene_capture.lua` 实测同场景隔 2.5s 两张 md5 相同、RT 层盖住背景静帧、Y 朝向与原生相反）。
-- 云端构建已过七次：`bc53496`（M4 主体）、`46206ea`（4:3 精确裁切 + 锚点重映射）、
+- 云端构建已过九次：`bc53496`（M4 主体）、`46206ea`（4:3 精确裁切 + 锚点重映射）、
   `5543638`（会话槽修复）、`0fe882e`（控件树修复：四个覆盖层挂载 + 档案页关闭按钮实例级 focusable）、
   `3d16005`（新故事路径补「先摘旧痕迹」）、`8aabefc`（冷启动按当前事实刷状态窗场景与信息卡）、
-  `f1d6daa`（建档/换卡把关系起点与 seedText 同步进段存档），
+  `f1d6daa`（建档/换卡把关系起点与 seedText 同步进段存档）、
+  `ba85d57`（项目自检新增场景 AG 建档关系落盘，场景总数 32→33）、
+  `ae9a662`（换景时站位三轴都取场景包声明值，消除微动偏移的棘形固化），
   均 `previewRefresh ok`、「🎉 项目构建成功」。
   两张旧测试码都别再拿来做 M4 验收：`m_c7s3_1790310057488.png` 停在 `3d16005`，**不含 `8aabefc`
-  （冷启动刷新）与 `f1d6daa`（关系起点落盘）**；`m_c7s3_1790273127726.png` 停在带缺陷的 `5543638`
+  （冷启动刷新）／`f1d6daa`（关系起点落盘）／`ba85d57`（自检 33 场景）／`ae9a662`（站位取声明值）**；`m_c7s3_1790273127726.png` 停在带缺陷的 `5543638`
   （点「设置」不会有反应）。
   两张都别拿来做 M4 验收——要真机看，得先按 `8aabefc` 重新出码（等用户明确要求再调
   `generate_test_qrcode`）。
@@ -246,8 +248,8 @@ $ node .../@taptap/maker/dist/maker.js build --target-dir D:/Develop/ShanTianLia
   `docs/asset-provenance.md` 待办 #11）。取到日志前 B-2 的口径原样适用：真机会话不开，云端就没有该构建的任何运行日志，
   任何「真机已验证」的说法都不成立。
 - 抓取器游标（供下次接手，重启时**不要带 `--reset`**，否则连这段窗口之前的日志一起删掉）：
-  `8aabefc` 与 `f1d6daa` 两次构建都按常规把抓取器 `--reset` 重启了，当前游标 **`1790313627`**
-  （`lastWrittenLogs: 0`、`consecutiveFailures: 0`）—— 即**七个构建至今没有任何一次真实会话**，
+  `8aabefc` 与 `f1d6daa` 两次构建都按常规把抓取器 `--reset` 重启了，当前游标 **`1790325063`**（`ba85d57` 与 `ae9a662` 又按常规 `--reset` 重启过两次）
+  （`lastWrittenLogs: 0`、`consecutiveFailures: 0`）—— 即**九个构建至今没有任何一次真实会话**；另一条独立证据：云端反馈侧 `get_debug_feedbacks`（status=0 全量、只读不标记）返回 `total: 0`，即没人提交过任何一条在线反馈/日志，
   这条本身是正面证据，不是缺日志的猜测。抓取器实测只活 4~8 分钟；
   **扫码前先不带 `--reset` 把它从这一格拉起来**，否则真机那段日志没人回补：
   `node C:/Users/20145/.taptap-maker/mcp-runtime/0.0.34/dist/maker.js logs watch --target-dir D:/Develop/ShanTianLiang --interval 5s --json`。

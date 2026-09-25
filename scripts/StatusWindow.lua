@@ -275,10 +275,40 @@ local function forEachChild(node, visitor)
     end
 end
 
+--- 在树里找「真正那盏主光」并认领下来。
+--- 为什么必须找而不能按名字取：出厂走的是 LightGroup 预设那一支（runtime log 里
+--- 「光照=LightGroup 预设」为证），预设里那盏叫 "Directional Light"，而 sunNode_ 过去只在
+--- 「预设不存在」的兜底分支里赋值——于是 16 个场景包声明的主光方向与色温一条都落不到画面上
+--- （2026-09-25 逐张取证：方向光 16 张同一朝向同一颜色，命中 0/16）。
+--- 判据用「投影的那盏」而不是 lightType：这台绑定层读出来的 lightType 是数字
+--- （预设那盏 0.0、我们自己造的两盏点光 2.0），跟枚举名对不上，拿它当唯一判据会赌错；
+--- 两盏补光是显式 castShadows=false 的，主光才投影，这一条比枚举稳。
+---@param node Node
+---@param depth integer
+---@return Node?
+local function searchKeyLight(node, depth)
+    if depth > 8 then
+        return nil
+    end
+    local name = node.name
+    if name ~= "WarmFillLight" and name ~= "CoolFillLight" then
+        local light = node:GetComponent("Light")
+        if light and light.castShadows then
+            return node
+        end
+    end
+    local hit = nil
+    forEachChild(node, function(child)
+        if hit == nil then
+            hit = searchKeyLight(child, depth + 1)
+        end
+    end)
+    return hit
+end
+
 ---@param node Node
 ---@param out Drawable[]
-local function collectDrawables(node, out)
-    local animated = node:GetComponent("AnimatedModel")
+local function collectDrawables(node, out)    local animated = node:GetComponent("AnimatedModel")
     if animated then
         out[#out + 1] = animated
     else
@@ -379,6 +409,28 @@ local function createLighting(scene)
         sun.brightness = 3.2
         sun.castShadows = true
         sunNode_ = sunNode
+    end
+
+    -- 预设那一支里 sunNode_ 一直是 nil，于是 ApplySceneLighting 的主光那段整块跳过：
+    -- 16 张场景包声明的主光方向与色温一条都没落到画面上（2026-09-25 逐张取证 0/16，
+    -- 那盏方向光 16 张同一朝向、同一颜色、同一亮度）。
+    -- 认领只认「这一次 createLighting 手里这棵 scene」里的灯，不写 `if not sunNode_` 那种
+    -- 「有没有认领过」的判断：Init 被再走一遍时（本地取证就是两次 Start 两棵树），
+    -- 那个判断会把上一棵树那盏灯一直留在引用里，于是主光打在没人看的那棵树上、
+    -- 站位写在另一棵上——2026-09-25 第一次实现就是这么错的，实测两棵树各说一半。
+    -- 认领不到就保持原样：宁可沿用预设的灯，也不为了「看起来生效」再造一盏去打架。
+    local keyNode = searchKeyLight(scene, 0)
+    if keyNode then
+        sunNode_ = keyNode
+        local kd = keyNode.direction
+        trace(string.format("主光认领=%s 方向=(%.2f,%.2f,%.2f) 亮度=%.2f（之后按场景包主光改）",
+            tostring(keyNode.name), kd.x, kd.y, kd.z,
+            (function()
+                local l = keyNode:GetComponent("Light")
+                return l and l.brightness or 0
+            end)()))
+    else
+        trace("主光认领失败：这棵树里没有投影的灯，主光方向/色温将保持预设值", LOG_WARNING)
     end
 
     -- 两盏补光两个分支都挂：「背光侧死黑」是共性问题，兜底分支有环境光也仍旧偏硬，
@@ -818,7 +870,6 @@ function StatusWindow.ApplySceneState(state, onApplied, force)
     logInfo("切换状态窗场景包: " .. state.sceneId .. " → " .. state.backgroundPath)
     PrepareBackground(state.backgroundPath, function(ready)
         sceneState_ = state
-        applySceneLighting(state)
         if characterRoot_ then
             -- 站位三个轴都取场景包声明值，不从「当前值」继承 y/z：当前值可能正带着这一帧的微动
             -- 偏移（breathe 每帧改写 position），继承下来会被 frameFixedCamera 里的
@@ -828,6 +879,11 @@ function StatusWindow.ApplySceneState(state, onApplied, force)
             local place = state.characterPlacement
             characterRoot_.position = Vector3(place.x, place.y, place.z)
         end
+        -- 顺序不能反：applySceneLighting 按 characterRoot_.position.x 摆那两盏补光（光要跟着人），
+        -- 写在站位之前就会拿到「上一个场景那一边」的 x。唱片行是 16 张里唯一站左侧的
+        -- （x=-0.50，其余 +0.55），进/出它的那两次换景补光会整体偏 1.05，正好落到人物另一侧。
+        -- 2026-09-25 逐张取证：15/16 命中「按换景前站位」，0/16 命中「按声明站位」。
+        applySceneLighting(state)
         frameFixedCamera()
         onApplied(ready)
         if noticesChanged_ then
