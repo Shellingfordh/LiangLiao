@@ -1390,6 +1390,9 @@ function HandleUpdate(eventType, eventData)
     -- M2-B：润色槽位的 8 秒预算与到点回落在同一权威时钟上逐帧推进
     PolishService.Update(NowUtc())
     ChatPanel.Tick(timeStep)
+    -- 状态窗的逐帧部分（无骨骼微动 + 开机 trace 重发）挂在 main 这条订阅上走：
+    -- StatusWindow 自己按函数订阅 Update 在这个运行时永不派发（2026-09-25 本地实测）。
+    StatusWindow.Tick(timeStep)
 
     -- 自检结论重发：每 4 秒一次、共 3 次，把它挪出开机那一批
     if selfTestEcho_ and selfTestEcho_.left > 0 then

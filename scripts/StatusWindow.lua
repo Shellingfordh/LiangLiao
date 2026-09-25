@@ -145,21 +145,14 @@ function StatusWindow.GetBootTrace()
     return table.concat(bootTrace_, " | ") .. " | 漫反射=" .. textureState_
 end
 
----@type fun(eventType: string, eventData: UpdateEventData)|nil
-local bootEchoHandler_ = nil
----@type boolean
-local bootEchoSubscribed_ = false
-
---- 全局订阅形式的回调签名是 (eventType, eventData)，与 main.lua 的 HandleUpdate 一致。
----@param eventType string
----@param eventData UpdateEventData
-local function HandleBootEchoUpdate(eventType, eventData)
-    -- eventData 一并兜住：这是每帧回调，一旦取不到 TimeStep 就会每帧抛一次 nil 索引，
-    -- 把正要救回来的日志又淹掉。
-    if not bootEcho_ or bootEcho_.left <= 0 or not eventData then
+--- 开机 trace 重发：每 4 秒一条，把开机那一瞬被日志管道整批丢掉的那份读数补回来。
+---@param dt number 本帧步长（秒）
+local function stepBootEcho(dt)
+    -- dt 一并兜住：这是每帧调用，取不到步长就会每帧抛一次 nil 索引，把正要救回来的日志又淹掉。
+    if not bootEcho_ or bootEcho_.left <= 0 or not dt then
         return
     end
-    bootEcho_.elapsed = bootEcho_.elapsed + eventData["TimeStep"]:GetFloat()
+    bootEcho_.elapsed = bootEcho_.elapsed + dt
     if bootEcho_.elapsed < 4 then
         return
     end
@@ -173,17 +166,12 @@ local function HandleBootEchoUpdate(eventType, eventData)
 end
 
 --- 启动开机 trace 重发。由 StatusWindow.Init 末尾调用。
---- 与 main.lua 的自检结论重发一样只退订自己这一轮的 bootEcho_、不反订阅 Update：
---- 全局 UnsubscribeFromEvent 只有 (eventName) 一种签名，按名退订会把 main.lua 的
---- HandleUpdate 一起收掉，所以这里让回调自己退休（left 归零后每次进来直接 return）。
+--- 只摆一个计数器，不订阅任何事件：逐帧推进统一由 main.lua 那条按全局名订阅的 Update
+--- 经 StatusWindow.Tick 转进来（本运行时按函数订阅的 Update 一次都没派发过，见 Tick 的注释）；
+--- 到点自己退休（left 归零后 bootEcho_ 置 nil）。
 ---@param left number 重发次数
 local function startBootEcho(left)
     bootEcho_ = { left = left, elapsed = 0 }
-    if not bootEchoSubscribed_ then
-        bootEchoHandler_ = HandleBootEchoUpdate
-        SubscribeToEvent("Update", bootEchoHandler_)
-        bootEchoSubscribed_ = true
-    end
 end
 
 --- 取消尚未发完的开机 trace 重发。由 StatusWindow.Shutdown 调用。
@@ -907,11 +895,10 @@ end
 -- 骨骼动作的三道验证门（源 GLB 骨骼动画 → MDL 保留 → 真机播放）未全过，
 -- 这里一行都不许依赖 AnimatedModel 的动画轨道；撤销式增量变换保证不漂移。
 -- ---------------------------------------------------------------------------
-local function HandleMicroMotionUpdate(eventType, eventData)
-    if not sceneState_ or not eventData then
+local function stepMicroMotion(dt)
+    if not sceneState_ or not dt then
         return
     end
-    local dt = eventData["TimeStep"]:GetFloat()
     microTime_ = microTime_ + dt
     local undo = microPrev_
     local nextv = 0
@@ -1006,10 +993,24 @@ function StatusWindow.Init()
     -- 状态窗 RenderTarget 走 NanoVG 采样，关闭 HDR 避免贴图被当成乱码 atlas
     renderer.hdrRendering = false
 
-    -- 无骨骼微动逐帧推进（撤销式增量，见 HandleMicroMotionUpdate）
-    SubscribeToEvent("Update", HandleMicroMotionUpdate)
+    -- 微动与开机重发都不在这里自订阅：本运行时只派发**按全局名**订阅的 Update
+    -- （main.lua 的 SubscribeToEvent("Update", "HandleUpdate") 每帧都到），
+    -- 而按函数订阅的那两条一次都没进来过。逐帧驱动统一由 StatusWindow.Tick 走 main 那条活路。
 
     startBootEcho(3)
+end
+
+--- 逐帧驱动：无骨骼微动 + 开机 trace 重发。由 main.lua 的 HandleUpdate 每帧调一次。
+--- 为什么不让本模块自己 SubscribeToEvent("Update", fn)：2026-09-25 本地实测，同一个进程里
+--- 按全局名订阅的那条重发了 6 次，按函数订阅的两条（微动、开机 trace）一次都没触发——
+--- 微动整块静默不跑、开机突发日志被管道丢掉时也没有重发可救。
+---@param dt number TimeStep（秒）
+function StatusWindow.Tick(dt)
+    if not dt then
+        return
+    end
+    stepMicroMotion(dt)
+    stepBootEcho(dt)
 end
 
 function StatusWindow.IsModelLoaded()
