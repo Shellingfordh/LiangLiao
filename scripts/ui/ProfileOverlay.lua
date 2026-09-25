@@ -363,12 +363,15 @@ function ProfileOverlay.Build()
             logWarn("确认被挡住：城市与关系起点都要点一下")
             return
         end
+        local isRandom = IsRandomPick()
+        -- 随机模式下 pickedRelation_ 本就是 nil：两轴由这一次随机决定（main 的
+        -- RandomPick 分支负责抽档）。2026-09-26 B-8 ④ 真机抓到旧写法在这里无条件
+        -- 要求非空 relationId，随机点确认被自己挡死、静默无响应。
         local relationId = pickedRelation_
-        if not relationId then
+        if not relationId and not isRandom then
             logWarn("确认被挡住：关系起点为空")
             return
         end
-        local isRandom = IsRandomPick()
         onConfirm_(pickedCity_, relationId, isRandom)
     end
 
