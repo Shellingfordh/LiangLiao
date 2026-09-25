@@ -807,11 +807,19 @@ function StartLifeSession(slot, firstTime)
     RefreshSnapshot()
     EnsureTraceSeeded()
     if firstTime then
+        -- 新故事这条路与换段一样必须先把上一段的画面摘掉：`RebuildChatForLife` 里那句
+        -- 隐藏只覆盖换段，firstTime 以前不隐也不重算画面 —— 旧段的生活痕迹会留在新段画面上，
+        -- 直到下一次状态文案变化才被换掉（2026-09-25 控件树逐帧取证 T2 抓到，判据见 CHANGELOG）。
+        if traceImage_ then
+            traceImage_:SetVisible(false)
+        end
         ChatPanel.ResetConversation()
         WriteBootGreeting(0)
         ChatPanel.SetDraft(ProfileService.DefaultDraft())
         ChatPanel.SetProfileLine(ProfileService.ProfileLine())
         ChatPanel.SetMemoryLine(MemoryService.GetSummaryLine())
+        RefreshStatusLine(true)
+        ApplyScene(true)
     else
         RebuildChatForLife()
     end
