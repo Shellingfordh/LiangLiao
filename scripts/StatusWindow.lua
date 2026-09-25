@@ -905,7 +905,10 @@ local function stepMicroMotion(dt)
     local mode = sceneState_.microMotion
     if mode == "breathe" and baseCharPos_ and characterRoot_ then
         nextv = math.sin(microTime_ * 1.7) * 0.006
-        characterRoot_.position = Vector3(baseCharPos_.x, baseCharPos_.y - undo + nextv, baseCharPos_.z)
+        -- 位置是**绝对写**（基准 + 目标偏移），不能再减 undo：减了就退化成
+        -- `nextv(n) - nextv(n-1)` ≈ A·ω·dt·cos，幅度只有声明值的 1/35（本地逐帧分账实测
+        -- ±0.00017 而非 ±0.006，2026-09-25）。撤销式增量只对下面的相对 Rotate 才成立。
+        characterRoot_.position = Vector3(baseCharPos_.x, baseCharPos_.y + nextv, baseCharPos_.z)
     elseif mode == "sway" and characterRoot_ then
         nextv = math.sin(microTime_ * 0.55) * 0.9
         characterRoot_:Rotate(Quaternion(-undo, Vector3(0, 0, 1)))
@@ -917,7 +920,8 @@ local function stepMicroMotion(dt)
     elseif mode == "dolly" and cameraNode_ then
         nextv = math.sin(microTime_ * 0.25) * 0.012
         local p = cameraNode_.position
-        cameraNode_.position = Vector3(p.x, baseCamY_ - undo + nextv, p.z)
+        -- 同 breathe：基准 y 是绝对值，减 undo 会把目标值自己抵消掉
+        cameraNode_.position = Vector3(p.x, baseCamY_ + nextv, p.z)
     end
     microPrev_ = nextv
 end
