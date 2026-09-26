@@ -192,8 +192,14 @@ preserved for later edits and builds.
 以下五条为 2026-09-18/19 与 2026-09-21 在 Maker AI Dev Kit 中实测确立，违反即返工（证据见
 `docs/maker-lua-api-verification.md`）：
 
-- **运行时没有 LLM 接口。** Maker 的 `text_to_dialogue` 等是构建期 MCP 工具，不是游戏运行时 API。
-  回复一律走 Lua 模板 + 变量替换；不得假设"生成式润色"这条路存在。
+- **客户端运行时没有 LLM 接口。** Maker 的 `text_to_dialogue` 等是构建期 MCP 工具，不是游戏运行时 API；
+  且**客户端模式下 `http` / `GetHttp` / `HttpClient` 被平台完全屏蔽**（`engine-docs/recipes/http.md`）。
+  默认形态下回复一律走 Lua 模板 + 变量替换。
+  唯一例外（2026-09-26 起，代码在 `scripts/network/`）：**联机服务端的 Lua 进程可以出站**，
+  但受「URL 全字符串精确匹配白名单」约束，加白名单须联系 TapTap 制造团队；且上线前还有
+  入口与大厅的产品改动。两件外部条件（白名单、`multiplayer.enabled`）没齐之前，
+  `CONFIG.LlmRelayEnabled` 必须保持 `false`——此时运行时零外发，行为与模板路径逐字节一致。
+  细节与判据见 `BLOCKED.md` B-9、`docs/2026-09-23-m2b-llm-gateway-design.md` §12。
 - **引擎没有 IANA 时区库。** 四城各用一张带生效区间的 UTC 偏移表；时间源必须是
   `common.get_server_time()`（权威 UTC，用户改系统时间无效）；`os.date` 必须带 `"!"` 前缀，
   否则会叠加运行设备本地时区。

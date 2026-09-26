@@ -28,6 +28,9 @@
 --     睡眠排队 FIFO、引用她的回复、落盘重进（与洛杉矶用的完全是同一套 helper，不另开旁路）；
 --   * 场景 Z：v4 旧档迁移 —— 缺 profile 按「洛杉矶×陌生网友·已初始化」迁移，
 --     transcript 更名 messages，引用字段/排队计划/事件计划一条不丢、不弹初始化界面。
+--   * 场景 AI（M2-B 路径 A）：LLM 中继客户端一侧 —— 信封编解码与尺寸闸、应答按
+--     requestId 配对、网络层 7 秒超时、断线批量结清、迟到结果一律作废。全程无网络；
+--     服务端一侧不在客户端自检里跑（network/Server.lua 是 c_or_s="s"，客户端加载不到）。
 --   * 场景 AB–AG（M4）：三段人生槽互不串写与满员拒建、冷启动选段与旧档收编、
 --     16 个场景状态包完整且背景不复用、2.5D 生活痕迹全生命周期、切换人生不残留旧城市/旧景/旧痕、
 --     建档时选的关系起点与种子必须落进段存档并在重进后原样接回。
@@ -100,7 +103,7 @@ local failures_ = {}
 local summary_ = "自检未运行"
 
 --- Run 里 runScenario 的调用条数；结论行拿它判断「有没有场景被整批日志丢掉」
-local SCENARIO_TOTAL = 34
+local SCENARIO_TOTAL = 35
 
 local function logInfo(msg)
     print(TAG .. " " .. msg)
@@ -2552,6 +2555,100 @@ local function ScenarioExplicitStoryAdopted(dateKey)
     resetLifeRegistry()
 end
 
+-- ---------------------------------------------------------------------------
+-- 场景 AI（M2-B 路径 A）：LLM 中继的客户端一侧 —— 信封契约、应答配对、超时与断线结清。
+-- 全程不碰网络，本地就能验那条底线：网络怎么坏，她也永远有回话（回落模板）。
+-- 服务端一侧（HTTP 出站、限流、上游解析）刻意不在客户端自检里跑：network/Server.lua
+-- 带 .meta c_or_s="s"，客户端根本加载不到它——这正是要的性质，不是覆盖缺口。
+-- ---------------------------------------------------------------------------
+local function ScenarioRelayContract()
+    logInfo("场景 AI LLM 中继客户端：信封、配对、超时、断线")
+
+    local Shared = require("network.Shared")
+    local RelayClient = require("network.Client")
+
+    -- 一、信封往返：白名单 payload 编码再解码必须同构；超限直接拒绝（不发出去）
+    local payload = { v = 1, userMessage = "今天有点累", core = { cityLabel = "洛杉矶" } }
+    local json, why = Shared.EncodePayload(payload)
+    check("AI1 白名单 payload 编码成功且不为空", json ~= nil and #json > 0, tostring(why))
+    local back, backWhy = Shared.DecodePayload(json or "")
+    check("AI2 解码后与原文同构（嵌套字段不丢）",
+        type(back) == "table" and back.userMessage == "今天有点累"
+        and type(back.core) == "table" and back.core.cityLabel == "洛杉矶",
+        tostring(backWhy))
+    local bigJson, bigWhy = Shared.EncodePayload(
+        { userMessage = string.rep("字", Shared.MAX_PAYLOAD_BYTES) })
+    check("AI3 超尺寸 payload 被拒（不发出去，也不当成网络错误）",
+        bigJson == nil and bigWhy == "payload_too_large", tostring(bigWhy))
+
+    -- 二、真路由：没有服务器连接时必须同步回落，绝不挂起（挂起会把 FIFO 拖住）
+    RelayClient.ResetForTest()
+    ---@type PolishTransportResult|nil
+    local syncResult = nil
+    RelayClient.RequestForTest(payload, function(result)
+        syncResult = result
+    end)
+    check("AI4 无连接时 transport 同步回落 no_connection（不挂起、不抛异常）",
+        syncResult ~= nil and syncResult.ok == false and syncResult.category == "no_connection",
+        syncResult and tostring(syncResult.category) or "未回调")
+
+    -- 三、应答配对：喂一条应答，回调必须拿到 bodyText；配不上的 id 不许二次回调
+    local clock = 1000
+    RelayClient.SetClockForTest(function()
+        return clock
+    end)
+    ---@type PolishTransportResult|nil
+    local got = nil
+    local hits = 0
+    local rid = RelayClient.EnqueueForTest("{}", function(result)
+        hits = hits + 1
+        got = result
+    end)
+    RelayClient.FeedReplyForTest(rid, true, 200, '{"segments":["好。"]}', "")
+    check("AI5 应答按 requestId 配回槽位并带 bodyText",
+        hits == 1 and got ~= nil and got.ok == true and got.status == 200
+        and got.bodyText == '{"segments":["好。"]}',
+        got and tostring(got.bodyText) or "无结果")
+    RelayClient.FeedReplyForTest(rid, true, 200, '{"segments":["迟到。"]}', "")
+    check("AI6 同一 requestId 的迟到应答不二次回调", hits == 1, "回调 " .. tostring(hits) .. " 次")
+
+    -- 四、网络层超时：到点结清；结清之后的应答同样不许回写
+    local timeouts = 0
+    local r2 = RelayClient.EnqueueForTest("{}", function(result)
+        timeouts = timeouts + 1
+        got = result
+    end)
+    RelayClient.Update()
+    check("AI7 未到 7 秒不误判超时", timeouts == 0 and RelayClient.GetPendingCount() == 1,
+        "在途 " .. tostring(RelayClient.GetPendingCount()))
+    clock = clock + 8
+    RelayClient.Update()
+    check("AI8 超 7 秒按 timeout 结清（不留悬挂槽位）",
+        timeouts == 1 and got ~= nil and got.category == "timeout"
+        and RelayClient.GetPendingCount() == 0,
+        got and tostring(got.category) or "无结果")
+    RelayClient.FeedReplyForTest(r2, true, 200, "{}", "")
+    check("AI9 超时后的迟到应答作废（不二次回调）", timeouts == 1,
+        "回调 " .. tostring(timeouts) .. " 次")
+
+    -- 五、断线：在途请求一次性结清，不等各自耗满 7 秒
+    local dropped = 0
+    RelayClient.EnqueueForTest("{}", function(result)
+        dropped = dropped + 1
+        got = result
+    end)
+    RelayClient.EnqueueForTest("{}", function(result)
+        dropped = dropped + 1
+    end)
+    local cleared = RelayClient.FailPendingForTest("disconnected")
+    check("AI10 断线时批量结清在途请求（category=disconnected）",
+        cleared == 2 and dropped == 2 and got ~= nil and got.category == "disconnected"
+        and RelayClient.GetPendingCount() == 0,
+        string.format("结清 %d 回调 %d", cleared, dropped))
+
+    RelayClient.ResetForTest()
+end
+
 --- 一个场景独立跑完再进下一个，并落一行「本场景判定几条」。
 --- 2026-09-22 云端实测：开机那一瞬的突发日志会被管道整批丢掉（suite 只剩 PASS A0…A6，
 --- 同批的 开场事件 / M1 已就绪 一起缺席），而调用点本来就有 pcall，所以不是断言抛出吞掉后续场景。
@@ -2675,6 +2772,8 @@ function DevSelfTest.Run(options)
     runScenario("AF", ScenarioSwitchNoResidue, dateKey)
     runScenario("AG", ScenarioRelationPersisted, dateKey)
     runScenario("AH", ScenarioExplicitStoryAdopted, dateKey)
+    -- M2-B 路径 A：中继客户端一侧的信封/配对/超时/断线结清（全程无网络）
+    runScenario("AI", ScenarioRelayContract, dateKey)
 
     MemoryService.ClearSavedData()
     -- M4 场景的注册表与段文件同理收尾清掉：自检不在设备上留人生

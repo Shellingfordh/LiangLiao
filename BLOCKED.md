@@ -459,3 +459,64 @@ LSP `Errors: 0`、`git diff --check` exit 0，交付 commit `e40fb21`），但**
 1. 修复版构建（第十七次）+ 重新出码；
 2. **Android 真机扫码**补跑四条全链（桌面预览不抵扣）：重点 ④ 随机 → 真·强杀重进；
 3. 每条按「构建标识/设备/时间/操作/期望/实际」转录后关闭 B-8。
+
+# BLOCKED — M2-B 路径 A：LLM 中继接线（2026-09-26 追加）
+
+## B-9 上游 URL 白名单 + 联机模式：两件都不能由代码代劳（代码已就位）
+
+**结论**：LLM 出站的**代码链路已经落地并通过本地验证**（`scripts/network/{Shared,Client,Server}.lua`，
+自检场景 AI 十条断言全绿，服务端模块未进客户端包）。但它在真机上**一行都跑不起来**，
+差的是两件外部动作——不是代码。
+
+### 卡在哪
+
+1. **TapTap URL 白名单**（全字符串精确匹配，非域名匹配）。
+   官方依据：`engine-docs/recipes/http.md` 服务端模式一行——「如需添加白名单，请联系 TapTap 制造团队」。
+   本轮选定通道：**服务端直连上游模型**（用户 2026-09-26 决定），不走自建网关。
+   要报给 TapTap 制造团队的**精确字符串**（改一个字符都要重新报）：
+
+   ```
+   https://api.deepseek.com/chat/completions
+   ```
+
+   用途一句话：本工程联机服务端向该地址发 `POST`（OpenAI 兼容 chat/completions），
+   把已确定的生活事实现场润色成 1–3 句中文短句；请求体 ≤ 数 KB，带 `Authorization: Bearer <服务端持有的 Key>`。
+
+2. **开联机模式**：`.project/settings.json` 的 `@runtime.multiplayer.enabled` 目前是 `false`，
+   `project.json` 只有 `entry: main.lua`。客户端 HTTP 被平台完全屏蔽，所以**单机形态下这条链路
+   在物理上不成立**（`main.lua` 的 `IsServerMode()` 分支永远不会走）。
+   开启要动的三处：`multiplayer.enabled=true` + `persistent_world`、构建时传 `entry_client`/`entry_server`、
+   以及**玩家可见的入口变化**——见下方「代价」。
+
+### 代价（开联机前必须让用户知道）
+
+- 开 `multiplayer.enabled=true` 会插入**引擎大厅运行路径**（`custom-lobby` skill：`true` 时才会启动
+  默认联机入口或 `lobby_runtime`）。当前体验是「冷启动直接进最近一段人生」，开联机后中间会多一层大厅。
+  要在「本地游玩」入口或自定 `lobby_runtime` 里把现有单机流程接回去，属于产品改动，不是配置改动。
+- 本工程是常驻服取向（relay 无状态、可随时进出），但服务端 `Start()` 时可能一个玩家都没有，
+  所以中继不许依赖任何玩家状态——这一点代码里已经守住（不读 `SERVER_REGISTERED_PLAYERS`）。
+
+### 代码侧已经做完的（不用再等）
+
+- `scripts/network/Server.lua`：唯一的出站出口。API Key、上游地址、系统提示词、限流（2 次/分/连接）、
+  日预算（200 次）全在这里；带 `.meta` `"c_or_s": "s"`，**已验证不出现在 `dist/` 任何产物里**
+  （`grep -rl "api.deepseek.com" dist/` = 0，`grep -rl "Bearer" dist/` = 0）。
+- `scripts/network/Client.lua`：`PolishService` 的 transport 实现，7 秒网络层超时、
+  按 `requestId` 配对、断线批量结清、迟到结果一律作废。
+- `scripts/main.lua`：`Start()` 顶部 `IsServerMode()` 分发（服务端只跑中继）；
+  `CONFIG.LlmRelayEnabled` 默认 `false`，开关关着时行为与 M2-A 逐字节一致、零外发。
+- 自检场景 AI：信封契约、尺寸闸、配对、超时、断线——**全程无网络**，所以本地就能验。
+
+### 需要谁
+
+- **用户**：① 向 TapTap 制造团队提白名单（上面那串 URL）；② 决定什么时候开联机、
+  以及入口那层大厅怎么处理；③ 在 `Server.lua` 的 `LLM_API_KEY` 处本地填 Key
+  （**不要贴进任何对话**——key 只该存在于那个文件里，而该文件已被标记为服务端专用）。
+- **不做**：把 Key 打进客户端、临时关掉校验、或为了让链路「看起来通了」而伪造 LLM 回复。
+
+### 判据（照做完这两件后）
+
+1. 云端构建后 `user_script.log` 里出现 `[LlmRelay] 中继就绪 上游=https://api.deepseek.com/chat/completions`；
+2. 客户端日志出现 `润色 结果=llm 长度=N 段数=K`（而不是 `结果=fallback:*`）；
+3. 若白名单没生效，日志形状是 `润色 结果=fallback:http_0` 或 `timeout` —— 而**不是** ERROR，
+   玩家看到的仍是模板回复，聊天不中断。

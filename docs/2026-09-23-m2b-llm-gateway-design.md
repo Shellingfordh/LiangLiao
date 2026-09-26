@@ -284,3 +284,43 @@ M2-B 引入运行时出站调用（仅润色、仅经服务端中继），**与�
   TapTap URL 白名单）的真实 transport 接线；`GATEWAY_ENABLED=true`；R/S/T 真机构建验证；
   AGENTS.md §8 措辞修订。
 - 运行记录与回滚：见 `CHANGELOG.md` 2026-09-24 条目；回滚仍是一行 `GatewayEnabled=false`。
+
+---
+
+## 13. 路径 A 落地：服务端直连上游（2026-09-26）
+
+用户 2026-09-26 定选：**服务端直连模型 API**（不走自建网关），上游 DeepSeek。
+本节的实现取代 §1 的网关形态成为线上目标形态；`gateway/` 与 `gateway/README.md`
+保留为设计留档与「要限流/预算/幂等时」的备选，**当前不部署、不接线**。
+
+### 13.1 与 §1–§7 的差异（其余契约全部沿用）
+
+| 项 | §1 网关形态 | 实现形态 |
+| --- | --- | --- |
+| 出站发起方 | Maker 服务端 Lua → 网关 → 上游 | Maker 服务端 Lua → 上游（一跳） |
+| Key 位置 | 网关环境变量 | `scripts/network/Server.lua`（`.meta` `c_or_s="s"`，已验不进 `dist/`） |
+| 鉴权 | `GATEWAY_SHARED_SECRET` | 无（边界 = 白名单 URL + 服务端不外发 Key） |
+| 限流/预算 | 网关侧固定窗口 + 日 token 预算 | 服务端内存计数：2 次/分/连接 + 200 次/日；token 用量不进硬闸 |
+| 契约校验 | 网关 validate + 客户端镜像 | **服务端只判形状**（取 `choices[1].message.content`），句法契约仍由 `PolishService.ValidateResponse` 做唯一一道严格校验 |
+| 词表守卫 | 客户端 | 客户端（不变） |
+
+### 13.2 代码位置
+
+- `scripts/network/Shared.lua` —— 事件名、信封（`RequestId`/`Payload` 与 `Ok`/`Status`/`Body`/`Category`）、
+  尺寸闸（payload ≤4KB、body ≤8KB）、两端注册函数。
+- `scripts/network/Server.lua` —— **唯一出站出口**。URL/模型/Key/系统提示词/限流预算都在这里；
+  带 `.meta` `"c_or_s": "s"`。`Server.ExtractContentForTest` 供服务端自检复用同一份形状判定。
+- `scripts/network/Client.lua` —— `PolishService` 的 transport：7 秒网络层超时、按 `requestId` 配对、
+  `ServerDisconnected` 批量结清、迟到结果一律作废；空场景只作联网媒介（network-game-guide §11.1/§11.2）。
+- `scripts/main.lua` —— `Start()` 顶部 `IsServerMode()` 分发；`CONFIG.LlmRelayEnabled` 默认 `false`；
+  `HandleUpdate` 里推进网络层超时；`Stop()` 两侧各自收尾。
+
+### 13.3 验证状态（诚实边界）
+
+- **本地已验**：`Lua LSP 0 Error`；`UrhoXRuntime` 本地整跑 = 就绪 + 无异常 + 仅 8 项已知本地假失败
+  （时钟坏：D2/H2/J3/J8/Y7×4），本轮**没有新增失败**；自检新增**场景 AI**（信封往返/尺寸闸/
+  无连接同步回落/应答配对/迟到作废/7 秒超时/断线批量结清）10 条断言全绿；
+  云端构建 `1.0.18` 成功。
+- **本地未验（做不到）**：真实出站、白名单、`IsServerMode()` 那侧的运行——本地运行时是单机客户端。
+- **未做**：`.project/settings.json` 开 `multiplayer`、白名单申请、真实 Key。
+  这三件都在 `BLOCKED.md` B-9，判据也写在那里。

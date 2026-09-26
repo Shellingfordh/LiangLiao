@@ -1,8 +1,9 @@
 -- ============================================================================
 -- 《送给你这个回来的人》M1 首个可玩闭环（建在已验收的 M0-1 竖切片之上）
 -- 竖屏手机：固定镜头 4:3 状态窗 + 真实时间驱动的生活状态 + 会排队的聊天闭环。
--- 后端 = 同工程内的 Lua 服务（消息/事件/内容/记忆/润色适配/开发自检）。M2-B：LLM 网关
--- 在独立的 gateway/ 目录且未部署；GatewayEnabled=false 时运行时零外发，回复仍是本地模板。
+-- 后端 = 同工程内的 Lua 服务（消息/事件/内容/记忆/润色适配/开发自检）。M2-B 路径 A：
+-- LLM 出站由联机服务端承担（scripts/network/），LlmRelayEnabled=false 时运行时零外发，
+-- 回复仍是本地模板；单机模式没有服务器连接，这条链路本来就不成立。
 -- M1 新增：忙碌与睡眠时消息按 FIFO 排队到下一个可回复窗口；重进恢复完整记录与队列；
 -- 回复只引用「送达时刻」与「交付时刻」两个确定时间快照里的事实。
 -- 日志前缀仍留 [M0-1]：AGENTS.md 把它当作「已进入 Lua」的判据字符串。
@@ -27,7 +28,7 @@ local SettingsOverlay = require("ui.SettingsOverlay")
 local ProfilePageOverlay = require("ui.ProfilePageOverlay")
 local LifeCardsOverlay = require("ui.LifeCardsOverlay")
 
----@type {Title: string, City: string, ReplyWaitSeconds: integer, DevTools: boolean, UseCloudMemory: boolean, DevSelfTest: boolean, AwaySummaryMinSeconds: integer, GatewayEnabled: boolean}
+---@type {Title: string, City: string, ReplyWaitSeconds: integer, DevTools: boolean, UseCloudMemory: boolean, DevSelfTest: boolean, AwaySummaryMinSeconds: integer, LlmRelayEnabled: boolean}
 local CONFIG = {
     Title = "送给你这个回来的人",
     City = "los_angeles",        -- 干净安装的初始城市；存档/换档案后的城市走 ProfileService
@@ -36,10 +37,13 @@ local CONFIG = {
     UseCloudMemory = false,  -- 预览不绑定云存储，只保留异步接口
     DevSelfTest = true,      -- 启动时跑一次真实服务自检（busy/offline/idle + FIFO + 重进）
     AwaySummaryMinSeconds = 60, -- 离开超过这个时长才给一条「离开期间」摘要
-    -- M2-B S1：网关与适配层已就位，但客户端 HTTP 被平台屏蔽（引擎文档 http.md），
-    -- 真正接入要等「Maker 多人房服务端中转 + TapTap URL 白名单」这条路径被确认。
-    -- 置 false 时 HandleDeliver 的行为与 M2-A 完全一致（同步模板回复）。
-    GatewayEnabled = false,
+    -- M2-B 路径 A：服务端直连上游模型（scripts/network/{Shared,Server,Client}.lua）。
+    -- 客户端 HTTP 被平台完全屏蔽（engine-docs/recipes/http.md），出站只能由联机服务端做，
+    -- 所以这条链路**只在联机模式下成立**：单机时 IsClientMode 没有服务器连接，中继不启动。
+    -- 还差两件外部条件：① 上游 URL 进 TapTap 白名单（全字符串精确匹配）；
+    -- ② .project/settings.json 开 multiplayer。两件齐备前保持 false：
+    -- HandleDeliver 的行为与 M2-A 完全一致（同步模板回复、零外发）。
+    LlmRelayEnabled = false,
 }
 
 --- 事件实例的生命周期上屏文案：状态窗注释行与回复共用同一套说法
@@ -79,6 +83,13 @@ local devTestPanel_ = nil
 
 -- 上一次上屏的状态文案，用来判断这一分钟要不要重画
 local statusLine_ = ""
+
+-- LLM 中继：两端各自只在自己那一侧被 require（服务端模块带 .meta c_or_s="s"，
+-- 客户端永远拿不到它；客户端的 require 也只在联机客户端那一次发生）。
+---@type table|nil
+local relayClient_ = nil
+---@type table|nil
+local relayServer_ = nil
 ---@type number
 local clockElapsed_ = 0
 ---@type { id: integer, role: string, text: string }|nil
@@ -385,6 +396,15 @@ function HandleDeliver(pending)
 end
 
 function Start()
+    -- 联机服务端：只跑 LLM 中继（本工程唯一的出站 HTTP 出口，见 network/Server.lua）。
+    -- 玩法、渲染、存档、3D 状态窗全部是客户端的事，服务端一行都不碰——
+    -- 服务端启动时可能一个玩家都没有（常驻服），所以这里不许依赖任何玩家状态。
+    if IsServerMode() then
+        relayServer_ = require("network.Server")
+        relayServer_.Start()
+        return
+    end
+
     graphics.windowTitle = CONFIG.Title
     -- 禁止自由相机 / 相对鼠标，保持光标可见，无镜头旋转
     input.mouseMode = MM_ABSOLUTE
@@ -490,6 +510,16 @@ function Start()
 end
 
 function Stop()
+    -- 中继两端各自收尾：服务端取消在途上游请求，客户端把在途槽位按「已停止」结清，
+    -- 不留下会回写到新会话的迟到回调（与 PolishService.CancelAll 同一套语义）。
+    if relayServer_ then
+        relayServer_.Stop()
+        relayServer_ = nil
+    end
+    if relayClient_ then
+        relayClient_.Stop()
+        relayClient_ = nil
+    end
     MemoryService.FlushCloud()
     DevTestPanel.Shutdown()
     ProfileOverlay.Shutdown()
@@ -587,9 +617,19 @@ function InitServices(saveFile, lifeSlot, freshSlot)
     -- 会话槽与段存档在同一条线上定：此后痕迹/档案的读写都只认这一段
     sessionSlotId_ = lifeSlot and lifeSlot.slotId or nil
     TimeState.SetReplyDelay("idle", CONFIG.ReplyWaitSeconds)
-    -- M2-B S1：GatewayEnabled=false 时 PolishService 全程同步回落，不产生任何外发。
-    -- 真正开启要等中转路径确认后再注入 transport（网关 URL + 共享密钥走服务端配置）。
-    PolishService.Configure({ enabled = CONFIG.GatewayEnabled })
+    -- M2-B 路径 A：只有「联机客户端 + CONFIG.LlmRelayEnabled」才注入真 transport；
+    -- 其余情况（单机 / 没开开关 / 连不上服务器）都不注入，PolishService 全程同步回落，
+    -- 行为与 M2-A 逐字节一致、零外发。Start() 自身幂等，重复 InitServices 不会重复握手。
+    local relayTransport = nil
+    if CONFIG.LlmRelayEnabled and IsClientMode() then
+        relayClient_ = require("network.Client")
+        if relayClient_.Start() then
+            relayTransport = relayClient_.CreateTransport()
+        else
+            relayClient_ = nil
+        end
+    end
+    PolishService.Configure({ enabled = relayTransport ~= nil, transport = relayTransport })
     MessageService.Init({
         hooks = {
             onPhaseChange = function()
@@ -1422,6 +1462,10 @@ function HandleUpdate(eventType, eventData)
     MessageService.Update(NowUtc())
     -- M2-B：润色槽位的 8 秒预算与到点回落在同一权威时钟上逐帧推进
     PolishService.Update(NowUtc())
+    -- 中继网络层自己的 7 秒过期判定（它内部取权威 UTC，不跟开发时间投影走）
+    if relayClient_ then
+        relayClient_.Update()
+    end
     ChatPanel.Tick(timeStep)
     -- 状态窗的逐帧部分（无骨骼微动 + 开机 trace 重发）挂在 main 这条订阅上走：
     -- StatusWindow 自己按函数订阅 Update 在这个运行时永不派发（2026-09-25 本地实测）。

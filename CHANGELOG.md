@@ -1,5 +1,51 @@
 # Changelog
 
+## 2026-09-26 — M2-B 路径 A：LLM 出站链路落地（开关默认关，运行时零外发）
+
+用户当日定选「**服务端直连模型 API**」（上游 DeepSeek），不再走自建网关。本轮只交付代码与本地验证，
+**不开联机、不申请白名单、不填 Key**——所以游戏行为与 M5 逐字节一致：`CONFIG.LlmRelayEnabled = false`
+时 `PolishService` 全程同步回落本地模板，运行时零外发。真机能不能跑，取决于 `BLOCKED.md` B-9 里那两件
+只能由人做的事。
+
+### 为什么只能这么做（硬约束，先于一切设计）
+
+`engine-docs/recipes/http.md`：**客户端模式下 `http`/`GetHttp`/`HttpClient` 被平台完全屏蔽**；
+服务端模式可用，但 URL 受**全字符串精确匹配**白名单约束（非域名匹配），加白名单须联系 TapTap 制造团队。
+因此出站只能由联机服务端的 Lua 进程承担，客户端照旧只发远程事件。
+
+### 新增
+
+- `scripts/network/Shared.lua`：事件名、信封字段（`RequestId`/`Payload` ↔ `Ok`/`Status`/`Body`/`Category`）、
+  尺寸闸（payload ≤4KB、body ≤8KB）、两端注册函数。
+- `scripts/network/Server.lua`：**本工程唯一的出站出口**，带 `.meta` `"c_or_s": "s"`。
+  URL/模型/系统提示词/限流（2 次/分/连接）/日预算（200 次）全在这里，客户端只交白名单事实。
+  `.meta` 标记不靠「应该没问题」：构建后 `grep -rl "api.deepseek.com" dist/` = 0、`grep -rl "Bearer" dist/` = 0。
+- `scripts/network/Client.lua`：`PolishService` 的 transport 实现——7 秒网络层超时、按 `requestId` 配对、
+  `ServerDisconnected` 批量结清、迟到结果一律作废；空场景只作联网媒介（network-game-guide §11.1/§11.2）。
+- `scripts/main.lua`：`Start()` 顶部 `IsServerMode()` 分发（服务端只跑中继，不碰玩法/渲染/存档）；
+  `CONFIG.GatewayEnabled` 更名 `LlmRelayEnabled`；`HandleUpdate` 推进网络层超时；`Stop()` 两侧各自收尾。
+- 自检**场景 AI**（`SCENARIO_TOTAL` 34→35）：信封往返、尺寸闸、无连接同步回落、应答配对、
+  迟到作废、7 秒超时、断线批量结清，共 10 条断言，**全程无网络**。
+  服务端一侧刻意不进客户端自检：`Server.lua` 是 `c_or_s="s"`，客户端加载不到它——这是要的性质，不是缺口。
+
+### 验证
+
+| 项 | 结果 |
+| --- | --- |
+| Lua LSP | 0 Error |
+| 本地 `UrhoXRuntime` 整跑 | 就绪、无 Lua 异常、**仅 8 项已知本地假失败**（时钟坏：D2/H2/J3/J8/Y7×4），无新增 |
+| 本地自检 | `通过=282 失败=8 场景=35/35`（较上轮 +10 条，全是场景 AI） |
+| 云端构建 | `1.0.18` 成功 |
+| 服务端模块隔离 | `dist/` 内 `api.deepseek.com` 与 `Bearer` 命中数均为 0 |
+
+### 未做（都在 B-9，需要人或外部条件）
+
+开 `multiplayer.enabled`（会引入大厅入口这层产品改动）、TapTap URL 白名单、真实 Key。
+**判据**：白名单生效后日志应出现 `[LlmRelay] 中继就绪` 与 `润色 结果=llm 长度=N 段数=K`；
+没生效时是 `结果=fallback:http_0|timeout` 而**不是** ERROR——玩家看到的仍是模板回复，聊天不中断。
+
+---
+
 ## 2026-09-26 — M5：可控的新故事（显式选择 100% 落地 · 随机只留一个入口）
 
 修复 M4 收尾登记的产品缺陷：预览里点「上海 × 前同事」创建新故事，实际落成「成都 × 高中同学」
