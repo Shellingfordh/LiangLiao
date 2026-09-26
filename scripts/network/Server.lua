@@ -30,7 +30,8 @@ local TAG = "[LlmRelay]"
 
 --- 白名单必须精确到这一整串（含协议、域名、路径，不含查询参数）
 local UPSTREAM_URL = "https://api.deepseek.com/chat/completions"
-local UPSTREAM_MODEL = "deepseek-chat"
+-- DeepSeek 当前 OpenAI 兼容模型；deepseek-chat 已在官方退役计划后不可作为新接入目标。
+local UPSTREAM_MODEL = "deepseek-v4-flash"
 
 --- ⚠️ API Key 只允许放在这一行。
 --- 留空时中继直接回 not_configured，客户端回落模板——即「没配 key」与「没接 LLM」
@@ -61,7 +62,8 @@ local PER_CONNECTION_PER_MINUTE = 2
 --- 全局日预算（按「请求条数」计；上游 token 用量只进日志、不做硬闸）
 local DAILY_REQUEST_BUDGET = 200
 --- 上游超时；客户端那侧还有 8 秒总预算，到点必回落
-local UPSTREAM_TIMEOUT_MS = 15000
+-- 不得晚于客户端的 7 秒中继预算；客户端回落后继续耗费上游额度没有产品价值。
+local UPSTREAM_TIMEOUT_MS = 6500
 
 -- =========================================================================
 -- 状态
