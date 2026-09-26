@@ -482,6 +482,22 @@ LSP `Errors: 0`、`git diff --check` exit 0，交付 commit `e40fb21`），但**
    用途一句话：本工程联机服务端向该地址发 `POST`（OpenAI 兼容 chat/completions），
    把已确定的生活事实现场润色成 1–3 句中文短句；请求体 ≤ 数 KB，带 `Authorization: Bearer <服务端持有的 Key>`。
 
+   **可直接粘贴的申请话术**（先问②再问①，顺序别反）：
+
+   > 你好，我是 TapTap 制造（Maker）项目的开发者，项目 id `m_c7s3`。
+   > 我们的游戏需要在**联机服务端**调用外部大模型 API（引擎文档 `recipes/http.md` 说服务端出站受
+   > URL 白名单限制，采用全字符串匹配，需联系制造团队添加）。
+   > 两个问题：
+   > ① 能否提供当前白名单里已有的 URL 清单？如果下面这条已经在内，就不用走申请了。
+   > ② 若不在，申请添加这一条（精确字符串，无查询参数）：
+   > `https://api.deepseek.com/chat/completions`
+   > 用途：服务端把游戏内已确定的实时事实现场润色成 1–3 句中文口语，失败一律回落本地模板、
+   > 不影响可玩性。请求体数 KB 级，鉴权用请求头 `Authorization: Bearer <我们自己持有的 Key>`，
+   > Key 只存在于服务端代码（已按 `.meta` `c_or_s="s"` 排除出客户端包）。
+
+   **没记录在本仓库里的**：这个申请渠道具体走哪个入口（平台内反馈 / 工单 / 社群）——
+   `engine-docs/` 只写了「联系制造团队」，没给地址。已知可用入口见下方「需要谁」。
+
 2. **开联机模式**：`.project/settings.json` 的 `@runtime.multiplayer.enabled` 目前是 `false`，
    `project.json` 只有 `entry: main.lua`。客户端 HTTP 被平台完全屏蔽，所以**单机形态下这条链路
    在物理上不成立**（`main.lua` 的 `IsServerMode()` 分支永远不会走）。
@@ -509,7 +525,14 @@ LSP `Errors: 0`、`git diff --check` exit 0，交付 commit `e40fb21`），但**
 
 ### 需要谁
 
-- **用户**：① 向 TapTap 制造团队提白名单（上面那串 URL）；② 决定什么时候开联机、
+- **用户**：① 向 TapTap 制造团队提白名单（上面那串 URL）。**已实测可用的入口**
+  （仓库里没有官方申请地址，以下三条来自 `research/taptap-pages/` 快照里的真实链接与
+  本次 MCP `list_tap_developers` 的返回字段 `developer_center_url`，按可用性排序）：
+  - 开发者中心 `https://developer.xdrnd.cn/` —— 本项目 `app_id 940330` 挂在名下，优先在这里找反馈/工单入口；
+  - 制造平台 `https://maker.taptap.cn/` 与开发者中心 Forge 入口 `https://developer.taptap.cn/forge`；
+  - Tripothon 赛事 Discord `https://discord.gg/NEdkyQQ3VP`（`docs/demand.md` §6.1）——
+    赛事期间最快，但它是赛事社群，不是平台支持工单。
+  ② 决定什么时候开联机、
   以及入口那层大厅怎么处理；③ 在 `Server.lua` 的 `LLM_API_KEY` 处本地填 Key
   （**不要贴进任何对话**——key 只该存在于那个文件里，而该文件已被标记为服务端专用）。
 - **不做**：把 Key 打进客户端、临时关掉校验、或为了让链路「看起来通了」而伪造 LLM 回复。
