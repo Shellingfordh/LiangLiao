@@ -92,16 +92,39 @@ function HandleReply(eventType, eventData)
     end
 end
 
+--- 告诉服务端「这条我放弃了」：本地已经回落模板，别再为它烧上游额度。
+--- 服务端据此取消在途 HTTP，结果一律不再交付（设计 §4 的双向收口）。
+--- 连接已经没了就不发——那种情况由服务端的断线清理负责。
+---@param requestId string
+local function NotifyCancel(requestId)
+    local connection = serverConnection_
+    if not connection then
+        return
+    end
+    local data = VariantMap()
+    data["RequestId"] = Variant(requestId)
+    local sent = pcall(function()
+        connection:SendRemoteEvent(Shared.EVENTS.CANCEL, true, data)
+    end)
+    if not sent then
+        logWarn("放弃请求的通知没发出去 请求=" .. tostring(requestId))
+    end
+end
+
 --- 把在途请求一次性按某个类别结清：连接断了、模块停了都走这一条，
 --- 不让每条各自耗满 7 秒才回落。
 ---@param category string
+---@param notifyServer boolean 本地超时 / 主动停止要告知服务端取消；断线不必（连接已没）
 ---@return integer count
-local function FailPending(category)
+local function FailPending(category, notifyServer)
     local ids = {}
     for requestId in pairs(pending_) do
         ids[#ids + 1] = requestId
     end
     for _, requestId in ipairs(ids) do
+        if notifyServer then
+            NotifyCancel(requestId)
+        end
         Settle(requestId, { ok = false, status = 0, category = category })
     end
     return #ids
@@ -111,7 +134,7 @@ end
 ---@param eventData VariantMap
 function HandleServerDisconnected(eventType, eventData)
     serverConnection_ = nil
-    local count = FailPending("disconnected")
+    local count = FailPending("disconnected", false)
     if count > 0 then
         logWarn("与服务器断开，已结清 " .. tostring(count) .. " 个在途请求")
     end
@@ -153,7 +176,9 @@ function Client.Start()
 end
 
 function Client.Stop()
-    FailPending("stopped")
+    -- 主动停止是「玩家不会再等这条结果」的确定信号：先告知服务端取消，
+    -- 否则服务端会把上游跑完，再回一条永远不会被使用的应答。
+    FailPending("stopped", true)
     pending_ = {}
     serverConnection_ = nil
     relayScene_ = nil
@@ -179,7 +204,10 @@ function Client.Update()
     if not ids then
         return
     end
+    -- 本地到点回落的同时告知服务端放弃：上游 6.5 秒超时虽然早于本地 7 秒，
+    -- 但这条通知让「玩家已经不等了」成为一个确定事实，而不是靠时序推断。
     for _, requestId in ipairs(ids) do
+        NotifyCancel(requestId)
         Settle(requestId, { ok = false, status = 0, category = "timeout" })
     end
     logWarn("网络层超时，回落模板 " .. tostring(#ids) .. " 条")
@@ -239,11 +267,11 @@ function Client.ResetForTest()
     started_ = false
 end
 
---- 仅暴露给自检：模拟「连接断了 / 主动停掉」那一次批量结清
+--- 仅暴露给自检：模拟「主动停掉」那一次批量结清（含发取消通知）
 ---@param category string
 ---@return integer count
 function Client.FailPendingForTest(category)
-    return FailPending(category)
+    return FailPending(category, true)
 end
 
 --- 仅暴露给自检：用真路由发一条（会因没有 serverConnection_ 立刻回调 no_connection）

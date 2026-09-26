@@ -1070,7 +1070,14 @@ function HandleSettingsEntry()
     })
 end
 
+--- ⚠️ 这份参数与 scripts/lobby_runtime.lua 的 UI_INIT_OPTIONS **必须逐字一致**：
+--- 无感联机入口的离线回退会直接走进 main.Start()，两边共用同一次 UI.Init，
+--- 缩放/主题才不会有第二种取值。已经初始化过就不再 Init——UI.Init 二次调用会被
+--- 忽略并在日志里打一条 WARNING，那条噪音对排查真问题没有帮助。
 function InitUI()
+    if UI.GetNVGContext() then
+        return
+    end
     UI.Init({
         theme = "default-dark",
         scale = UI.Scale.DEFAULT,

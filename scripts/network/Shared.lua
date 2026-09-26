@@ -24,6 +24,10 @@ Shared.EVENTS = {
     REQUEST = "RuoxiLlmPolishRequest",
     --- 服务端 → 客户端：对应的结果（成功或机器码失败）
     REPLY = "RuoxiLlmPolishReply",
+    --- 客户端 → 服务端：放弃某条在途请求（本地超时 / 主动停止）。
+    --- 服务端收到后取消对应上游请求，结果不再交付——双向收口，
+    --- 免得玩家已经在本地回落模板了，上游额度还在被这条请求消耗。
+    CANCEL = "RuoxiLlmPolishCancel",
     --- 客户端 → 服务端：连接就绪握手（引擎要求的远端事件时序，见 network-game-guide §11.1）
     READY = "RuoxiLlmRelayReady",
 }
@@ -31,6 +35,7 @@ Shared.EVENTS = {
 -- 服务端要接收的事件（客户端发的）
 Shared.SERVER_EVENTS = {
     Shared.EVENTS.REQUEST,
+    Shared.EVENTS.CANCEL,
     Shared.EVENTS.READY,
 }
 
@@ -42,6 +47,21 @@ Shared.CLIENT_EVENTS = {
 --- 单条请求的 JSON 上限（设计 §4 的 16KB 是网关口径；RemoteEvent 走的是游戏连接，
 --- 白名单 payload 正常在 1–2KB，这里留一倍余量并在超限时直接回落模板）
 Shared.MAX_PAYLOAD_BYTES = 4096
+
+--- 同一 requestId 的幂等窗口（设计 §4）：5 分钟内重复请求复用在途或已完成结果，
+--- 不重复扣预算、不重复请求模型。
+Shared.IDEMPOTENCY_WINDOW_SECONDS = 300
+
+--- requestId 形状：`c-<序号>-<发起时刻 UTC 秒>`（两端共用一份判定）。
+--- 服务端在解 payload 之前先按它挡掉不像 id 的字符串——幂等表的键不能是任意串。
+---@param requestId any
+---@return boolean
+function Shared.IsValidRequestId(requestId)
+    if type(requestId) ~= "string" or #requestId > 40 then
+        return false
+    end
+    return requestId:match("^c%-%d+%-%d+$") ~= nil
+end
 
 --- 上游回包只取 choices[1].message.content，长度另设上限防异常体
 Shared.MAX_BODY_BYTES = 8192

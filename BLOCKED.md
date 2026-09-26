@@ -543,3 +543,43 @@ LSP `Errors: 0`、`git diff --check` exit 0，交付 commit `e40fb21`），但**
 2. 客户端日志出现 `润色 结果=llm 长度=N 段数=K`（而不是 `结果=fallback:*`）；
 3. 若白名单没生效，日志形状是 `润色 结果=fallback:http_0` 或 `timeout` —— 而**不是** ERROR，
    玩家看到的仍是模板回复，聊天不中断。
+
+---
+
+## B-10 上游 Key 没有可验证的安全注入通道（2026-09-27，代码侧已按「Key 为空」收口）
+
+**结论**：Maker 平台**没有**任何已文档化的「给服务端 Lua 注入密钥 / 环境变量」机制。
+本轮不改设计、不填 Key：`scripts/network/Server.lua` 的 `LLM_API_KEY` 继续留空字符串，
+空值时中继直接回 `not_configured`、客户端回落模板——「没配 Key」与「没接 LLM」行为一致。
+**Key 不进源码、不进文档、不进日志、不进提交历史。**
+
+### 查过什么
+
+| 查证面 | 结果 |
+| --- | --- |
+| `engine-docs/`（含 `recipes/http.md`） | 只有「服务端可用、受 URL 白名单限制、加白名单联系制造团队」；**没有**任何密钥注入 / 环境变量 / 密钥库的说明。全目录 grep `环境变量\|getenv\|secret\|密钥` 只命中 http.md 示例里的字面量 `"secret"`。 |
+| `schemas/settings.schema.json` | `runtime` / `@runtime` 是 `additionalProperties: true` 的自由表，但写进去的值会随资源打进包（= 进仓库），**不能**当密钥通道。 |
+| `.emmylua/` | 没有 `os.getenv` 之类的类型声明；`EnvironmentBakeCache` 是图形环境贴图烘焙，与密钥无关。 |
+| 本地 Windows 运行时实测（2026-09-27，一次性探针，已删） | `os.getenv` 与 `io` **都存在**（`os.getenv("PATH")` 非空）。但同一次探测里 `io` 也在，而云端已实测 `io` 为 `nil`（AGENTS.md）——**本地能力不代表云端**；即便云端也有 `os.getenv`，也没有任何「谁把 Key 放进服务端进程环境」的机制。 |
+
+### 因此不能做的事
+
+- 不能把长期 Key 作为字面量写进 `Server.lua`（那会进 Maker 仓库与提交历史，且客户端包虽已排除该文件，
+  但仓库本身是有多人在看的）。B-9 里「用户在 `LLM_API_KEY` 处本地填 Key」这条**只在
+  本地/私有部署下成立**；一旦要推 Maker 远端，它就不是可接受的做法。
+- 不能用「先写死、上线前再删」的临时方案：`git log` 不会因为后来删除而忘记。
+
+### 需要谁
+
+用户向 TapTap 制造团队问一句（可与 B-9 的 URL 白名单一起问）：
+
+> 联机服务端 Lua 需要调用外部大模型 API，`Authorization: Bearer <Key>` 的 Key 应该放在哪里？
+> Maker 是否提供服务端密钥 / 环境变量的安全注入（不写进 Lua 源码与仓库）？
+> 如果没有，官方推荐的替代做法是什么？
+
+### 判据
+
+得到明确答复后再决定：① 有注入机制 → 改成从该机制读取，`LLM_API_KEY` 保持空字面量；
+② 没有 → 只能选「可撤销、低额度、仅本 demo 用」的 Key 并明确接受它进仓库的风险，
+或改走 B-9 里那条自建网关（Key 留在网关侧，Maker 侧只放共享口令——同样需要注入通道，故同样卡在这里）。
+在此之前 `CONFIG.LlmRelayEnabled` 保持 `false`。
