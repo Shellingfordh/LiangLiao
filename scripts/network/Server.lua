@@ -38,8 +38,8 @@ local TAG = "[LlmRelay]"
 
 --- 白名单必须精确到这一整串（含协议、域名、路径，不含查询参数）
 local UPSTREAM_URL = "https://api.deepseek.com/chat/completions"
--- DeepSeek 当前 OpenAI 兼容模型；deepseek-chat 已在官方退役计划后不可作为新接入目标。
-local UPSTREAM_MODEL = "deepseek-v4-flash"
+-- DeepSeek 当前官方推荐的 OpenAI 兼容模型；旧标识（deepseek-chat 等）已不作为新接入目标。
+local UPSTREAM_MODEL = "deepseek-flash"
 
 --- ⚠️ API Key 只允许放在这一行，且必须由**人**在部署环境里就地填写。
 --- 留空时中继直接回 not_configured，客户端回落模板——即「没配 key」与「没接 LLM」
@@ -386,7 +386,15 @@ local function ValidateAndRebuild(payload)
     if payload.v ~= 1 then
         return nil, "version"
     end
-    if not Shared.IsValidRequestId(payload.requestId) then
+    -- 先落到局部、再用 type 判定收窄：Shared.IsValidRequestId 是不透明调用，
+    -- EmmyLua 不会据此把 payload.requestId 从 any 收窄成 string，重建表里回填就会撞
+    -- RelayCanonical.requestId: string 而报 return-type-mismatch。
+    -- 两道闸分开写：第一道只判类型（收窄成非 nil 的 string），第二道判 id 形状。
+    local requestId = payload.requestId
+    if type(requestId) ~= "string" then
+        return nil, "request_id"
+    end
+    if not Shared.IsValidRequestId(requestId) then
         return nil, "request_id"
     end
 
@@ -501,7 +509,7 @@ local function ValidateAndRebuild(payload)
 
     return {
         v = 1,
-        requestId = payload.requestId,
+        requestId = requestId,
         core = {
             characterId = CHARACTER_ID,
             characterName = CHARACTER_NAME,

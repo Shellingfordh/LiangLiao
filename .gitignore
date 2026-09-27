@@ -27,6 +27,13 @@ ossutil_output/
 .installer/
 .maker/
 
+# Maker 远端 pre-receive 硬拒的路径：一旦被自动提交工具纳入提交，push 会被
+# `! [remote rejected]` 退回，远端构建根本不会启动。这些文件保留在本地、不入 git。
+# game_material/ 只存本地图标（.project/project.json 的 assets.icon 指向它，设计如此）；
+# .penguin/ 是平台侧本地状态。
+game_material/
+.penguin/
+
 # Maker engine assets & agent files (provided by ai-dev-kit, not user source)
 engine-docs/
 examples/
