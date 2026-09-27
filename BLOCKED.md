@@ -583,3 +583,51 @@ LSP `Errors: 0`、`git diff --check` exit 0，交付 commit `e40fb21`），但**
 ② 没有 → 只能选「可撤销、低额度、仅本 demo 用」的 Key 并明确接受它进仓库的风险，
 或改走 B-9 里那条自建网关（Key 留在网关侧，Maker 侧只放共享口令——同样需要注入通道，故同样卡在这里）。
 在此之前 `CONFIG.LlmRelayEnabled` 保持 `false`。
+
+---
+
+## B-11 WASM 宿主把 bgfx 内建着色器编译失败记成游戏错误（2026-09-27，工程侧无改动可做）
+
+**结论**：2026-09-27 09:06 那份「317 条错误」的报告，全部是**同一个事件**——宿主引擎的
+bgfx GL 后端在初始化时编译/链接它**自己的内建 clear 程序**（`vs_clear` / `fs_clear`）失败。
+这与本工程的 Lua、资源、构建产物都无关，工程侧没有任何可改的代码。
+
+### 证据
+
+1. 报错里 dump 出来的 GLSL 是 **bgfx 自带的着色器**：uniform 名 `bgfx_clear_depth` /
+   `bgfx_clear_color[8]`，输出名 `bgfx_FragColor` / `bgfx_FragData[1..8]`，以及
+   `#define texture2DLod textureLod` 那一整块 bgfx 生成的兼容宏。工程里没有任何文件引用这些名字。
+2. 报错位置在**宿主自己的引擎二进制**里（`/workspace/engine/Source/ThirdParty/bgfx-all/bgfx/src/renderer_gl.cpp`
+   是宿主构建时的源码路径），日志 tag 是 `[0]`（引擎层），出现在启动最初 2 秒，
+   整份报告里**没有一行 `[Script]`**——Lua 侧一条 ERROR 都没有。
+3. 本工程**不带任何着色器资源**：`find assets scripts raw-assets -name '*.glsl/*.hlsl/*.sc/*.vert/*.frag'`
+   为空，也没有 `Techniques/` `Shaders/` `RenderPaths/` 目录。bgfx 的内建程序无从被工程影响。
+4. 那次会话跑的是 **1.0.18 构建**（`dist/latest.json`，2026-09-26T15:11:06Z，
+   在 2026-09-27 凌晨这轮联机/中继改动**之前**），而且该构建里的 `settings.json` 是
+   `{"multiplayer":{"enabled":false}}`（单机路径）。⇒ 既不是这轮新代码，也不是联机入口。
+5. 报错文本 `errmsg:glLinkProgram error:0`：bgfx 自己的 GL 错误检查拿到的是
+   **GL_NO_ERROR**，而 `GL_LINK_STATUS` 为假、info log 长度为 0。
+   这不是「GLSL 语法错」，而是**程序根本没链上**（上下文无效 / 链接未完成 / GPU 进程异常）的典型签名。
+
+### 因此不能做的事
+
+- 不要为了「消掉这些错误」去改 Lua、改材质、砍 3D 状态窗——那些都碰不到 bgfx 的内建着色器，
+  改了只会白白损坏已验证的画质与验收结论。
+- 不要改 `.project/settings.json` 的 `sources.*.tag`（现为 `stable`）：没有依据说明该换成什么，
+  猜一个 tag 会把已经真机验证过的引擎版本换掉。
+
+### 需要谁
+
+- **用户**：把下面这段连同报告原文一起提给 TapTap 制造团队（可与 B-9 的白名单一起问）：
+
+  > WASM 宿主构建 `feat/wasm-tap-host-v1.31.6` 下，游戏启动时 bgfx GL 后端反复报
+  > `bgfx invalid shader` / `BXERROR: renderer_gl.cpp (7045): Failed to compile shader`，
+  > dump 出来的是 bgfx 自带的 `vs_clear` / `fs_clear`（uniform `bgfx_clear_depth` /
+  > `bgfx_clear_color[]`）。`errmsg:glLinkProgram error:0` 说明 GL 侧没有报错码、
+  > 链接信息日志为空，像是链接根本没完成。项目侧不带任何 shader/technique/renderpath 资源，
+  > 同一份构建在上一版宿主里没有这个问题，怀疑是宿主侧回归。能否确认：
+  > ① 该宿主的 WebGL 上下文是按 WebGL2 申请的吗？
+  > ② 是否有 `KHR_parallel_shader_compile` 下未轮询 `COMPLETION_STATUS` 就判 `LINK_STATUS` 的问题？
+
+- **判据**：宿主更新后重跑预览，`bgfx invalid shader` 归零；在此之前这 317 条错误
+  按平台缺陷处理，不再计入本工程的「运行时报错」。
