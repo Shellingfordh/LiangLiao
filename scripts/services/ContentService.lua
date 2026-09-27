@@ -287,6 +287,7 @@ local function varsOf(fact)
         gap = ContentService.FormatGap(fact.gapSeconds),
         sentEvent = fact.sentEventTitle or "",
         sentEnds = fact.sentEventEndsAt or "",
+        m7Answer = fact.m7Answer or fact.eventPhrase or "",
     }
 end
 
@@ -323,6 +324,25 @@ function ContentService.DetectTopics(text)
     return found
 end
 
+--- M7 的自由输入守卫：命中事件卡声明的自然发问方向才给出该方向的固定回答；
+--- 其他输入仍可聊天，但第一句只能承认当前可确认的事实，不能把模板伪装成精确理解。
+---@param fact EventFact
+---@param text string
+---@return boolean
+local function matchesM7Question(fact, text)
+    if fact.isM7KeyEvent ~= true or type(fact.questionHints) ~= "table" then
+        return false
+    end
+    local source = text or ""
+    for i = 1, #fact.questionHints do
+        local hint = fact.questionHints[i]
+        if type(hint) == "string" and hint ~= "" and source:find(hint, 1, true) then
+            return true
+        end
+    end
+    return false
+end
+
 --- 组装 1–3 段短回复。事实只从 fact 取（EventService 是唯一事实源），
 --- quote 只作为被回指的宾语和话题词匹配的额外输入。
 ---@param fact EventFact
@@ -333,7 +353,13 @@ end
 local function BuildSegments(fact, userText, turnIndex, quote)
     local briefReply = fact.brief == true
     local pool
-    if briefReply then
+    if fact.isM7KeyEvent == true and type(fact.m7Answer) == "string" and fact.m7Answer ~= "" then
+        if matchesM7Question(fact, userText or "") then
+            pool = { "{m7Answer}" }
+        else
+            pool = { "我只能先确认：{m7Answer}" }
+        end
+    elseif briefReply then
         pool = BRIEF_LINES
     else
         pool = EVENT_LINES[fact.id] or GENERIC_LINES

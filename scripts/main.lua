@@ -182,7 +182,34 @@ function UpdateCurrentTrace(fact)
     if not slot or not fact then
         return
     end
-    if not fact.traceKey or fact.eventState ~= "ongoing" then
+    -- M7：事后痕迹由「已经结束」的关键事件才触发。它优先于普通日程，且一旦
+    -- 钉在该段人生上就一直保留到下一张关键卡结束；不能被下一小时的咖啡/通勤覆盖。
+    local completed = EventService.LatestCompletedKeyEvent(City(), fact.serverTime)
+    if completed then
+        if not completed.traceKey then
+            return
+        end
+        if slot.trace and slot.trace.occurrenceKey == completed.occurrenceKey then
+            return
+        end
+        LifeService.SetTrace(slot.slotId, {
+            traceKey = completed.traceKey,
+            occurrenceKey = completed.occurrenceKey,
+            eventTitle = completed.title or "",
+            sceneId = completed.sceneId,
+            isM7KeyEvent = true,
+        }, fact.serverTime)
+        logInfo(string.format("M7 事后痕迹替换 槽=%s 痕迹=%s 场景=%s 事件=%s",
+            slot.slotId, completed.traceKey, completed.sceneId, tostring(completed.title or "")))
+        ApplyScene(true)
+        return
+    end
+    -- 已经有一条 M7 痕迹、但今天还没有下一张关键事件结束：普通日程没有替换权。
+    if slot.trace and slot.trace.isM7KeyEvent == true then
+        return
+    end
+    -- M4 既有日程痕迹维持原行为，兼容旧档与现有发布链路。
+    if not fact.traceKey or fact.eventState ~= "ongoing" or fact.isM7KeyEvent == true then
         return
     end
     if slot.trace and slot.trace.occurrenceKey == fact.occurrenceKey then
@@ -193,6 +220,7 @@ function UpdateCurrentTrace(fact)
         occurrenceKey = fact.occurrenceKey,
         eventTitle = fact.eventTitle or "",
         sceneId = fact.sceneId,
+        isM7KeyEvent = false,
     }, fact.serverTime)
     logInfo(string.format("生活痕迹替换 槽=%s 痕迹=%s 场景=%s 事件=%s",
         slot.slotId, fact.traceKey, fact.sceneId, tostring(fact.eventTitle or "")))
@@ -205,11 +233,26 @@ function EnsureTraceSeeded()
     if not slot or slot.trace or not lastSnap_ then
         return
     end
+    local completed = EventService.LatestCompletedKeyEvent(City(), lastSnap_.utcSec)
+    if completed then
+        if not completed.traceKey then
+            return
+        end
+        LifeService.SetTrace(slot.slotId, {
+            traceKey = completed.traceKey,
+            occurrenceKey = completed.occurrenceKey,
+            eventTitle = completed.title,
+            sceneId = completed.sceneId,
+            isM7KeyEvent = true,
+        }, lastSnap_.utcSec)
+        logInfo("M7 事后痕迹按当日计划补挂 槽=" .. slot.slotId .. " 痕迹=" .. tostring(completed.traceKey))
+        return
+    end
     local plan = EventService.PlanFor(City(), lastSnap_.dateKey)
     local best = nil
     for i = 1, #plan.occurrences do
         local occ = plan.occurrences[i]
-        if occ.traceKey and occ.startUtc <= lastSnap_.utcSec then
+        if occ.traceKey and occ.isM7KeyEvent ~= true and occ.startUtc <= lastSnap_.utcSec then
             if not best or occ.startUtc > best.startUtc then
                 best = occ
             end
@@ -1358,6 +1401,9 @@ function RefreshNoteLine()
         note = string.format("事件 · %s（%s）· %s · %s—%s",
             lastFact_.eventTitle, EVENT_STATE_LABEL[lastFact_.eventState] or lastFact_.eventState,
             (lastFact_.eventEmotion or ""), lastFact_.eventStartsAt, lastFact_.eventEndsAt)
+        if lastFact_.isM7KeyEvent == true and lastFact_.clue and lastFact_.clue ~= "" then
+            note = note .. " · 线索：" .. lastFact_.clue
+        end
     end
     local sceneNote = StatusWindow.GetSceneNotice()
     if sceneNote ~= "" then

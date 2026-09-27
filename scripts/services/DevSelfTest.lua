@@ -48,6 +48,11 @@ local MessageService = require("services.MessageService")
 local ContentService = require("services.ContentService")
 local MemoryService = require("services.MemoryService")
 local EventService = require("services.EventService")
+-- EventService 的 M7 扩展与旧 M1–M5 接口并存；自检只经这两个公开入口观察
+-- 关键卡，不把计划器内部表当成另一条测试路径。EmmyLua 对跨模块增量字段不作合并，
+-- 这里以公开适配面标成 any，实际字段断言仍在 AJ1–AJ4。
+---@type any
+local M7EventService = EventService
 local PolishService = require("services.PolishService")
 local ElizaService = require("services.ElizaService")
 local SceneService = require("SceneService")
@@ -103,7 +108,7 @@ local failures_ = {}
 local summary_ = "自检未运行"
 
 --- Run 里 runScenario 的调用条数；结论行拿它判断「有没有场景被整批日志丢掉」
-local SCENARIO_TOTAL = 35
+local SCENARIO_TOTAL = 36
 
 local function logInfo(msg)
     print(TAG .. " " .. msg)
@@ -781,11 +786,12 @@ local function ScenarioEventReentry(dateKey)
         string.format("key=%s fact=%s 回复增量=%d 队列=%d", tostring(reply1945 and reply1945.factKey),
             tostring(reply1945 and reply1945.factId), herReplyCount() - opens1945,
             MessageService.GetQueueLength()))
-    -- 精确断言：回复里必须出现「19:45 那个实例的原话」。
-    -- 不用「A 或 B 或 C」的措辞或匹配 —— 空回复、错模板都可能蹭过那种写法。
+    -- M7 关键卡命中自然发问时优先用卡片的固定回答；普通事件仍用实例原话。
+    -- 两者都必须来自这个 19:45 实例，不能用宽松的 A/B/C 任意匹配。
+    local expectedFactText = fact1945.m7Answer or fact1945.eventPhrase
     check("J1 19:45 回复用了开放麦实例自己的事实句",
-        fact1945.eventPhrase ~= "" and text1945:find(fact1945.eventPhrase, 1, true) ~= nil,
-        string.format("期望含=%s 实际=%s", fact1945.eventPhrase, text1945))
+        expectedFactText ~= "" and text1945:find(expectedFactText, 1, true) ~= nil,
+        string.format("期望含=%s 实际=%s", expectedFactText, text1945))
     check("J1b 19:45 回复没有串到别的事件文案池",
         text1945:find("边距") == nil and text1945:find("水刚烧开") == nil
         and text1945:find("便签") == nil, text1945)
@@ -2556,6 +2562,133 @@ local function ScenarioExplicitStoryAdopted(dateKey)
 end
 
 -- ---------------------------------------------------------------------------
+-- 场景 AJ（M7）：四城事件四件套。每城只有一条关键事件；线索、可问方向、
+-- 固定事实和事后痕迹必须挂同一 occurrenceKey。普通日程不会抢走当前痕迹。
+-- ---------------------------------------------------------------------------
+local function ScenarioM7FourPieceCards(dateKey)
+    logInfo("场景 AJ M7 四城事件四件套")
+    beginScenario()
+    local expected = {
+        los_angeles = "la_cafe_open_mic",
+        shanghai = "sha_bookstore_evening",
+        chengdu = "cdu_nightmarket_supper",
+        london = "lon_recordshop_shift",
+    }
+    local cards = M7EventService.M7Cards()
+    local bad = ""
+    for cityId, templateId in pairs(expected) do
+        local card = cards[cityId]
+        local plan = EventService.PlanFor(cityId, dateKey)
+        ---@type any
+        local occurrence = nil
+        for i = 1, #plan.occurrences do
+            if plan.occurrences[i].templateId == templateId then
+                occurrence = plan.occurrences[i]
+                break
+            end
+        end
+        local fieldsOk = card ~= nil and card.templateId == templateId
+            and type(card.id) == "string" and card.id ~= ""
+            and type(card.clue) == "string" and card.clue ~= ""
+            and type(card.questionHints) == "table" and #card.questionHints > 0
+            and type(card.answer) == "string" and card.answer ~= ""
+            and type(card.forbidden) == "string" and card.forbidden ~= ""
+            and type(card.traceLifecycle) == "string" and card.traceLifecycle ~= ""
+        local occurrenceOk = occurrence ~= nil and occurrence.isM7KeyEvent == true
+            and occurrence.m7CardId == card.id and occurrence.traceKey ~= nil
+            and occurrence.clue == card.clue
+        if not (fieldsOk and occurrenceOk) then
+            bad = bad .. " " .. cityId
+        end
+    end
+    check("AJ1 四城各一张完整事件卡，计划实例带同一张卡与有效痕迹", bad == "", bad)
+
+    local laPlan = EventService.PlanFor("los_angeles", dateKey)
+    ---@type any
+    local laKey = nil
+    for i = 1, #laPlan.occurrences do
+        if laPlan.occurrences[i].isM7KeyEvent then
+            laKey = laPlan.occurrences[i]
+            break
+        end
+    end
+    local regenerated = EventService.Regenerate("los_angeles", dateKey)
+    ---@type any
+    local regeneratedKey = nil
+    for i = 1, #regenerated.occurrences do
+        if regenerated.occurrences[i].isM7KeyEvent then
+            regeneratedKey = regenerated.occurrences[i]
+            break
+        end
+    end
+    check("AJ2 同城同日重算仍是同一关键事件实例键与卡片（不重复产出）",
+        laKey ~= nil and regeneratedKey ~= nil
+        and laKey.occurrenceKey == regeneratedKey.occurrenceKey
+        and laKey.m7CardId == regeneratedKey.m7CardId,
+        string.format("%s / %s", tostring(laKey and laKey.occurrenceKey),
+            tostring(regeneratedKey and regeneratedKey.occurrenceKey)))
+
+    -- 真正走一次存档→服务重建：M7 字段可由旧计划补齐，但实例键绝不随升级变化。
+    MemoryService.SetEventPlans(EventService.ExportPlans())
+    MemoryService.Save()
+    reinit_(SELFTEST_SAVE)
+    local restoredPlan = EventService.PeekPlan("los_angeles", dateKey)
+    ---@type any
+    local restoredKey = nil
+    if restoredPlan then
+        for i = 1, #restoredPlan.occurrences do
+            if restoredPlan.occurrences[i].templateId == "la_cafe_open_mic" then
+                restoredKey = restoredPlan.occurrences[i]
+                break
+            end
+        end
+    end
+    check("AJ2b 离线重进接管同一关键实例并保留四件套字段",
+        restoredPlan ~= nil and restoredPlan.fromSave == true and restoredKey ~= nil
+        and regeneratedKey ~= nil and restoredKey.occurrenceKey == regeneratedKey.occurrenceKey
+        and restoredKey.m7CardId == regeneratedKey.m7CardId and restoredKey.clue ~= "",
+        string.format("fromSave=%s key=%s", tostring(restoredPlan and restoredPlan.fromSave),
+            tostring(restoredKey and restoredKey.occurrenceKey)))
+
+    if regeneratedKey then
+        ---@type any
+        local during = EventService.FactFor("los_angeles", regeneratedKey.startUtc + 60)
+        local known = ContentService.Reply(during, "开放麦什么时候开始？", 91)
+        local unknown = ContentService.Reply(during, "你今天认识了谁？", 92)
+        check("AJ3 线索与已知发问走关键事件事实，未知自由输入不假装精准理解",
+            during.isM7KeyEvent == true and during.occurrenceKey == regeneratedKey.occurrenceKey
+            and known:find(during.m7Answer, 1, true) ~= nil
+            and unknown:find("我只能先确认", 1, true) ~= nil,
+            string.format("known=%s unknown=%s", known, unknown))
+
+        local before = M7EventService.LatestCompletedKeyEvent("los_angeles", regeneratedKey.endUtc - 1)
+        local after = M7EventService.LatestCompletedKeyEvent("los_angeles", regeneratedKey.endUtc + 1)
+        check("AJ4 关键事件结束前不留事后痕迹，结束后只返回该实例作为替换源",
+            before == nil and after ~= nil and after.occurrenceKey == regeneratedKey.occurrenceKey
+            and after.traceKey == regeneratedKey.traceKey,
+            string.format("before=%s after=%s", tostring(before and before.occurrenceKey),
+                tostring(after and after.occurrenceKey)))
+
+        resetLifeRegistry()
+        local slot = LifeService.CreateSlot("los_angeles", "stranger", nil, regeneratedKey.endUtc + 1)
+        reinit_(LifeService.SlotSaveFile("life-1"), slot)
+        local afterFact = EventService.FactFor("los_angeles", regeneratedKey.endUtc + 1)
+        updateTrace_(afterFact)
+        local bound = LifeService.GetTrace("life-1")
+        local routineFact = EventService.FactFor("los_angeles", regeneratedKey.endUtc + 1801)
+        updateTrace_(routineFact)
+        local kept = LifeService.GetTrace("life-1")
+        check("AJ5 事后痕迹写入人生槽后，后续普通日程不能覆盖；换段/重进可持久化",
+            bound ~= nil and bound.isM7KeyEvent == true
+            and bound.occurrenceKey == regeneratedKey.occurrenceKey
+            and kept ~= nil and kept.occurrenceKey == regeneratedKey.occurrenceKey,
+            string.format("bound=%s kept=%s", tostring(bound and bound.occurrenceKey),
+                tostring(kept and kept.occurrenceKey)))
+        resetLifeRegistry()
+    end
+end
+
+-- ---------------------------------------------------------------------------
 -- 场景 AI（M2-B 路径 A）：LLM 中继的客户端一侧 —— 信封契约、应答配对、超时与断线结清。
 -- 全程不碰网络，本地就能验那条底线：网络怎么坏，她也永远有回话（回落模板）。
 -- 服务端一侧（HTTP 出站、限流、上游解析）刻意不在客户端自检里跑：network/Server.lua
@@ -2772,6 +2905,7 @@ function DevSelfTest.Run(options)
     runScenario("AF", ScenarioSwitchNoResidue, dateKey)
     runScenario("AG", ScenarioRelationPersisted, dateKey)
     runScenario("AH", ScenarioExplicitStoryAdopted, dateKey)
+    runScenario("AJ", ScenarioM7FourPieceCards, dateKey)
     -- M2-B 路径 A：中继客户端一侧的信封/配对/超时/断线结清（全程无网络）
     runScenario("AI", ScenarioRelayContract, dateKey)
 

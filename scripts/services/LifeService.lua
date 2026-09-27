@@ -116,6 +116,7 @@ local function readSlot(raw)    if type(raw) ~= "table" then
                 occurrenceKey = occurrenceKey,
                 eventTitle = asString(raw.trace.eventTitle) or "",
                 sceneId = sceneId,
+                isM7KeyEvent = raw.trace.isM7KeyEvent == true,
                 boundAtUtc = asInteger(raw.trace.boundAtUtc) or 0,
             }
         end
@@ -493,6 +494,9 @@ function LifeService.SetTrace(slotId, trace, utcNow)
             occurrenceKey = trace.occurrenceKey,
             eventTitle = trace.eventTitle or "",
             sceneId = trace.sceneId,
+            -- M7 的事后痕迹必须跨普通日程保留，直到下一张关键事件结束；
+            -- 字段随人生槽落盘，重进后仍能判定它不是 M4 的即时日程痕迹。
+            isM7KeyEvent = trace.isM7KeyEvent == true,
             boundAtUtc = math.floor(utcNow or 0),
         }
     else

@@ -323,6 +323,7 @@ end
 ---@field occurrenceKey string 绑定的事件实例（同一天同一城永远同一个键）
 ---@field eventTitle string 档案页短文本用的事件标题
 ---@field sceneId string 绑定时所在场景（痕迹锚点跟着它走）
+---@field isM7KeyEvent? boolean 事后痕迹：普通日程不能在下一次刷新时替换
 ---@field boundAtUtc? integer 由 LifeService 落槽时补
 
 ---@class SceneState

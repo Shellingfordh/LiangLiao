@@ -381,6 +381,53 @@ local FALLBACK_EVENT = {
     london = "lon_recordshop_shift",
 }
 
+-- M7 事件四件套。这里只放每城一条「关键事件」：普通作息仍是日程，
+-- 不会因为带了 traceKey 就挤进关键叙事。卡片字段同时给状态窗线索、
+-- 本地模板回复和验收文档使用，避免三处再各写一套事实。
+---@class M7EventCard
+---@field id string
+---@field templateId string
+---@field clue string 用户回复前可见的线索
+---@field questionHints string[] 可自然发问的词；不匹配就只回已知事实
+---@field answer string Lua 固定事实，允许直接说出的回答
+---@field forbidden string 禁止编造的边界说明
+---@field traceLifecycle string 事后痕迹何时出现、何时被替换
+---@type table<string, M7EventCard>
+local M7_CARDS = {
+    los_angeles = {
+        id = "m7-la-open-mic", templateId = "la_cafe_open_mic",
+        clue = "靠窗那杯咖啡已经凉了，台前有人在试音。",
+        questionHints = { "开放麦", "试音", "上台", "咖啡馆", "几点" },
+        answer = "今晚是咖啡馆的开放麦，我在靠窗等下一位上台。",
+        forbidden = "不编造表演者、曲目、她是否上台或活动结果。",
+        traceLifecycle = "活动结束后，靠窗的半杯咖啡留在咖啡馆场景；下一次关键事件结束后替换。",
+    },
+    shanghai = {
+        id = "m7-sha-bookstore", templateId = "sha_bookstore_evening",
+        clue = "柜台旁叠着两本刚收回来的旧书，店里比平时安静。",
+        questionHints = { "旧书", "书店", "值班", "柜台", "哪本" },
+        answer = "我今晚在旧书店值班，刚把柜台旁收回来的两本旧书叠好。",
+        forbidden = "不编造书名、顾客身份、成交或她私下读完了什么。",
+        traceLifecycle = "值班结束后，两本旧书留在书店场景；下一次关键事件结束后替换。",
+    },
+    chengdu = {
+        id = "m7-cdu-nightmarket", templateId = "cdu_nightmarket_supper",
+        clue = "摊位收好后，桌边还压着一张没干透的明信片。",
+        questionHints = { "夜市", "明信片", "摊", "收摊", "卖" },
+        answer = "夜市刚收摊，我把最后一张还没干透的明信片压在桌边。",
+        forbidden = "不编造售卖数量、收入、买家或她答应寄给谁。",
+        traceLifecycle = "收摊后，未干的明信片留在夜市街口场景；下一次关键事件结束后替换。",
+    },
+    london = {
+        id = "m7-lon-recordshop", templateId = "lon_recordshop_shift",
+        clue = "试听机旁有一张还没放回架子的唱片，柜台灯亮着。",
+        questionHints = { "唱片", "试听", "唱片行", "找", "柜台" },
+        answer = "我今晚在老唱片行当值，正帮人找一张难找的唱片。",
+        forbidden = "不编造唱片名称、顾客身份、是否找到或她的收藏。",
+        traceLifecycle = "当值结束后，试听机旁的唱片留在唱片行场景；下一次关键事件结束后替换。",
+    },
+}
+
 ---@class EventOccurrence
 ---@field occurrenceKey string 城市/当地日期/模板 id
 ---@field templateId string
@@ -398,6 +445,13 @@ local FALLBACK_EVENT = {
 ---@field emotion string
 ---@field phrase string
 ---@field traceKey? string 关键事件的当前生活痕迹键（随实例落盘，重进读回同一绑定）
+---@field isM7KeyEvent boolean 是否是 M7 每城唯一的关键事件
+---@field m7CardId? string 关键事件四件套卡 id
+---@field clue? string 用户回复前可见的线索
+---@field questionHints? string[] 可自然发问的词
+---@field answer? string Lua 固定回答
+---@field forbidden? string 回复禁区说明
+---@field traceLifecycle? string 痕迹生命周期说明
 ---@field variantIndex integer 当天定中第几个变体（可复现，不是随机）
 
 ---@class EventPlan
@@ -495,6 +549,20 @@ function EventService.Restore(savedPlans)
                         and type(occ.templateId) == "string"
                         and type(occ.startUtc) == "number"
                         and type(occ.endUtc) == "number" then
+                        -- v6 及以前的计划没有 M7 卡片字段；不重算、不改变 occurrenceKey，
+                        -- 只按城市与既存 templateId 补齐当前版本的内容契约。
+                        local card = M7_CARDS[raw.cityId]
+                        if card and card.templateId == occ.templateId then
+                            occ.isM7KeyEvent = true
+                            occ.m7CardId = card.id
+                            occ.clue = card.clue
+                            occ.questionHints = card.questionHints
+                            occ.answer = card.answer
+                            occ.forbidden = card.forbidden
+                            occ.traceLifecycle = card.traceLifecycle
+                        else
+                            occ.isM7KeyEvent = false
+                        end
                         occurrences[#occurrences + 1] = occ
                     end
                 end
@@ -573,6 +641,8 @@ function EventService.PlanFor(cityId, dateKey)
         local row = rows[i]
         local template = EVENT_TEMPLATES[row.event]
         if template then
+            local card = M7_CARDS[cityId]
+            local isM7KeyEvent = card ~= nil and card.templateId == template.id
             local seedText = cityId .. "|" .. dateKey .. "|" .. template.id .. "|" .. SEED_SALT
             local rolled = fnv1a(seedText)
             local variants = template.variants
@@ -604,6 +674,13 @@ function EventService.PlanFor(cityId, dateKey)
                 emotion = variant.emotion,
                 phrase = variant.phrase,
                 traceKey = template.traceKey,
+                isM7KeyEvent = isM7KeyEvent,
+                m7CardId = isM7KeyEvent and card.id or nil,
+                clue = isM7KeyEvent and card.clue or nil,
+                questionHints = isM7KeyEvent and card.questionHints or nil,
+                answer = isM7KeyEvent and card.answer or nil,
+                forbidden = isM7KeyEvent and card.forbidden or nil,
+                traceLifecycle = isM7KeyEvent and card.traceLifecycle or nil,
                 variantIndex = variantIndex,
             }
             occurrences[#occurrences + 1] = occurrence
@@ -630,6 +707,32 @@ function EventService.PlanFor(cityId, dateKey)
         onPlansChanged_()
     end
     return plan
+end
+
+--- 返回每城一张 M7 事件卡。只读约定：调用者不得改写；实例化时会复制必要字段进计划。
+---@return table<string, M7EventCard>
+function EventService.M7Cards()
+    return M7_CARDS
+end
+
+--- 当地当天最近一个已结束的 M7 关键事件。跨日不重新寻找旧事件：它的痕迹已在
+--- LifeService 槽里持久化，直到本地日期里的下一张关键卡结束才被替换。
+---@param cityId string
+---@param utcSec number
+---@return EventOccurrence|nil
+function EventService.LatestCompletedKeyEvent(cityId, utcSec)
+    local snap = TimeState.Snapshot(cityId, utcSec)
+    local plan = EventService.PlanFor(cityId, snap.dateKey)
+    local best = nil
+    local t = math.floor(utcSec)
+    for i = 1, #plan.occurrences do
+        local occurrence = plan.occurrences[i]
+        if occurrence.isM7KeyEvent == true and occurrence.endUtc <= t
+            and (not best or occurrence.endUtc > best.endUtc) then
+            best = occurrence
+        end
+    end
+    return best
 end
 
 ---@param occurrence EventOccurrence
@@ -718,6 +821,13 @@ end
 ---@field placeLabel string
 ---@field sceneId string
 ---@field traceKey? string 该事件绑定的生活痕迹键（nil = 非关键事件，不改变当前痕迹）
+---@field isM7KeyEvent boolean 是否是 M7 四件套关键事件
+---@field m7CardId? string
+---@field clue? string
+---@field questionHints? string[]
+---@field m7Answer? string
+---@field m7Forbidden? string
+---@field traceLifecycle? string
 ---@field availability string
 ---@field availabilityLabel string
 ---@field brief boolean 碎片时间档：回复要短
@@ -767,6 +877,13 @@ function EventService.FactFor(cityId, utcSec, sentUtcSec)
         placeLabel = PLACE_LABEL[snap.place] or "外面",
         sceneId = (occ and occ.sceneId) or snap.sceneId or "",
         traceKey = occ and occ.traceKey or nil,
+        isM7KeyEvent = occ and occ.isM7KeyEvent == true or false,
+        m7CardId = occ and occ.m7CardId or nil,
+        clue = occ and occ.clue or nil,
+        questionHints = occ and occ.questionHints or nil,
+        m7Answer = occ and occ.answer or nil,
+        m7Forbidden = occ and occ.forbidden or nil,
+        traceLifecycle = occ and occ.traceLifecycle or nil,
         availability = snap.availability,
         availabilityLabel = snap.availabilityLabel or "",
         brief = snap.brief == true,
