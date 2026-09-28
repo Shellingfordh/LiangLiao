@@ -41,12 +41,10 @@ local UPSTREAM_URL = "https://api.deepseek.com/chat/completions"
 -- DeepSeek 当前官方推荐的 OpenAI 兼容模型；旧标识（deepseek-chat 等）已不作为新接入目标。
 local UPSTREAM_MODEL = "deepseek-flash"
 
---- ⚠️ API Key 只允许放在这一行，且必须由**人**在部署环境里就地填写。
---- 留空时中继直接回 not_configured，客户端回落模板——即「没配 key」与「没接 LLM」
---- 行为一致，不会报错、不会静默超时。
---- 请不要把 key 贴进任何对话、提交信息、文档或客户端模块。
---- Maker 是否提供服务端安全注入（环境变量 / 密钥库）尚未验证，见 BLOCKED.md B-10。
-local LLM_API_KEY = ""
+--- 只从 Maker 服务端安全注入的环境变量读取，绝不在源码、资源、日志或 RemoteEvent 中出现。
+--- 未注入时保持空串：中继回 not_configured，客户端仍立即回落本地模板，
+--- 不会静默超时或中断聊天。请在 Maker 的服务端环境变量中设置 LLM_API_KEY。
+local LLM_API_KEY = os.getenv("LLM_API_KEY") or ""
 
 --- 系统提示词是构建期常量（对应 M2-B 设计 §7），不是用户数据，也不来自客户端。
 --- 客户端送来的只有事实区块（白名单 payload），提示词与模型名由服务端固定。

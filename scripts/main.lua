@@ -40,10 +40,10 @@ local CONFIG = {
     -- M2-B 路径 A：服务端直连上游模型（scripts/network/{Shared,Server,Client}.lua）。
     -- 客户端 HTTP 被平台完全屏蔽（engine-docs/recipes/http.md），出站只能由联机服务端做，
     -- 所以这条链路**只在联机模式下成立**：单机时 IsClientMode 没有服务器连接，中继不启动。
-    -- 还差两件外部条件：① 上游 URL 进 TapTap 白名单（全字符串精确匹配）；
-    -- ② .project/settings.json 开 multiplayer。两件齐备前保持 false：
-    -- HandleDeliver 的行为与 M2-A 完全一致（同步模板回复、零外发）。
-    LlmRelayEnabled = false,
+    -- 前提已满足：DeepSeek 精确 URL 已在平台白名单，且项目已启用联机。
+    -- 服务端仍仅在安全注入的 LLM_API_KEY 存在时才会真正出站；缺 Key、断线、
+    -- 超时或上游失败均由 PolishService 回落 M2-A 本地模板，不中断聊天。
+    LlmRelayEnabled = true,
 }
 
 --- 事件实例的生命周期上屏文案：状态窗注释行与回复共用同一套说法
