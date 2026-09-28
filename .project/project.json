@@ -29,5 +29,7 @@
   "test_qrcode": {
     "url": "https://tapcode-sce.spark.xd.com/qrcode/m_c7s3_1790375200784.png",
     "generated_at": "2026-09-25T22:26:40.914Z"
-  }
+  },
+  "entry@client": "main.lua",
+  "entry@server": "main.lua"
 }

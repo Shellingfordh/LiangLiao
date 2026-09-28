@@ -28,7 +28,8 @@
   "@runtime": {
     "multiplayer": {
       "enabled": true,
-      "lobby_runtime": "scripts/lobby_runtime.lua"
+      "lobby_runtime": "scripts/lobby_runtime.lua",
+      "max_players": 1
     }
   }
 }
