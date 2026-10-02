@@ -55,8 +55,8 @@ local CHIP_STYLE = {
 -- 预览/提示两行的高度写死：文字换行不再挪动任何一枚 chip（规则 ②）。
 -- 预览留到 3 行的量：窄屏（320px 宽）下 82% 卡片内宽约 230px，最长那句 33 字要占 2 行，
 -- 只按宽屏估会裁字——裁了没人报，只会读成「没选对」。
-local PREVIEW_HEIGHT = 48
-local HINT_HEIGHT = 18
+local PREVIEW_HEIGHT = 76
+local HINT_HEIGHT = 42
 local CHIP_HEIGHT = 30
 local ACTION_HEIGHT = 38
 
@@ -156,15 +156,15 @@ local function RefreshPreview()
         return
     end
     if IsRandomPick() then
-        preview_:SetText("随机 · 由创建时刻定种，落盘后不再变")
-        hint_:SetText("城市与关系都由这一次随机决定，不用再挑")
+        preview_:SetText("A surprise city and relationship, saved for this story.")
+        hint_:SetText("Both choices are made for you.")
         RefreshChips()
         return
     end
     local city = pickedCity_ and ProfileService.CityFor(pickedCity_) or nil
     if not city then
-        preview_:SetText("要点两下：一枚城市 + 一枚关系起点")
-        hint_:SetText("她按当地时间生活，忙或在睡时消息排队")
+        preview_:SetText("Choose a city and how you know her.")
+        hint_:SetText("She follows local time. Messages wait while she's busy or asleep.")
         RefreshChips()
         return
     end
@@ -172,13 +172,13 @@ local function RefreshPreview()
     if not relationChosen_ then
         -- 默认关系只是预填：说清楚还差一步，别让它替用户提交
         local prefill = relation and relation.label or "?"
-        preview_:SetText(string.format("%s · %s｜关系起点未选（预填 %s）",
+        preview_:SetText(string.format("%s · %s\nChoose a relationship (suggested: %s).",
             city.label, city.identityShort, prefill))
-        hint_:SetText("再点一枚关系起点才算选它")
+        hint_:SetText("Tap a relationship to confirm your choice.")
     else
-        preview_:SetText(string.format("就这么开始：%s × %s",
+        preview_:SetText(string.format("Start here: %s × %s",
             relation and relation.label or "?", city.label))
-        hint_:SetText("她按当地时间生活，忙或在睡时消息排队")
+        hint_:SetText("She follows local time. Messages wait while she's busy or asleep.")
     end
     RefreshChips()
 end
@@ -272,7 +272,7 @@ function ProfileOverlay.Build()
 
     title_ = UI.Label {
         id = "profileTitle",
-        text = "选择你想遇见她的城市",
+        text = "Where would you like to meet her?",
         fontSize = 14,
         fontWeight = "bold",
         fontColor = COLORS.title,
@@ -281,7 +281,7 @@ function ProfileOverlay.Build()
     }
     preview_ = UI.Label {
         id = "profilePreview",
-        text = "要点两下：一枚城市 + 一枚关系起点",
+        text = "Choose a city and how you know her.",
         fontSize = 11,
         fontColor = COLORS.accent,
         height = PREVIEW_HEIGHT,
@@ -290,7 +290,7 @@ function ProfileOverlay.Build()
     }
     hint_ = UI.Label {
         id = "profileHint",
-        text = "她按当地时间生活，忙或在睡时消息排队",
+        text = "She follows local time. Messages wait while she's busy or asleep.",
         fontSize = 10,
         fontColor = COLORS.dim,
         height = HINT_HEIGHT,
@@ -318,7 +318,7 @@ function ProfileOverlay.Build()
     -- 随机入口只在初始化时给；换档案时目标明确，不再赌一次（Show 里按 mode 隐藏）
     local randomWidget = MakeChip({
         id = RANDOM_PICK,
-        label = "随机",
+        label = "Surprise me",
         onPress = PickRandom,
     })
     randomChip_ = { id = RANDOM_PICK, widget = randomWidget }
@@ -344,10 +344,11 @@ function ProfileOverlay.Build()
 
     confirmButton_ = UI.Button {
         id = "profileConfirm",
-        text = "就这么开始",
+        text = "Start story",
         variant = "primary",
         fontSize = 13,
         height = ACTION_HEIGHT,
+        flexGrow = 1, flexBasis = 0,
         focusable = false,
         disabled = true,
     }
@@ -377,10 +378,11 @@ function ProfileOverlay.Build()
 
     cancelButton_ = UI.Button {
         id = "profileCancel",
-        text = "先不换",
+        text = "Cancel",
         variant = "secondary",
         fontSize = 12,
         height = ACTION_HEIGHT,
+        flexGrow = 1, flexBasis = 0,
         focusable = false,
         visible = false,
     }
@@ -462,7 +464,7 @@ function ProfileOverlay.Show(opts)
     onCancel_ = opts.onCancel
     local isSwitch = opts.mode == "switch"
     mode_ = isSwitch and "switch" or "init"
-    title_:SetText(isSwitch and "换一个档案再见她" or "选择你想遇见她的城市")
+    title_:SetText(isSwitch and "Choose a new starting point" or "Where would you like to meet her?")
     if cancelButton_ then
         cancelButton_:SetVisible(isSwitch)
     end

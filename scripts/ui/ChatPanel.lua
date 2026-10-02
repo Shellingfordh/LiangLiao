@@ -23,8 +23,8 @@ local COLORS = {
     accent = { 200, 162, 122, 255 },
 }
 
-local IDLE_HINT = "写下你想对她说的话，发送后她会隔一会儿才回。"
-local TYPING_GLYPHS = { "。", "。。", "。。。" }
+local IDLE_HINT = "Say what's on your mind. She'll reply when she has a moment."
+local TYPING_GLYPHS = { ".", "..", "..." }
 local TYPING_STEP_SECONDS = 0.45
 local SCROLL_SETTLE_FRAMES = 3
 local SCROLL_PAD = 10
@@ -36,7 +36,7 @@ local QUOTE_BTN_W = 42
 local QUOTE_STRIP_MAX = 20
 -- 气泡宽度按「最坏情况的状态文案」预留：状态是事后 SetText 换上去的，
 -- 如果按创建那一刻的文案算宽度，消息从「已送达」变「已排队」时会溢出气泡边界。
-local STATUS_WIDTH_RESERVE = "已送达 · 对方只有碎片时间，已排队 · 第 9 位"
+local STATUS_WIDTH_RESERVE = "Delivered · Only a moment free · Queued · #9"
 
 -- 气泡宽度：ScrollView 内子树的百分比宽度在首轮测量时拿不到确定父宽，
 -- "78%" 会塌成最小内容宽（预览实测：一行两个字）。所以由 main 传入屏幕逻辑宽，
@@ -176,7 +176,7 @@ end
 local function MakeProfileEntryButton()
     local btn = UI.Button {
         id = "chatProfileEntry",
-        text = "设置",
+        text = "Settings",
         variant = "primary",
         fontSize = 10,
         height = 26,
@@ -202,7 +202,7 @@ end
 local function MakeResetButton()
     local btn = UI.Button {
         id = "chatResetConversation",
-        text = "重置对话",
+        text = "Clear",
         variant = "secondary",
         fontSize = 10,
         height = 26,
@@ -282,7 +282,7 @@ local function MakeBubbleRow(msg)
 
     local quoteButton = UI.Button {
         id = "msgQuote" .. tostring(msg.id),
-        text = "引用",
+        text = "Quote",
         variant = "secondary",
         fontSize = 9,
         height = 18,
@@ -320,7 +320,7 @@ local function MakeBubbleRow(msg)
             marginBottom = 4,
             children = {
                 UI.Label {
-                    text = "引用 " .. quotePreview,
+                    text = "Quote: " .. quotePreview,
                     fontSize = 9,
                     fontColor = COLORS.dimText,
                     whiteSpace = "normal",
@@ -411,18 +411,21 @@ function ChatPanel.Build(opts)
 
     memoryLabel_ = UI.Label {
         id = "chatMemoryLine",
-        text = "记忆读取中…",
+        text = "Loading memories...",
         fontSize = 10,
         fontColor = COLORS.dimText,
-        whiteSpace = "nowrap",
+        whiteSpace = "normal",
+        wordBreak = "break-word",
     }
 
     profileLabel_ = UI.Label {
         id = "chatProfileLine",
         text = ProfileService.ProfileLine(),
+        flexGrow = 1, flexShrink = 1, flexBasis = 0,
         fontSize = 11,
         fontColor = COLORS.dimText,
-        whiteSpace = "nowrap",
+        whiteSpace = "normal",
+        wordBreak = "break-word",
     }
 
     if opts.outerWidth and opts.outerWidth > 120 then
@@ -435,7 +438,7 @@ function ChatPanel.Build(opts)
     end
 
     typingLabel_ = UI.Label {
-        text = "若夕正在输入。",
+        text = "Ruoxi is typing.",
         fontSize = 13,
         fontColor = COLORS.herText,
         whiteSpace = "nowrap",
@@ -468,7 +471,7 @@ function ChatPanel.Build(opts)
     }
 
     local cancelQuoteButton = UI.Button {
-        text = "取消",
+        text = "Cancel",
         variant = "secondary",
         fontSize = 9,
         height = 20,
@@ -500,7 +503,7 @@ function ChatPanel.Build(opts)
         paddingVertical = 5,
         children = {
             UI.Label {
-                text = "引用",
+                text = "Quote",
                 fontSize = 9,
                 fontColor = COLORS.accent,
                 whiteSpace = "nowrap",
@@ -511,7 +514,7 @@ function ChatPanel.Build(opts)
     }
 
     local cancelResetButton = UI.Button {
-        text = "取消", variant = "secondary", fontSize = 10, height = 26, width = 50, focusable = false,
+        text = "Cancel", variant = "secondary", fontSize = 10, height = 26, width = 50, focusable = false,
     }
     cancelResetButton.focusable = false
     function cancelResetButton:OnPointerDown(event)
@@ -521,7 +524,7 @@ function ChatPanel.Build(opts)
     end
 
     local confirmResetButton = UI.Button {
-        text = "确认清空", variant = "primary", fontSize = 10, height = 26, width = 66, focusable = false,
+        text = "Clear", variant = "primary", fontSize = 10, height = 26, width = 66, focusable = false,
     }
     confirmResetButton.focusable = false
     function confirmResetButton:OnPointerDown(event)
@@ -546,7 +549,8 @@ function ChatPanel.Build(opts)
         paddingVertical = 5,
         children = {
             UI.Label {
-                text = "清空当前聊天和待回复？", fontSize = 10,
+                text = "Clear chat and pending replies?", fontSize = 10,
+                whiteSpace = "normal", wordBreak = "break-word",
                 fontColor = { 255, 218, 210, 255 }, flexGrow = 1, flexBasis = 0,
             },
             cancelResetButton,
@@ -588,7 +592,7 @@ function ChatPanel.Build(opts)
 
     skipButton_ = UI.Button {
         id = "chatSkip",
-        text = "跳过等待",
+        text = "Skip wait",
         variant = "secondary",
         fontSize = 11,
         height = 28,
@@ -608,7 +612,7 @@ function ChatPanel.Build(opts)
     inputField_ = UI.TextField {
         id = "chatInput",
         value = opts.initialDraft or "",
-        placeholder = "说点什么…",
+        placeholder = "Say something...",
         fontSize = 13,
         maxLength = 120,
         height = 42,
@@ -624,7 +628,7 @@ function ChatPanel.Build(opts)
 
     sendButton_ = UI.Button {
         id = "chatSend",
-        text = "发送",
+        text = "Send",
         variant = "primary",
         fontSize = 13,
         width = 72,
@@ -795,7 +799,7 @@ function ChatPanel.Tick(dt)
             typingTimer_ = 0
             typingFrame_ = typingFrame_ + 1
             if typingLabel_ then
-                typingLabel_:SetText("若夕正在输入"
+                typingLabel_:SetText("Ruoxi is typing"
                     .. TYPING_GLYPHS[(typingFrame_ % #TYPING_GLYPHS) + 1])
             end
         end
@@ -831,7 +835,7 @@ function ChatPanel.SetPhase(phase, statusText, awaiting)
         -- M1 起等待期间仍然可以再发：后发的会排在队首之后（队列不越序），所以按钮不禁用。
         -- 「她在忙/在睡」由状态条与气泡上的排队文案说明，不靠禁用按钮来表达。
         sendButton_:SetDisabled(false)
-        sendButton_:SetText(awaiting and "继续发送" or "发送")
+        sendButton_:SetText(awaiting and "Send" or "Send")
     end
     if skipButton_ then
         skipButton_:SetDisabled(not awaiting)
@@ -868,8 +872,8 @@ function ChatPanel.SetPendingQuote(quote)
         quoteStrip_:SetVisible(false)
         return
     end
-    local who = quote.role == "her" and "她" or "你"
-    quotePreviewLabel_:SetText(string.format("%s：%s", who,
+    local who = quote.role == "her" and "Ruoxi" or "You"
+    quotePreviewLabel_:SetText(string.format("%s: %s", who,
         ContentService.ClipPreview(quote.text, QUOTE_STRIP_MAX)))
     quoteStrip_:SetVisible(true)
 end

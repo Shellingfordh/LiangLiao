@@ -9,6 +9,7 @@
 -- ============================================================================
 
 local TimeState = require("TimeState")
+local EnglishText = require("EnglishText")
 
 local EventService = {}
 
@@ -38,16 +39,10 @@ local EVENT_TEMPLATES = {
         id = "la_apartment_night_rest", sceneId = "la_apartment", traceKey = "note",
         variants = {
             {
-                title = "凌晨的安静",
-                summary = "凌晨在公寓睡着，白天那场活动的便签还摊在桌上",
-                emotion = "安静、低沉",
-                phrase = "我在公寓睡下了，桌上的便签还没收",
+                title = "Quiet after midnight", summary = "Asleep at home, with notes from the day's event still on the desk", emotion = "Quiet, subdued", phrase = "I'm asleep at home, with my notes still on the desk",
             },
             {
-                title = "凌晨的复盘梦",
-                summary = "凌晨在公寓休息，梦里还在排今天的流程",
-                emotion = "疲惫、松弛",
-                phrase = "刚睡下不久，梦里还在排今天的流程",
+                title = "Dreaming of the schedule", summary = "Resting at home, still arranging the day's schedule in a dream", emotion = "Tired, relaxed", phrase = "I've just fallen asleep, still dreaming about the day's schedule",
             },
         },
     },
@@ -55,16 +50,10 @@ local EVENT_TEMPLATES = {
         id = "la_apartment_morning_inbox", sceneId = "la_apartment", traceKey = "note",
         variants = {
             {
-                title = "清晨的活动邮件",
-                summary = "清晨整理了今天活动的邮件和便签",
-                emotion = "安静、专注",
-                phrase = "我在公寓把活动邮件和便签归到一起",
+                title = "Morning event emails", summary = "Sorting the day's event emails and notes", emotion = "Quiet, focused", phrase = "I'm sorting the event emails and notes at home",
             },
             {
-                title = "清晨的活动清单",
-                summary = "清晨在公寓核对今天的活动清单并冲了咖啡",
-                emotion = "清醒、有条理",
-                phrase = "咖啡刚好冲完，我在核对今天的活动清单",
+                title = "The morning checklist", summary = "Checking the day's event list and making coffee at home", emotion = "Alert, organised", phrase = "The coffee's ready, and I'm checking today's event list",
             },
         },
     },
@@ -72,16 +61,10 @@ local EVENT_TEMPLATES = {
         id = "la_campus_workshop", sceneId = "la_studio", traceKey = "proofs",
         variants = {
             {
-                title = "工作坊的准备",
-                summary = "在工作室准备一场小型工作坊",
-                emotion = "忙碌、期待",
-                phrase = "工作坊快开始了，我在整理要用的材料",
+                title = "Getting the workshop ready", summary = "Preparing a small workshop in the studio", emotion = "Busy, looking forward to it", phrase = "The workshop starts soon, and I'm laying out the materials",
             },
             {
-                title = "示例过了一遍",
-                summary = "在工作室的长桌边过了一遍示例",
-                emotion = "专注、略赶",
-                phrase = "我在工作室的长桌边，把示例顺了一遍",
+                title = "Running through the examples", summary = "Reviewing the examples at the studio's long table", emotion = "Focused, a little rushed", phrase = "I'm running through the examples at the long table in the studio",
             },
         },
     },
@@ -89,16 +72,10 @@ local EVENT_TEMPLATES = {
         id = "la_cafe_midday", sceneId = "la_cafe", traceKey = "coffee",
         variants = {
             {
-                title = "午间的咖啡馆间隙",
-                summary = "中午在咖啡馆吃午饭，顺手看晚上的安排",
-                emotion = "松弛、简短",
-                phrase = "我在店里吃午饭，顺便看晚上的安排",
+                title = "A cafe lunch break", summary = "Having lunch at the cafe and checking tonight's plans", emotion = "Relaxed, brief", phrase = "I'm having lunch at the cafe and checking tonight's plans",
             },
             {
-                title = "午间的活动电话",
-                summary = "中午在咖啡馆接了一个关于今晚活动的电话",
-                emotion = "有点被打断",
-                phrase = "在店里吃两口就接了个电话，说今晚的场地",
+                title = "A lunchtime call", summary = "Taking a call at the cafe about tonight's event", emotion = "A little interrupted", phrase = "A call about tonight's venue interrupted my lunch at the cafe",
             },
         },
     },
@@ -106,16 +83,10 @@ local EVENT_TEMPLATES = {
         id = "la_studio_zine_layout", sceneId = "la_studio", traceKey = "proofs",
         variants = {
             {
-                title = "小册子版面校样",
-                summary = "在工作室完成小册子版面校样",
-                emotion = "专注、略紧张",
-                phrase = "工作室里在对小册子的最后一版校样",
+                title = "Zine proofs", summary = "Finishing the zine layout proofs in the studio", emotion = "Focused, a little tense", phrase = "I'm checking the final zine proofs in the studio",
             },
             {
-                title = "工作室的样张",
-                summary = "在工作室挪版面，桌上堆着没裁的样张",
-                emotion = "沉浸、有点赶",
-                phrase = "我在工作室挪版面，桌上全是没裁的样张",
+                title = "Prints on the studio table", summary = "Adjusting the layout, with uncut proofs piled on the table", emotion = "Absorbed, a little rushed", phrase = "I'm adjusting the layout in the studio, with uncut proofs all over the table",
             },
         },
     },
@@ -123,16 +94,10 @@ local EVENT_TEMPLATES = {
         id = "la_commute_voice_notes", sceneId = "la_commute",
         variants = {
             {
-                title = "路上的语音便签",
-                summary = "在路上整理晚间活动的语音便签",
-                emotion = "短暂、轻快",
-                phrase = "我在路上，刚把一个想法录进语音便签",
+                title = "Voice notes on the way", summary = "Organising voice notes for the evening event while travelling", emotion = "Brief, upbeat", phrase = "I'm on my way, and I've just recorded an idea as a voice note",
             },
             {
-                title = "路上的等车时间",
-                summary = "在等车，看晚上的活动安排",
-                emotion = "零散、期待",
-                phrase = "车还没到站，我在看晚上的活动安排",
+                title = "Waiting for the bus", summary = "Waiting for the bus and checking tonight's event plans", emotion = "Distracted, looking forward to it", phrase = "The bus isn't here yet, so I'm checking tonight's plans",
             },
         },
     },
@@ -140,16 +105,10 @@ local EVENT_TEMPLATES = {
         id = "la_cafe_open_mic", sceneId = "la_cafe", traceKey = "coffee",
         variants = {
             {
-                title = "咖啡馆的开放麦克风夜",
-                summary = "在咖啡馆参与开放麦克风夜",
-                emotion = "放松、投入",
-                phrase = "咖啡馆这场开放麦克风还没收，人比昨天多一点",
+                title = "Open mic at the cafe", summary = "Taking part in an open mic night at the cafe", emotion = "Relaxed, engaged", phrase = "The cafe's open mic is still going, with a few more people than yesterday",
             },
             {
-                title = "咖啡馆的下一位上台",
-                summary = "在咖啡馆等下一位上台，坐在靠窗的位置",
-                emotion = "期待、安静",
-                phrase = "店里正在轮到下一位上台，我坐在靠窗的位置",
+                title = "Waiting for the next performer", summary = "Waiting by the cafe window for the next performer", emotion = "Quiet, looking forward to it", phrase = "I'm sitting by the window as the next performer takes the stage",
             },
         },
     },
@@ -157,16 +116,10 @@ local EVENT_TEMPLATES = {
         id = "la_apartment_wind_down", sceneId = "la_apartment", traceKey = "note",
         variants = {
             {
-                title = "回家后的活动复盘",
-                summary = "回到公寓整理活动后的便签",
-                emotion = "疲惫、踏实",
-                phrase = "我回到公寓，把今晚活动的几张便签摊开了",
+                title = "Notes after the event", summary = "Sorting event notes back at the apartment", emotion = "Tired, settled", phrase = "I'm back at the apartment, spreading out tonight's event notes",
             },
             {
-                title = "明天的清单",
-                summary = "回到家把今天剩下的事情写进明天的清单",
-                emotion = "收束、平静",
-                phrase = "刚到家，正在把今天剩下的事情写进明天的清单",
+                title = "Tomorrow's list", summary = "Adding today's unfinished tasks to tomorrow's list at home", emotion = "Winding down, calm", phrase = "I've just got home and I'm adding today's unfinished tasks to tomorrow's list",
             },
         },
     },
@@ -175,64 +128,64 @@ local EVENT_TEMPLATES = {
     sha_apartment_night_rest = {
         id = "sha_apartment_night_rest", sceneId = "sha_apartment", traceKey = "note",
         variants = {
-            { title = "凌晨的选题草稿", summary = "凌晨在公寓睡着，明天专栏的选题草稿还摊着", emotion = "安静、低沉", phrase = "我在公寓睡下了，明天的选题草稿还摊在桌上" },
-            { title = "凌晨的稿子梦", summary = "凌晨休息，梦里还在理顺明天的稿", emotion = "疲惫、松弛", phrase = "刚睡下，梦里还在理顺明天的那篇稿" },
+            { title = "An article draft after midnight", summary = "Asleep at home, with tomorrow's column draft still out", emotion = "Quiet, subdued", phrase = "I'm asleep at home, with tomorrow's column draft still on the desk" },
+            { title = "Dreaming of tomorrow's article", summary = "Resting, still working through tomorrow's article in a dream", emotion = "Tired, relaxed", phrase = "I've just fallen asleep, still dreaming about tomorrow's article" },
         },
     },
     sha_apartment_morning_balcony = {
         id = "sha_apartment_morning_balcony", sceneId = "sha_apartment",
         variants = {
-            { title = "清晨的阳台", summary = "清晨在阳台浇花，顺手过一遍要交的字", emotion = "清醒、有条理", phrase = "我在阳台浇花，顺手把要交的字过了一遍" },
-            { title = "清晨的头一遍读", summary = "咖啡温着，把稿子开头读了遍", emotion = "安静、专注", phrase = "咖啡温着，我在阳台把那篇稿的开头读了遍" },
+            { title = "Morning on the balcony", summary = "Watering the balcony plants and reviewing the writing due today", emotion = "Alert, organised", phrase = "I'm watering the balcony plants and reviewing the writing I need to send" },
+            { title = "The first morning read", summary = "Rereading the opening of the article while the coffee stays warm", emotion = "Quiet, focused", phrase = "I'm reading the article's opening on the balcony, with warm coffee beside me" },
         },
     },
     sha_commute_rush = {
         id = "sha_commute_rush", sceneId = "sha_commute", traceKey = "coffee",
         variants = {
-            { title = "早高峰的地铁", summary = "在早高峰的地铁里通勤", emotion = "拥挤、简短", phrase = "在早高峰的地铁里，字打不长" },
-            { title = "换乘路上", summary = "车厢很挤，等下车再看", emotion = "零散、期待", phrase = "车厢很挤，等下了车我再仔细看" },
+            { title = "Rush hour on the metro", summary = "Commuting on the crowded morning metro", emotion = "Crowded, brief", phrase = "I'm on the rush-hour metro, so I can't type much" },
+            { title = "Changing trains", summary = "Waiting to get off a crowded train before reading properly", emotion = "Distracted, looking forward to it", phrase = "The carriage is packed; I'll read properly once I'm off" },
         },
     },
     sha_office_topic_meeting = {
         id = "sha_office_topic_meeting", sceneId = "sha_office", traceKey = "proofs",
         variants = {
-            { title = "选题会", summary = "报社在开选题会，一上午没停", emotion = "忙碌、专注", phrase = "报社在开选题会，一上午没停" },
-            { title = "会中速记", summary = "在记会议要点，回得慢", emotion = "忙、略赶", phrase = "手在记会议要点，回得慢一点" },
+            { title = "The editorial meeting", summary = "In a newsroom planning meeting all morning", emotion = "Busy, focused", phrase = "I'm in the newsroom's editorial meeting; it's been going all morning" },
+            { title = "Meeting notes", summary = "Taking meeting notes and replying slowly", emotion = "Busy, a little rushed", phrase = "I'm taking meeting notes, so my replies are a little slow" },
         },
     },
     sha_cafe_midday = {
         id = "sha_cafe_midday", sceneId = "sha_office", traceKey = "coffee",
         variants = {
-            { title = "午间版面", summary = "中午在版房边吃边看版面", emotion = "松弛、简短", phrase = "中午在版房，边吃边看版面" },
-            { title = "午间小憩", summary = "扒完两口就要接着盯版", emotion = "有点赶", phrase = "扒完两口就要接着盯版" },
+            { title = "Layouts over lunch", summary = "Eating lunch while checking layouts in the newsroom", emotion = "Relaxed, brief", phrase = "I'm eating lunch in the newsroom while checking the layouts" },
+            { title = "A quick lunch break", summary = "Taking a few bites before returning to the layouts", emotion = "A little rushed", phrase = "I've only got time for a few bites before checking the layouts again" },
         },
     },
     sha_office_layout = {
         id = "sha_office_layout", sceneId = "sha_office", traceKey = "proofs",
         variants = {
-            { title = "盯排版", summary = "下午在版房盯这一期的排版", emotion = "专注、略紧张", phrase = "下午在版房盯这一期的排版" },
-            { title = "页码对齐", summary = "这版页码还差一点对齐", emotion = "沉浸、有点赶", phrase = "这一版的页码还差一点没对齐" },
+            { title = "Watching the layout", summary = "Checking this issue's layout in the newsroom", emotion = "Focused, a little tense", phrase = "I'm checking this issue's layout in the newsroom" },
+            { title = "Aligning page numbers", summary = "Adjusting page numbers that are slightly out of line", emotion = "Absorbed, a little rushed", phrase = "The page numbers on this layout still need a little aligning" },
         },
     },
     sha_commute_market = {
         id = "sha_commute_market", sceneId = "sha_commute", traceKey = "grocery",
         variants = {
-            { title = "绕菜场", summary = "绕到菜场给屋里添点吃的", emotion = "生活气、零散", phrase = "绕到菜场给屋里添点吃的" },
-            { title = "拎着菜", summary = "拎着菜，晚点再说", emotion = "短暂、轻快", phrase = "拎着菜呢，晚点再和你说" },
+            { title = "A detour to the market", summary = "Picking up groceries for home at the market", emotion = "Everyday, distracted", phrase = "I'm stopping at the market to pick up some food for home" },
+            { title = "Carrying groceries", summary = "Carrying groceries and leaving the conversation for later", emotion = "Brief, upbeat", phrase = "My hands are full of groceries; I'll talk to you later" },
         },
     },
     sha_bookstore_evening = {
         id = "sha_bookstore_evening", sceneId = "sha_bookstore", traceKey = "oldbook",
         variants = {
-            { title = "旧书店夜班", summary = "在旧书店值夜班的台，安静得很", emotion = "安静、松弛", phrase = "我在旧书店值夜班的台，店里安静得很" },
-            { title = "靠窗的书台", summary = "店里客人不多，能多说两句", emotion = "平和、有空", phrase = "店里客人不多，我能多和你说两句" },
+            { title = "The bookshop's evening shift", summary = "Working the counter at the quiet second-hand bookshop", emotion = "Quiet, relaxed", phrase = "I'm on the evening shift at the second-hand bookshop; it's very quiet" },
+            { title = "The counter by the window", summary = "A quiet shop with room for a longer conversation", emotion = "Calm, available", phrase = "There aren't many customers, so I can talk a little longer" },
         },
     },
     sha_apartment_reread = {
         id = "sha_apartment_reread", sceneId = "sha_apartment", traceKey = "note",
         variants = {
-            { title = "灯下改稿", summary = "回公寓把明天的稿子又读了一遍", emotion = "踏实、收束", phrase = "我回公寓了，把明天的稿子又读了一遍" },
-            { title = "最后几行", summary = "灯下改最后几行，快收了", emotion = "专注、平静", phrase = "灯下改最后几行，一会儿就收" },
+            { title = "Editing under the lamp", summary = "Rereading tomorrow's article back at the apartment", emotion = "Settled, winding down", phrase = "I'm back at the apartment and I've reread tomorrow's article" },
+            { title = "The last few lines", summary = "Editing the last few lines under the lamp before finishing", emotion = "Focused, calm", phrase = "I'm editing the last few lines under the lamp; nearly done" },
         },
     },
 
@@ -240,57 +193,57 @@ local EVENT_TEMPLATES = {
     cdu_apartment_night_rest = {
         id = "cdu_apartment_night_rest", sceneId = "cdu_apartment", traceKey = "postcard",
         variants = {
-            { title = "凌晨的明信片", summary = "凌晨在公寓睡下，桌上一叠没干的明信片", emotion = "安静、低沉", phrase = "我在公寓睡下了，桌上一叠明信片还没干" },
-            { title = "颜料味的梦", summary = "睡了，颜料味还没散", emotion = "疲惫、松弛", phrase = "刚睡下，屋里颜料味还没散" },
+            { title = "Postcards after midnight", summary = "Asleep at home, with a stack of wet postcards on the desk", emotion = "Quiet, subdued", phrase = "I'm asleep at home, with a stack of postcards still drying on the desk" },
+            { title = "Dreams smelling of paint", summary = "Asleep, with the smell of paint still in the room", emotion = "Tired, relaxed", phrase = "I've just fallen asleep, and the room still smells of paint" },
         },
     },
     cdu_apartment_morning_water = {
         id = "cdu_apartment_morning_water", sceneId = "cdu_apartment",
         variants = {
-            { title = "清晨浇花", summary = "早上给阳台的花浇水，还没开工", emotion = "松弛、清醒", phrase = "早上给阳台的花浇了水，还没开工" },
-            { title = "等会儿动笔", summary = "泡了盏茶，等会儿再动笔", emotion = "安静、有条理", phrase = "泡了盏茶，等会儿再动笔" },
+            { title = "Watering plants in the morning", summary = "Watering the balcony plants before starting work", emotion = "Relaxed, alert", phrase = "I've watered the balcony plants, but haven't started work yet" },
+            { title = "A little tea before drawing", summary = "Making tea and waiting a little before drawing", emotion = "Quiet, organised", phrase = "I've made some tea; I'll start drawing in a little while" },
         },
     },
     cdu_studio_morning_ink = {
         id = "cdu_studio_morning_ink", sceneId = "cdu_studio", traceKey = "postcard",
         variants = {
-            { title = "勾线上色", summary = "上午在画室给一批明信片勾线上色", emotion = "专注、沉浸", phrase = "上午在画室给一批明信片勾线上色" },
-            { title = "描屋檐", summary = "正描一条街的屋檐，别催", emotion = "沉浸、略赶", phrase = "正描着一条街的屋檐，先别催我" },
+            { title = "Outlines and colours", summary = "Drawing outlines and colouring a batch of postcards in the studio", emotion = "Focused, absorbed", phrase = "I'm outlining and colouring a batch of postcards in the studio" },
+            { title = "Drawing the rooftops", summary = "Drawing the rooftops along a street without rushing", emotion = "Absorbed, a little rushed", phrase = "I'm drawing a street's rooftops; give me a moment" },
         },
     },
     cdu_cafe_midday = {
         id = "cdu_cafe_midday", sceneId = "cdu_cafe", traceKey = "gaiwan",
         variants = {
-            { title = "茶馆午饭", summary = "中午在茶馆吃面，顺便看别人的稿", emotion = "松弛、简短", phrase = "中午在茶馆吃碗面，顺便看看别人的稿" },
-            { title = "人多说短点", summary = "茶馆人多，我说短点", emotion = "热闹、零散", phrase = "茶馆人多，我先把话说短点" },
+            { title = "Lunch at the teahouse", summary = "Eating noodles at the teahouse and looking at others' sketches", emotion = "Relaxed, brief", phrase = "I'm having noodles at the teahouse and looking at other people's sketches" },
+            { title = "A crowded teahouse", summary = "Keeping the conversation brief in a busy teahouse", emotion = "Lively, distracted", phrase = "The teahouse is crowded, so I'll keep this short" },
         },
     },
     cdu_studio_color = {
         id = "cdu_studio_color", sceneId = "cdu_studio", traceKey = "postcard",
         variants = {
-            { title = "调颜色", summary = "下午在工作台把这批颜色调完", emotion = "专注、略紧张", phrase = "下午在工作台把今天这批颜色调完" },
-            { title = "手有点忙", summary = "在调色，手有点忙", emotion = "沉浸、有点赶", phrase = "在调色呢，手有点忙" },
+            { title = "Mixing colours", summary = "Finishing the batch's colours at the workbench", emotion = "Focused, a little tense", phrase = "I'm finishing today's colours at the workbench" },
+            { title = "Hands full of paint", summary = "Mixing colours with busy hands", emotion = "Absorbed, a little rushed", phrase = "I'm mixing colours, so my hands are a little busy" },
         },
     },
     cdu_commute_supplies = {
         id = "cdu_commute_supplies", sceneId = "cdu_commute",
         variants = {
-            { title = "买颜料纸", summary = "出去买颜料和纸，一趟要走一会儿", emotion = "零散、轻快", phrase = "出去买颜料和纸，一趟要走一会儿" },
-            { title = "在路上", summary = "在路上，到店里再聊", emotion = "短暂、期待", phrase = "在路上，等我到店里再和你说" },
+            { title = "Buying paint and paper", summary = "Going out for paint and paper; the trip takes a while", emotion = "Distracted, upbeat", phrase = "I'm out buying paint and paper; it's a bit of a trip" },
+            { title = "On the way", summary = "Travelling and waiting until arrival to chat", emotion = "Brief, looking forward to it", phrase = "I'm on my way; I'll talk to you when I reach the shop" },
         },
     },
     cdu_nightmarket_supper = {
         id = "cdu_nightmarket_supper", sceneId = "cdu_commute", traceKey = "postcard",
         variants = {
-            { title = "夜市收摊", summary = "在夜市摆摊收工，顺便吃了口夜宵", emotion = "松弛、踏实", phrase = "在夜市摆摊收工，顺便吃了口夜宵" },
-            { title = "路边缓会儿", summary = "摊子刚收，坐在路边缓会儿", emotion = "疲惫、平静", phrase = "摊子刚收，我坐在路边缓一会儿" },
+            { title = "Packing up at the night market", summary = "Packing up the night-market stall and having a late snack", emotion = "Relaxed, settled", phrase = "I've packed up my night-market stall and had a late snack" },
+            { title = "A pause by the roadside", summary = "Sitting by the road for a moment after packing up", emotion = "Tired, calm", phrase = "I've just packed up the stall and I'm sitting by the road for a moment" },
         },
     },
     cdu_apartment_letters = {
         id = "cdu_apartment_letters", sceneId = "cdu_apartment", traceKey = "postcard",
         variants = {
-            { title = "写明信片地址", summary = "回公寓把寄出去的明信片写地址", emotion = "安静、专注", phrase = "回公寓了，在给寄出去的明信片写地址" },
-            { title = "灯下收尾", summary = "灯下写地址，快写完了", emotion = "收束、平静", phrase = "灯下写地址，快写完了" },
+            { title = "Addressing postcards", summary = "Writing addresses on outgoing postcards back at the apartment", emotion = "Quiet, focused", phrase = "I'm back at the apartment, addressing the postcards I'm sending out" },
+            { title = "Finishing under the lamp", summary = "Writing the final addresses under the lamp", emotion = "Winding down, calm", phrase = "I'm writing addresses under the lamp; almost finished" },
         },
     },
 
@@ -298,79 +251,79 @@ local EVENT_TEMPLATES = {
     lon_apartment_night_rest = {
         id = "lon_apartment_night_rest", sceneId = "lon_apartment", traceKey = "note",
         variants = {
-            { title = "凌晨的混音", summary = "凌晨在公寓睡了，混音工程还没导出", emotion = "安静、低沉", phrase = "我在公寓睡下了，混音工程还没导出" },
-            { title = "摊着的耳机", summary = "睡了，耳机还摊在桌上", emotion = "疲惫、松弛", phrase = "刚睡下，耳机还摊在桌上" },
+            { title = "A mix after midnight", summary = "Asleep at home, with the mix not yet exported", emotion = "Quiet, subdued", phrase = "I'm asleep at home, and the mix hasn't been exported yet" },
+            { title = "Headphones on the desk", summary = "Asleep, with headphones still on the desk", emotion = "Tired, relaxed", phrase = "I've just fallen asleep, with my headphones still on the desk" },
         },
     },
     lon_apartment_morning_tea = {
         id = "lon_apartment_morning_tea", sceneId = "lon_apartment",
         variants = {
-            { title = "晨间课表", summary = "早上煮了茶，翻了翻今天的课表", emotion = "清醒、有条理", phrase = "早上煮了茶，翻了翻今天的课表" },
-            { title = "热茶与时序", summary = "茶还热，我在看时间安排", emotion = "安静、专注", phrase = "茶还热着，我在看今天的时间安排" },
+            { title = "The morning timetable", summary = "Making tea and checking today's class timetable", emotion = "Alert, organised", phrase = "I've made tea and checked today's class timetable" },
+            { title = "Hot tea and plans", summary = "Checking the schedule while the tea is still hot", emotion = "Quiet, focused", phrase = "My tea's still hot, and I'm checking today's schedule" },
         },
     },
     lon_commute_early_train = {
         id = "lon_commute_early_train", sceneId = "lon_commute", traceKey = "umbrella",
         variants = {
-            { title = "一早的火车", summary = "赶一早的火车，信号断断续续", emotion = "零散、略赶", phrase = "在赶一早的火车，信号断断续续" },
-            { title = "车上没网", summary = "在车上，等下可能又没网", emotion = "短暂、期待", phrase = "在车上，等下可能又没网了" },
+            { title = "An early train", summary = "Catching an early train with patchy reception", emotion = "Distracted, a little rushed", phrase = "I'm catching an early train, and the signal keeps dropping" },
+            { title = "No signal on the train", summary = "Travelling with another possible loss of reception", emotion = "Brief, looking forward to it", phrase = "I'm on the train; I might lose the signal again" },
         },
     },
     lon_campus_lecture = {
         id = "lon_campus_lecture", sceneId = "lon_studio", traceKey = "note",
         variants = {
-            { title = "学院棚里的工作坊", summary = "学院录音棚里有场声音设计的工作坊，走不开", emotion = "专注、忙碌", phrase = "学院录音棚里正忙，我走不开" },
-            { title = "工作坊中", summary = "工作坊进行中，晚点回", emotion = "忙、略赶", phrase = "这边工作坊进行中，我晚点回你" },
+            { title = "A workshop in the college studio", summary = "Busy at a sound-design workshop in the college studio", emotion = "Focused, busy", phrase = "I'm busy in the college recording studio and can't step away" },
+            { title = "During the workshop", summary = "Waiting until the workshop is over to reply", emotion = "Busy, a little rushed", phrase = "The workshop's still going; I'll reply a little later" },
         },
     },
     lon_cafe_midday = {
         id = "lon_cafe_midday", sceneId = "lon_commute", traceKey = "coffee",
         variants = {
-            { title = "午间三明治", summary = "中午在街边买了三明治，赶下午的棚", emotion = "简短、有点赶", phrase = "中午在街边吃个三明治，赶下午的棚" },
-            { title = "啃完就走", summary = "吃完就要去录音", emotion = "忙、零散", phrase = "啃完两口就要去录音" },
+            { title = "A lunchtime sandwich", summary = "Buying a sandwich on the street before the afternoon studio session", emotion = "Brief, a little rushed", phrase = "I'm eating a sandwich on the street before heading to the studio" },
+            { title = "A bite before recording", summary = "Eating quickly before going to record", emotion = "Busy, distracted", phrase = "I've got time for a couple of bites before recording" },
         },
     },
     lon_studio_field_recording = {
         id = "lon_studio_field_recording", sceneId = "lon_studio", traceKey = "vinyl",
         variants = {
-            { title = "田野录音", summary = "录音棚里采集一段田野录音", emotion = "专注、沉浸", phrase = "在录音棚里采集一段田野录音" },
-            { title = "戴着监听", summary = "戴着监听，回得慢", emotion = "沉浸、略忙", phrase = "戴着监听呢，回得会慢一点" },
+            { title = "Field recording", summary = "Collecting a field recording in the studio", emotion = "Focused, absorbed", phrase = "I'm collecting a field recording in the studio" },
+            { title = "Listening on headphones", summary = "Monitoring audio and replying slowly", emotion = "Absorbed, busy", phrase = "I'm monitoring on headphones, so my replies will be a little slow" },
         },
     },
     lon_commute_dark = {
         id = "lon_commute_dark", sceneId = "lon_commute", traceKey = "umbrella",
         variants = {
-            { title = "天黑路上", summary = "天已经黑了，路上人多走得慢", emotion = "零散、疲惫", phrase = "天已经黑了，路上人多走得慢" },
-            { title = "回家路上", summary = "在回家路上，风有点大", emotion = "短暂、低沉", phrase = "在回家路上，今天风有点大" },
+            { title = "Travelling after dark", summary = "Walking slowly through the crowds after dark", emotion = "Distracted, tired", phrase = "It's dark already, and the crowds are slowing me down" },
+            { title = "On the way home", summary = "Travelling home in a strong breeze", emotion = "Brief, subdued", phrase = "I'm on my way home; it's a little windy today" },
         },
     },
     lon_recordshop_shift = {
         id = "lon_recordshop_shift", sceneId = "lon_recordshop", traceKey = "vinyl",
         variants = {
-            { title = "唱片行当值", summary = "在老唱片行当值，帮人找一张难找的唱片", emotion = "松弛、专注", phrase = "在老唱片行当值，正帮人找一张难找的唱片" },
-            { title = "守着台", summary = "店里放着一张老唱片，我守着台", emotion = "安静、平和", phrase = "店里在放一张老唱片，我守着台" },
+            { title = "A shift at the record shop", summary = "Helping find a hard-to-find record at the old record shop", emotion = "Relaxed, focused", phrase = "I'm on shift at the old record shop, helping someone find a rare record" },
+            { title = "At the counter", summary = "Working the counter while an old record plays", emotion = "Quiet, calm", phrase = "An old record's playing in the shop, and I'm at the counter" },
         },
     },
     lon_apartment_mixdown = {
         id = "lon_apartment_mixdown", sceneId = "lon_apartment", traceKey = "note",
         variants = {
-            { title = "混音收尾", summary = "回公寓把今天的混音收到最后", emotion = "踏实、收束", phrase = "我回公寓了，把今天的混音收到最后" },
-            { title = "灯下最后", summary = "灯下收尾，一会儿就弄完", emotion = "专注、平静", phrase = "灯下收尾，一会儿就弄完了" },
+            { title = "Finishing the mix", summary = "Finishing today's mix back at the apartment", emotion = "Settled, winding down", phrase = "I'm back at the apartment, finishing today's mix" },
+            { title = "The last work under the lamp", summary = "Finishing under the lamp, nearly done", emotion = "Focused, calm", phrase = "I'm finishing up under the lamp; almost done" },
         },
     },
 }
 
 ---@type table<string, string>
 local PLACE_LABEL = {
-    cafe = "咖啡馆",
-    apartment = "公寓",
-    campus = "学校",
-    studio = "工作室",
-    commute = "路上",
-    office = "办公室",
-    bookstore = "书店",
-    nightmarket = "夜市",
-    recordshop = "唱片行",
+    cafe = "Cafe",
+    apartment = "Apartment",
+    campus = "College",
+    studio = "Studio",
+    commute = "On the way",
+    office = "Office",
+    bookstore = "Bookshop",
+    nightmarket = "Night market",
+    recordshop = "Record shop",
 }
 
 -- 当前城日程无命中时的兜底事件（消息缺事实才走到这里）：各城傍晚空闲档。
@@ -396,33 +349,33 @@ local FALLBACK_EVENT = {
 local M7_CARDS = {
     los_angeles = {
         id = "m7-la-open-mic", templateId = "la_cafe_open_mic",
-        clue = "靠窗那杯咖啡已经凉了，台前有人在试音。",
-        questionHints = { "开放麦", "试音", "上台", "咖啡馆", "几点" },
-        answer = "今晚是咖啡馆的开放麦，我在靠窗等下一位上台。",
+        clue = "The coffee by the window has gone cold. Someone is checking the mic.",
+        questionHints = { "开放麦", "试音", "上台", "咖啡馆", "几点" , "open mic", "sound check", "stage", "cafe", "what time" },
+        answer = "It's open mic night at the cafe. I'm by the window, waiting for the next performer.",
         forbidden = "不编造表演者、曲目、她是否上台或活动结果。",
         traceLifecycle = "活动结束后，靠窗的半杯咖啡留在咖啡馆场景；下一次关键事件结束后替换。",
     },
     shanghai = {
         id = "m7-sha-bookstore", templateId = "sha_bookstore_evening",
-        clue = "柜台旁叠着两本刚收回来的旧书，店里比平时安静。",
-        questionHints = { "旧书", "书店", "值班", "柜台", "哪本" },
-        answer = "我今晚在旧书店值班，刚把柜台旁收回来的两本旧书叠好。",
+        clue = "Two returned books sit beside the counter. The shop is quieter than usual.",
+        questionHints = { "旧书", "书店", "值班", "柜台", "哪本" , "old book", "bookshop", "shift", "counter", "which book" },
+        answer = "I'm on the bookshop's evening shift. I've just stacked two returned books by the counter.",
         forbidden = "不编造书名、顾客身份、成交或她私下读完了什么。",
         traceLifecycle = "值班结束后，两本旧书留在书店场景；下一次关键事件结束后替换。",
     },
     chengdu = {
         id = "m7-cdu-nightmarket", templateId = "cdu_nightmarket_supper",
-        clue = "摊位收好后，桌边还压着一张没干透的明信片。",
-        questionHints = { "夜市", "明信片", "摊", "收摊", "卖" },
-        answer = "夜市刚收摊，我把最后一张还没干透的明信片压在桌边。",
+        clue = "The stall is packed away. One postcard is still drying at the edge of the table.",
+        questionHints = { "夜市", "明信片", "摊", "收摊", "卖" , "night market", "postcard", "stall", "packing up", "sell" },
+        answer = "I've just packed up at the night market and left the last damp postcard at the edge of the table.",
         forbidden = "不编造售卖数量、收入、买家或她答应寄给谁。",
         traceLifecycle = "收摊后，未干的明信片留在夜市街口场景；下一次关键事件结束后替换。",
     },
     london = {
         id = "m7-lon-recordshop", templateId = "lon_recordshop_shift",
-        clue = "试听机旁有一张还没放回架子的唱片，柜台灯亮着。",
-        questionHints = { "唱片", "试听", "唱片行", "找", "柜台" },
-        answer = "我今晚在老唱片行当值，正帮人找一张难找的唱片。",
+        clue = "A record is still beside the listening station. The counter light is on.",
+        questionHints = { "唱片", "试听", "唱片行", "找", "柜台" , "record", "listen", "record shop", "find", "counter" },
+        answer = "I'm on shift at the old record shop tonight, helping someone find a rare record.",
         forbidden = "不编造唱片名称、顾客身份、是否找到或她的收藏。",
         traceLifecycle = "当值结束后，试听机旁的唱片留在唱片行场景；下一次关键事件结束后替换。",
     },
@@ -551,6 +504,9 @@ function EventService.Restore(savedPlans)
                         and type(occ.endUtc) == "number" then
                         -- v6 及以前的计划没有 M7 卡片字段；不重算、不改变 occurrenceKey，
                         -- 只按城市与既存 templateId 补齐当前版本的内容契约。
+                        for _, field in ipairs({"title", "summary", "emotion", "phrase"}) do
+                            occ[field] = EnglishText.Translate(occ[field])
+                        end
                         local card = M7_CARDS[raw.cityId]
                         if card and card.templateId == occ.templateId then
                             occ.isM7KeyEvent = true
@@ -667,7 +623,7 @@ function EventService.PlanFor(cityId, dateKey)
                 startClock = string.format("%02d:00", row.from % 24),
                 endClock = string.format("%02d:00", endHour % 24),
                 place = row.place,
-                placeLabel = PLACE_LABEL[row.place] or "外面",
+                placeLabel = PLACE_LABEL[row.place] or "Out and about",
                 sceneId = template.sceneId,
                 title = variant.title,
                 summary = variant.summary,
@@ -874,7 +830,7 @@ function EventService.FactFor(cityId, utcSec, sentUtcSec)
         eventStartUtc = occ and occ.startUtc or snap.utcSec,
         eventEndUtc = occ and occ.endUtc or snap.utcSec,
         place = snap.place,
-        placeLabel = PLACE_LABEL[snap.place] or "外面",
+        placeLabel = PLACE_LABEL[snap.place] or "Out and about",
         sceneId = (occ and occ.sceneId) or snap.sceneId or "",
         traceKey = occ and occ.traceKey or nil,
         isM7KeyEvent = occ and occ.isM7KeyEvent == true or false,

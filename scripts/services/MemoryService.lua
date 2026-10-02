@@ -14,6 +14,7 @@
 --   * 预览是否成功不依赖云存储：云回调只打日志，不驱动任何 UI 状态。
 -- ============================================================================
 
+local EnglishText = require("EnglishText")
 local MemoryService = {}
 
 local SAVE_DIR = "memory"
@@ -161,10 +162,10 @@ local function sanitizeMessage(raw)
     local entry = {
         id = asInteger(raw.id) or 0,
         role = role,
-        text = text,
+        text = role == "user" and text or EnglishText.Translate(text),
         serverTime = serverTime,
         state = asString(raw.state) or "replied",
-        statusText = asString(raw.statusText) or "",
+        statusText = EnglishText.Translate(asString(raw.statusText) or ""),
         clockText = asString(raw.clockText) or "",
         factId = asString(raw.factId),
         planReplyAtUtc = asInteger(raw.planReplyAtUtc),
@@ -172,11 +173,11 @@ local function sanitizeMessage(raw)
         replyableAtSend = asBoolean(raw.replyableAtSend),
         brief = asBoolean(raw.brief),
         availabilityAtSend = asString(raw.availabilityAtSend),
-        availabilityLabelAtSend = asString(raw.availabilityLabelAtSend),
+        availabilityLabelAtSend = EnglishText.Translate(asString(raw.availabilityLabelAtSend)),
         placeAtSend = asString(raw.placeAtSend),
         sceneIdAtSend = asString(raw.sceneIdAtSend),
         cityIdAtSend = asString(raw.cityIdAtSend),
-        phraseAtSend = asString(raw.phraseAtSend),
+        phraseAtSend = EnglishText.Translate(asString(raw.phraseAtSend)),
         factKey = asString(raw.factKey),
         quotedMessageId = asInteger(raw.quotedMessageId),
         quotedRole = asString(raw.quotedRole),
@@ -218,6 +219,16 @@ local function readMessages(rawMessages)
         end
         seen[entry.id] = true
     end
+    local byId = {}
+    for _, entry in ipairs(out) do byId[entry.id] = entry end
+    local ContentService = require("services.ContentService")
+    for _, entry in ipairs(out) do
+        if entry.quotedRole == "her" and entry.quotedTextPreview then
+            local target = byId[entry.quotedMessageId]
+            entry.quotedTextPreview = target and ContentService.ClipPreview(target.text, 24)
+                or EnglishText.Translate(entry.quotedTextPreview)
+        end
+    end
     return out
 end
 
@@ -237,7 +248,7 @@ local function readEventLedger(rawLedger)
                 out[#out + 1] = {
                     key = key,
                     eventId = eventId,
-                    title = asString(raw.title) or "",
+                    title = EnglishText.Translate(asString(raw.title) or ""),
                     sceneId = asString(raw.sceneId) or "",
                     -- v3 的账本没有起止与生命周期字段，读回来补 0/空串而不是报错
                     startUtc = asInteger(raw.startUtc) or 0,
@@ -662,8 +673,8 @@ end
 
 ---@return string
 function MemoryService.GetSummaryLine()
-    return string.format("已聊 %d 轮 · 记忆来源 %s · 最近事实 %s · 事件记录 %d 条",
-        mem_.turns, source_, mem_.lastFactId ~= "" and mem_.lastFactId or "无", #mem_.eventLedger)
+    return string.format("%d exchanges · %d shared moments",
+        mem_.turns, #mem_.eventLedger)
 end
 
 function MemoryService.ResetInMemory()

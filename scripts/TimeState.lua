@@ -51,10 +51,10 @@ local function europeLondonDst(y)
 end
 
 TimeState.CITIES = {
-    los_angeles = { label = "洛杉矶", scenePrefix = "la", stdOffset = -8 * 3600, dstOffset = -7 * 3600, dstRange = usPacificDst, hemisphere = "N" },
-    london      = { label = "伦敦",   scenePrefix = "lon", stdOffset = 0,         dstOffset = 1 * 3600,  dstRange = europeLondonDst, hemisphere = "N" },
-    shanghai    = { label = "上海",   scenePrefix = "sha", stdOffset = 8 * 3600,  dstOffset = 8 * 3600,  dstRange = nil, hemisphere = "N" },
-    chengdu     = { label = "成都",   scenePrefix = "cdu", stdOffset = 8 * 3600,  dstOffset = 8 * 3600,  dstRange = nil, hemisphere = "N" },
+    los_angeles = { label = "Los Angeles", scenePrefix = "la", stdOffset = -8 * 3600, dstOffset = -7 * 3600, dstRange = usPacificDst, hemisphere = "N" },
+    london      = { label = "London",   scenePrefix = "lon", stdOffset = 0,         dstOffset = 1 * 3600,  dstRange = europeLondonDst, hemisphere = "N" },
+    shanghai    = { label = "Shanghai",   scenePrefix = "sha", stdOffset = 8 * 3600,  dstOffset = 8 * 3600,  dstRange = nil, hemisphere = "N" },
+    chengdu     = { label = "Chengdu",   scenePrefix = "cdu", stdOffset = 8 * 3600,  dstOffset = 8 * 3600,  dstRange = nil, hemisphere = "N" },
 }
 
 -- 作息表按城市分键：换城市就是换一套日程叙事，四城各自覆盖 00:00–24:00 无缝。
@@ -66,46 +66,46 @@ TimeState.CITIES = {
 -- 所以这里绝不允许出现第五种 place —— 那会指向一张不存在的背景。
 TimeState.SCHEDULE_BY_CITY = {
     los_angeles = {
-        { from = 0,  to = 6,  availability = "offline",    place = "apartment", event = "la_apartment_night_rest",   phrase = "已经睡下了" },
-        { from = 6,  to = 8,  availability = "idle",       place = "apartment", event = "la_apartment_morning_inbox", phrase = "在煮咖啡" },
-        { from = 8,  to = 12, availability = "busy",       place = "studio",    event = "la_campus_workshop",         phrase = "在备课" },
-        { from = 12, to = 13, availability = "fragments",  place = "cafe",      event = "la_cafe_midday",             phrase = "在吃午饭" },
-        { from = 13, to = 17, availability = "busy",       place = "studio",    event = "la_studio_zine_layout",      phrase = "在赶项目" },
-        { from = 17, to = 19, availability = "fragments",  place = "commute",   event = "la_commute_voice_notes",     phrase = "在路上" },
-        { from = 19, to = 22, availability = "idle",       place = "cafe",      event = "la_cafe_open_mic",           phrase = "还在外面" },
-        { from = 22, to = 24, availability = "idle",       place = "apartment", event = "la_apartment_wind_down",     phrase = "回到公寓了" },
+        { from = 0,  to = 6,  availability = "offline",    place = "apartment", event = "la_apartment_night_rest",   phrase = "Asleep" },
+        { from = 6,  to = 8,  availability = "idle",       place = "apartment", event = "la_apartment_morning_inbox", phrase = "Making coffee" },
+        { from = 8,  to = 12, availability = "busy",       place = "studio",    event = "la_campus_workshop",         phrase = "Preparing a workshop" },
+        { from = 12, to = 13, availability = "fragments",  place = "cafe",      event = "la_cafe_midday",             phrase = "Having lunch" },
+        { from = 13, to = 17, availability = "busy",       place = "studio",    event = "la_studio_zine_layout",      phrase = "Working on a deadline" },
+        { from = 17, to = 19, availability = "fragments",  place = "commute",   event = "la_commute_voice_notes",     phrase = "On the way" },
+        { from = 19, to = 22, availability = "idle",       place = "cafe",      event = "la_cafe_open_mic",           phrase = "Still out" },
+        { from = 22, to = 24, availability = "idle",       place = "apartment", event = "la_apartment_wind_down",     phrase = "Back at the apartment" },
     },
     shanghai = {
-        { from = 0,  to = 6,  availability = "offline",    place = "apartment", event = "sha_apartment_night_rest",    phrase = "已经睡下了" },
-        { from = 6,  to = 8,  availability = "idle",       place = "apartment", event = "sha_apartment_morning_balcony", phrase = "在阳台浇花" },
-        { from = 8,  to = 9,  availability = "fragments",  place = "commute",   event = "sha_commute_rush",            phrase = "在挤地铁" },
-        { from = 9,  to = 12, availability = "busy",       place = "office",    event = "sha_office_topic_meeting",    phrase = "在开选题会" },
-        { from = 12, to = 13, availability = "fragments",  place = "office",    event = "sha_cafe_midday",             phrase = "在吃午饭" },
-        { from = 13, to = 17, availability = "busy",       place = "office",    event = "sha_office_layout",           phrase = "在盯排版" },
-        { from = 17, to = 19, availability = "fragments",  place = "commute",   event = "sha_commute_market",          phrase = "在绕菜场" },
-        { from = 19, to = 22, availability = "idle",       place = "bookstore", event = "sha_bookstore_evening",       phrase = "在书店值班" },
-        { from = 22, to = 24, availability = "idle",       place = "apartment", event = "sha_apartment_reread",        phrase = "回到公寓了" },
+        { from = 0,  to = 6,  availability = "offline",    place = "apartment", event = "sha_apartment_night_rest",    phrase = "Asleep" },
+        { from = 6,  to = 8,  availability = "idle",       place = "apartment", event = "sha_apartment_morning_balcony", phrase = "Watering the balcony plants" },
+        { from = 8,  to = 9,  availability = "fragments",  place = "commute",   event = "sha_commute_rush",            phrase = "On a crowded metro" },
+        { from = 9,  to = 12, availability = "busy",       place = "office",    event = "sha_office_topic_meeting",    phrase = "In an editorial meeting" },
+        { from = 12, to = 13, availability = "fragments",  place = "office",    event = "sha_cafe_midday",             phrase = "Having lunch" },
+        { from = 13, to = 17, availability = "busy",       place = "office",    event = "sha_office_layout",           phrase = "Checking layouts" },
+        { from = 17, to = 19, availability = "fragments",  place = "commute",   event = "sha_commute_market",          phrase = "Stopping at the market" },
+        { from = 19, to = 22, availability = "idle",       place = "bookstore", event = "sha_bookstore_evening",       phrase = "On shift at the bookshop" },
+        { from = 22, to = 24, availability = "idle",       place = "apartment", event = "sha_apartment_reread",        phrase = "Back at the apartment" },
     },
     chengdu = {
-        { from = 0,  to = 7,  availability = "offline",    place = "apartment", event = "cdu_apartment_night_rest",    phrase = "已经睡下了" },
-        { from = 7,  to = 9,  availability = "idle",       place = "apartment", event = "cdu_apartment_morning_water", phrase = "在浇花" },
-        { from = 9,  to = 12, availability = "busy",       place = "studio",    event = "cdu_studio_morning_ink",      phrase = "在画片" },
-        { from = 12, to = 14, availability = "idle",       place = "cafe",      event = "cdu_cafe_midday",             phrase = "在茶馆" },
-        { from = 14, to = 18, availability = "busy",       place = "studio",    event = "cdu_studio_color",            phrase = "在调颜色" },
-        { from = 18, to = 20, availability = "fragments",  place = "commute",   event = "cdu_commute_supplies",        phrase = "在路上" },
-        { from = 20, to = 23, availability = "idle",       place = "commute",   event = "cdu_nightmarket_supper",      phrase = "在夜市" },
-        { from = 23, to = 24, availability = "idle",       place = "apartment", event = "cdu_apartment_letters",       phrase = "回到公寓了" },
+        { from = 0,  to = 7,  availability = "offline",    place = "apartment", event = "cdu_apartment_night_rest",    phrase = "Asleep" },
+        { from = 7,  to = 9,  availability = "idle",       place = "apartment", event = "cdu_apartment_morning_water", phrase = "Watering plants" },
+        { from = 9,  to = 12, availability = "busy",       place = "studio",    event = "cdu_studio_morning_ink",      phrase = "Drawing postcards" },
+        { from = 12, to = 14, availability = "idle",       place = "cafe",      event = "cdu_cafe_midday",             phrase = "At the teahouse" },
+        { from = 14, to = 18, availability = "busy",       place = "studio",    event = "cdu_studio_color",            phrase = "Mixing colours" },
+        { from = 18, to = 20, availability = "fragments",  place = "commute",   event = "cdu_commute_supplies",        phrase = "On the way" },
+        { from = 20, to = 23, availability = "idle",       place = "commute",   event = "cdu_nightmarket_supper",      phrase = "At the night market" },
+        { from = 23, to = 24, availability = "idle",       place = "apartment", event = "cdu_apartment_letters",       phrase = "Back at the apartment" },
     },
     london = {
-        { from = 0,  to = 6,  availability = "offline",    place = "apartment", event = "lon_apartment_night_rest",    phrase = "已经睡下了" },
-        { from = 6,  to = 7,  availability = "idle",       place = "apartment", event = "lon_apartment_morning_tea",   phrase = "在煮茶" },
-        { from = 7,  to = 8,  availability = "fragments",  place = "commute",   event = "lon_commute_early_train",     phrase = "在赶火车" },
-        { from = 8,  to = 13, availability = "busy",       place = "studio",    event = "lon_campus_lecture",          phrase = "在学院棚里" },
-        { from = 13, to = 14, availability = "fragments",  place = "commute",   event = "lon_cafe_midday",             phrase = "在吃三明治" },
-        { from = 14, to = 18, availability = "busy",       place = "studio",    event = "lon_studio_field_recording",  phrase = "在录音棚" },
-        { from = 18, to = 19, availability = "fragments",  place = "commute",   event = "lon_commute_dark",            phrase = "在路上" },
-        { from = 19, to = 22, availability = "idle",       place = "recordshop", event = "lon_recordshop_shift",       phrase = "在唱片行" },
-        { from = 22, to = 24, availability = "idle",       place = "apartment", event = "lon_apartment_mixdown",       phrase = "回到公寓了" },
+        { from = 0,  to = 6,  availability = "offline",    place = "apartment", event = "lon_apartment_night_rest",    phrase = "Asleep" },
+        { from = 6,  to = 7,  availability = "idle",       place = "apartment", event = "lon_apartment_morning_tea",   phrase = "Making tea" },
+        { from = 7,  to = 8,  availability = "fragments",  place = "commute",   event = "lon_commute_early_train",     phrase = "Catching a train" },
+        { from = 8,  to = 13, availability = "busy",       place = "studio",    event = "lon_campus_lecture",          phrase = "In the college studio" },
+        { from = 13, to = 14, availability = "fragments",  place = "commute",   event = "lon_cafe_midday",             phrase = "Having a sandwich" },
+        { from = 14, to = 18, availability = "busy",       place = "studio",    event = "lon_studio_field_recording",  phrase = "In the recording studio" },
+        { from = 18, to = 19, availability = "fragments",  place = "commute",   event = "lon_commute_dark",            phrase = "On the way" },
+        { from = 19, to = 22, availability = "idle",       place = "recordshop", event = "lon_recordshop_shift",       phrase = "At the record shop" },
+        { from = 22, to = 24, availability = "idle",       place = "apartment", event = "lon_apartment_mixdown",       phrase = "Back at the apartment" },
     },
 }
 
@@ -134,10 +134,10 @@ local REPLY_POLICY = {
 
 ---@type table<string, string>
 local AVAILABILITY_LABEL = {
-    idle = "有空",
-    fragments = "只有碎片时间",
-    busy = "在忙",
-    offline = "睡了",
+    idle = "Free to chat",
+    fragments = "Only a moment free",
+    busy = "Busy",
+    offline = "Asleep",
 }
 
 --- 取某档可用性的回复策略（返回表本身，勿在外部改写）
@@ -164,14 +164,14 @@ function TimeState.AvailabilityLabel(availability)
 end
 
 ---@type table<number, string>
-local SEASONS = { "冬", "春", "春", "春", "夏", "夏", "夏", "秋", "秋", "冬", "冬", "冬" }
+local SEASONS = { "Winter", "Spring", "Spring", "Spring", "Summer", "Summer", "Summer", "Autumn", "Autumn", "Winter", "Winter", "Winter" }
 
 -- 天气只走低风险状态，且由 city_id + 当地日期定种，全天一致（§5.1）
 local WEATHER_BY_CITY = {
-    los_angeles = { { "晴", 62 }, { "阴", 26 }, { "风", 12 } },
-    london      = { { "阴", 48 }, { "雨", 34 }, { "风", 12 }, { "晴", 6 } },
-    shanghai    = { { "阴", 34 }, { "雨", 30 }, { "晴", 26 }, { "风", 10 } },
-    chengdu     = { { "阴", 46 }, { "晴", 24 }, { "雨", 22 }, { "风", 8 } },
+    los_angeles = { { "Sunny", 62 }, { "Cloudy", 26 }, { "Windy", 12 } },
+    london      = { { "Cloudy", 48 }, { "Rainy", 34 }, { "Windy", 12 }, { "Sunny", 6 } },
+    shanghai    = { { "Cloudy", 34 }, { "Rainy", 30 }, { "Sunny", 26 }, { "Windy", 10 } },
+    chengdu     = { { "Cloudy", 46 }, { "Sunny", 24 }, { "Rainy", 22 }, { "Windy", 8 } },
 }
 
 local function fnv1a(s)

@@ -438,7 +438,7 @@ local function ScenarioBusy(dateKey)
         StatusOf(busyHead))
     local queuedStatus = StatusOf(busyHead)
     check("C4 气泡写了已送达但没有任何已读字样",
-        queuedStatus:find("已送达") ~= nil and queuedStatus:find("已读") == nil, queuedStatus)
+        queuedStatus:find("Delivered") ~= nil and queuedStatus:find("Read") == nil, queuedStatus)
 
     local at16 = goLocalHour(16, dateKey)
     advance(30)
@@ -450,7 +450,7 @@ local function ScenarioBusy(dateKey)
     check("C6 进入可回复窗口后回复", at17.availability == "fragments"
         and MessageService.GetQueueLength() == 0 and herReplyCount() == opens + 1)
     local reply = lastHerReply()
-    check("C7 回复引用送达时的作息事实而非捏造", TextOf(reply and reply.text):find("在赶项目") ~= nil,
+    check("C7 回复引用送达时的作息事实而非捏造", TextOf(reply and reply.text):find("Working on a deadline") ~= nil,
         TextOf(reply and reply.text))
 end
 
@@ -479,7 +479,7 @@ local function ScenarioOfflineFifo(dateKey)
     check("D3 两条都只标排队（谁都没被读过）",
         first ~= nil and first.state == MessageService.PHASE.QUEUED
         and second ~= nil and second.state == MessageService.PHASE.QUEUED
-        and firstStatus:find("已读") == nil,
+        and firstStatus:find("Read") == nil,
         string.format("first=%s second=%s", StatusOf(first), StatusOf(second)))
 
     advance(60)
@@ -650,8 +650,8 @@ local function ScenarioAwaySummary()
     logInfo("场景 G 离开期间摘要")
     local line = ContentService.AwaySummary(5 * 3600 + 12 * 60, "在赶项目", "还在外面", 3)
     check("G1 摘要只有一行", line:find("\n") == nil, line)
-    check("G2 摘要含客观间隔与两头作息", line:find("5 小时 12 分") ~= nil
-        and line:find("在赶项目") ~= nil and line:find("还在外面") ~= nil, line)
+    check("G2 摘要含客观间隔与两头作息", line:find("5h 12min") ~= nil
+        and line:find("Working on a deadline") ~= nil and line:find("Still out") ~= nil, line)
     check("G3 摘要没有逐小时流水", line:find("在上课") == nil and line:find("在路上") == nil, line)
 end
 
@@ -829,7 +829,7 @@ local function ScenarioEventReentry(dateKey)
     local morningReply = lastHerReply()
     local morningText = TextOf(morningReply and morningReply.text)
     -- 结束钟点从实例自己带上，不写死：改作息表时这条断言会跟着走，而不是留下过期的硬编码
-    local endedMark = "到" .. nightFact.eventEndsAt .. "就收了"
+    local endedMark = "ended at " .. nightFact.eventEndsAt
     local morningFact = EventService.FactFor(cityId_, TimeState.NowUtc())
     check("J5 醒来补回点名凌晨那件事、并报它几点收的",
         morningText:find(endedMark, 1, true) ~= nil
@@ -863,7 +863,7 @@ local function ScenarioEventReentry(dateKey)
     advance(30)
     local busyReply = lastHerReply()
     local busyText = TextOf(busyReply and busyReply.text)
-    local studioEndedMark = "到" .. studioFact.eventEndsAt .. "就收了"
+    local studioEndedMark = "ended at " .. studioFact.eventEndsAt
     local commuteFact = EventService.FactFor(cityId_, TimeState.NowUtc())
     check("J9 14:30 的消息在 17:05 补回时点名工作室事件已收",
         MessageService.GetQueueLength() == 0 and herReplyCount() == opensBusy + 1
@@ -912,7 +912,7 @@ local function ScenarioQuoteHer(dateKey)
     check("K3 回复里带上被引用那句的完整预览", preview ~= "" and text:find(preview, 1, true) ~= nil,
         string.format("期望含=%s 实际=%s", preview, text))
     check("K4 回指句只认下那句话，不做事实断言",
-        text:find("我看见了") ~= nil or text:find("这句我记下了") ~= nil, text)
+        text:find("I saw what you said") ~= nil or text:find("I'll keep that in mind") ~= nil, text)
 end
 
 -- ---------------------------------------------------------------------------
@@ -992,8 +992,8 @@ local function ScenarioInvalidQuote(dateKey)
 
     advance(idleWait_ + 20)
     local text = TextOf(lastHerReply() and lastHerReply().text)
-    check("M8 降级后的回复里没有回指句", text:find("我看见了") == nil
-        and text:find("这句我记下了") == nil, text)
+    check("M8 降级后的回复里没有回指句", text:find("I saw what you said") == nil
+        and text:find("I'll keep that in mind") == nil, text)
 end
 
 -- ---------------------------------------------------------------------------
@@ -1020,7 +1020,7 @@ local function ScenarioQuoteBusyQueue(dateKey)
     advance(30)
     local status = StatusOf(head())
     check("N2 忙碌排队只写已送达与排队，绝不写已读",
-        status:find("已送达") ~= nil and status:find("已读") == nil, status)
+        status:find("Delivered") ~= nil and status:find("Read") == nil, status)
 
     local markIndex = #MessageService.GetMessages()
     goLocalHour(19, dateKey, 45)
@@ -1056,7 +1056,7 @@ local function ScenarioQuoteSleepQueue(dateKey)
     advance(60)
     local status = StatusOf(head())
     check("O2 睡眠排队只写已送达与排队，绝不写已读",
-        status:find("已送达") ~= nil and status:find("已读") == nil, status)
+        status:find("Delivered") ~= nil and status:find("Read") == nil, status)
 
     local markIndex = #MessageService.GetMessages()
     goLocalHour(7, dateKey)
@@ -1188,7 +1188,7 @@ local function ScenarioPolishContract()
         tostring(r0Cat))
 
     local segs2, cat2, payload2 = polishOnce(
-        { ok = true, status = 200, bodyText = polishBody('"好的呀。","稍等一下。"') })
+        { ok = true, status = 200, bodyText = polishBody('"Okay.","Give me a moment."') })
     check("R1 合法两段通过（llm）", segs2 ~= nil and #segs2 == 2 and cat2 == "llm",
         string.format("段数=%s 结果=%s", tostring(segs2 and #segs2), tostring(cat2)))
     check("R2 白名单 payload：quote 缺省也显式为 null，core/事实齐备",
@@ -1197,7 +1197,7 @@ local function ScenarioPolishContract()
         and payload2.deliveryFact ~= nil and payload2.sendFact ~= nil,
         string.format("quote=%s", tostring(payload2 and payload2.quote)))
 
-    local _, _, clipped = polishOnce(okResponse("好。"), nil,
+    local _, _, clipped = polishOnce(okResponse("Okay."), nil,
         polishPending({ text = string.rep("话", 350) }))
     check("R3 用户原文超 300 码点出站前裁到 300", clipped ~= nil
         and PolishService.RuneLenForTest(clipped.userMessage) == 300,
@@ -1221,13 +1221,13 @@ local function ScenarioPolishContract()
     local quotedPending = { id = 4002, text = "再说说那句。",
         quotedMessageId = 77, quotedRole = "user", quotedTextPreview = "那句想再听听" }
     local _, c8 = polishOnce({ ok = true, status = 200,
-        bodyText = polishBody('"好。"', "88") }, nil, quotedPending)
+        bodyText = polishBody('"Okay."', "88") }, nil, quotedPending)
     check("R8 引用 id 与本次允许值不符 → schema_quote_id", c8 == "schema_quote_id", tostring(c8))
     local segs9, cat9 = polishOnce({ ok = true, status = 200,
-        bodyText = polishBody('"好。"', "77") }, nil, quotedPending)
+        bodyText = polishBody('"Okay."', "77") }, nil, quotedPending)
     check("R8b 引用 id 与允许值一致 → 通过", segs9 ~= nil and cat9 == "llm", tostring(cat9))
     local _, c8c = polishOnce({ ok = true, status = 200,
-        bodyText = polishBody('"好。"', "77") })
+        bodyText = polishBody('"Okay."', "77") })
     check("R8c 无引用请求里出数字 id → schema_quote_id", c8c == "schema_quote_id", tostring(c8c))
 
     local _, c10 = polishOnce(okResponse("   "))
@@ -1294,14 +1294,16 @@ local function ScenarioPolishContract()
 
     local _, g3 = polishOnce(okResponse("明天 23:30 才收工。"))
     check("R19 润色句带白名单外钟点 → guard_time", g3 == "guard_time", tostring(g3))
-    local segs20, cat20 = polishOnce(okResponse("19:45 还在收尾。"))
+    local segs20, cat20 = polishOnce(okResponse("Still finishing at 19:45."))
     check("R20 请求事实里已有的钟点放行", segs20 ~= nil and cat20 == "llm", tostring(cat20))
 
     local _, b1 = polishOnce({ ok = true, status = 200, bodyText = polishBody('"好的。","马上。"') },
         polishFact({ brief = true }))
     check("R21 碎片档出两句 → schema_brief_multi", b1 == "schema_brief_multi", tostring(b1))
-    local segs22, cat22 = polishOnce(okResponse("好的。"), polishFact({ brief = true }))
+    local segs22, cat22 = polishOnce(okResponse("Okay."), polishFact({ brief = true }))
     check("R22 碎片档一句短回复通过", segs22 ~= nil and cat22 == "llm", tostring(cat22))
+    local _, languageReason = polishOnce(okResponse("还是中文。"))
+    check("R23 非英文润色回落英文模板", languageReason == "guard_language", tostring(languageReason))
 
     PolishService.Configure({ enabled = false })
 end
@@ -1349,11 +1351,11 @@ local function ScenarioPolishFifo()
 
     -- 结果落地 → 交付由主循环那一次 Update 推进（真机每帧调 HandleUpdate；
     -- 自检在 Start 里同步跑，没有帧循环，所以这里手动推一拍，走的仍是同一个入口）
-    callbacks[2](okResponse("B 句。"))
+    callbacks[2](okResponse("B reply."))
     PolishService.Update(POLISH_BASE_UTC)
     check("S1 后发的结果先回来也不越序：一条都不交付", #order == 0,
         table.concat(order, ","))
-    callbacks[1](okResponse("A 句。"))
+    callbacks[1](okResponse("A reply."))
     PolishService.Update(POLISH_BASE_UTC)
     check("S2 队头落地后按发起顺序连发（A 先 B 后）",
         #order == 2 and order[1] == "A" and order[2] == "B"
@@ -1392,9 +1394,9 @@ local function ScenarioPolishQueueFlow(dateKey)
     goLocalHour(19, dateKey, 45)
     -- reinit_ 把配置放回 GatewayEnabled=false；本场景注入假 transport 进入开启态
     PolishService.Configure({ enabled = true, transport = { request = function(payload, callback)
-        local mark = payload.userMessage:find("第一条", 1, true) and "甲" or "乙"
+        local mark = payload.userMessage:find("第一条", 1, true) and "A" or "B"
         callback({ ok = true, status = 200,
-            bodyText = polishBody('"' .. mark .. '一。","' .. mark .. '二。"') })
+            bodyText = polishBody('"' .. mark .. ' one.","' .. mark .. ' two."') })
     end } })
 
     sendNow("第一条。")
@@ -1408,12 +1410,12 @@ local function ScenarioPolishQueueFlow(dateKey)
         string.format("回复增量 %d 队列 %d", herReplyCount() - opens,
             MessageService.GetQueueLength()))
     check("T2 回复按送达顺序 FIFO：第一条落甲句、第二条落乙句", #replies == 2
-        and TextOf(replies[1] and replies[1].text):find("甲一", 1, true) ~= nil
-        and TextOf(replies[2] and replies[2].text):find("乙一", 1, true) ~= nil,
+        and TextOf(replies[1] and replies[1].text):find("A one", 1, true) ~= nil
+        and TextOf(replies[2] and replies[2].text):find("B one", 1, true) ~= nil,
         string.format("一=%s 二=%s", TextOf(replies[1] and replies[1].text),
             TextOf(replies[2] and replies[2].text)))
     check("T3 润色文本逐句上屏后完整落库，一次回复仍只有一条记录", #replies == 2
-        and replies[1] ~= nil and replies[1].text == "甲一。甲二。"
+        and replies[1] ~= nil and replies[1].text == "A one. A two."
         and replies[1].streamSegments == nil,
         TextOf(replies[1] and replies[1].text))
     check("T4 回复记录的送达事实照常由 Lua 带上（LLM 不碰事实）",
@@ -1708,9 +1710,9 @@ local function ScenarioCityConsistency(dateKey)
     -- 气泡城市戳取消息自带的城；缺字段（旧档）或未知城才回落当前档案
     ProfileService.Set("los_angeles", "stranger", { initialized = true })
     check("Y13 城市戳优先取消息自带城市，缺省/未知回落当前档案",
-        ProfileService.MessageSuffix(true, "shanghai"):find("上海", 1, true) ~= nil
-        and ProfileService.MessageSuffix(true, nil):find("洛杉矶", 1, true) ~= nil
-        and ProfileService.MessageSuffix(true, "no_such_city"):find("洛杉矶", 1, true) ~= nil)
+        ProfileService.MessageSuffix(true, "shanghai"):find("Shanghai", 1, true) ~= nil
+        and ProfileService.MessageSuffix(true, nil):find("Los Angeles", 1, true) ~= nil
+        and ProfileService.MessageSuffix(true, "no_such_city"):find("Los Angeles", 1, true) ~= nil)
     cityId_ = "los_angeles"
 end
 
@@ -1802,7 +1804,7 @@ local function ScenarioV4Migration()
     check("Z4 引用字段原样迁移（quotedMessageId/role/preview 都在）",
         quotedEntry ~= nil and quotedEntry.quotedMessageId == 9000
         and quotedEntry.quotedRole == "her"
-        and TextOf(quotedEntry.quotedTextPreview) == "人不多。",
+        and TextOf(quotedEntry.quotedTextPreview) == "Not many people here.",
         string.format("id=%s role=%s", tostring(quotedEntry and quotedEntry.quotedMessageId),
             tostring(quotedEntry and quotedEntry.quotedRole)))
     local queued = head()
@@ -2437,8 +2439,8 @@ local function ScenarioExplicitStoryAdopted(dateKey)
             ProfileService.GetCityId(), ProfileService.GetRelationId(),
             tostring(profSha and profSha.cityId), tostring(profSha and profSha.relationId)))
     check("AH1 聊天顶部标签与档案页那行都读这一对（同源，没有第二处默认值）",
-        ProfileService.ProfileLine() == "前同事 · 上海"
-        and ProfileService.RelationCityLine():find("前同事 × 上海", 1, true) ~= nil,
+        ProfileService.ProfileLine() == "Former colleague · Shanghai"
+        and ProfileService.RelationCityLine():find("Former colleague × Shanghai", 1, true) ~= nil,
         ProfileService.ProfileLine())
 
     local factSha = EventService.FactFor("shanghai", TimeState.NowUtc())
@@ -2477,7 +2479,7 @@ local function ScenarioExplicitStoryAdopted(dateKey)
         cdu ~= nil and cdu.cityId == "chengdu" and cdu.relationId == "classmate"
         and ProfileService.GetCityId() == "chengdu"
         and ProfileService.GetRelationId() == "classmate"
-        and ProfileService.ProfileLine() == "高中同学 · 成都"
+        and ProfileService.ProfileLine() == "School friend · Chengdu"
         and profCdu ~= nil and profCdu.cityId == "chengdu"
         and profCdu.relationId == "classmate",
         string.format("档案=%s/%s 标签=%s 存档=%s/%s",
@@ -2658,7 +2660,7 @@ local function ScenarioM7FourPieceCards(dateKey)
         check("AJ3 线索与已知发问走关键事件事实，未知自由输入不假装精准理解",
             during.isM7KeyEvent == true and during.occurrenceKey == regeneratedKey.occurrenceKey
             and known:find(during.m7Answer, 1, true) ~= nil
-            and unknown:find("我只能先确认", 1, true) ~= nil,
+            and unknown:find("What I can tell you is", 1, true) ~= nil,
             string.format("known=%s unknown=%s", known, unknown))
 
         local before = M7EventService.LatestCompletedKeyEvent("los_angeles", regeneratedKey.endUtc - 1)

@@ -546,8 +546,8 @@ local function bindCharacterMaterial(node)
         local tex = resource and (resource --[[@as Texture2D]]) or nil
         if not applyDiffuse(tex) then
             textureState_ = "异步失败"
-            characterTextureError_ = "角色贴图 " .. CHARACTER_DIFFUSE_TEXTURE
-                .. " 下载失败，人物可能发黑。"
+            characterTextureError_ = "Character texture " .. CHARACTER_DIFFUSE_TEXTURE
+                .. " failed to load. Her appearance may be incomplete."
             trace(characterTextureError_, LOG_WARNING)
             return
         end
@@ -798,9 +798,9 @@ local function loadCharacter()
     else
         modelLoaded_ = false
         if glbExists then
-            modelError_ = "已找到 lin-ruoxi.glb，但缺少 Meshes/lin-ruoxi.mdl。请用 UrhoXCLI import-gltf 导入后再预览。"
+            modelError_ = "Her model isn't ready yet. The scene will use a placeholder."
         else
-            modelError_ = "未找到角色模型。请将最终 GLB 放到 assets/models/characters/lin-ruoxi/lin-ruoxi.glb，并导入为 Meshes/lin-ruoxi.mdl。"
+            modelError_ = "Her model is unavailable. The scene will use a placeholder."
         end
         trace(modelError_, LOG_ERROR)
         createPlaceholderCharacter(characterRoot_)
@@ -898,7 +898,7 @@ end
 ---@return string result applied-pending | unchanged | missing-package
 function StatusWindow.ApplySceneState(state, onApplied, force)
     if not state then
-        sceneNotice_ = "当前事件缺少对应场景状态包，状态窗沿用现有画面"
+        sceneNotice_ = "This scene is unavailable. Keeping the current view."
         logWarn("场景包缺失（未切换），沿用当前画面")
         if noticesChanged_ then
             noticesChanged_()
@@ -936,7 +936,7 @@ function StatusWindow.ApplySceneState(state, onApplied, force)
         -- 背景没到手就不切：光照/站位/阴影都保持原场景那一套，
         -- 绝不允许「新光照打在旧背景上」这种半切状态出现在画面上。
         currentSceneId_ = ""
-        backgroundError_ = "场景 " .. state.sceneId .. " 的静帧未下载成功，状态窗沿用上一帧画面。"
+        backgroundError_ = "Scene " .. state.sceneId .. " couldn't load. Keeping the previous view."
         logError(backgroundError_ .. " path=" .. failed)
         if noticesChanged_ then
             noticesChanged_()

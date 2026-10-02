@@ -168,17 +168,17 @@ function MessageService.EntryStatusText(entry)
         return ""
     end
     if entry.state == MessageService.PHASE.SENT then
-        return "已送达"
+        return "Delivered"
     elseif entry.state == MessageService.PHASE.WAITING then
-        return "已送达 · 等待回复"
+        return "Delivered · Waiting for a reply"
     elseif entry.state == MessageService.PHASE.QUEUED then
         local pos = MessageService.QueuePosition(entry)
-        local tail = pos > 1 and (" · 第 " .. tostring(pos) .. " 位") or ""
-        return "已送达 · 对方" .. (entry.availabilityLabelAtSend or "在忙") .. "，已排队" .. tail
+        local tail = pos > 1 and (" · #" .. tostring(pos)) or ""
+        return "Delivered · " .. (entry.availabilityLabelAtSend or "Busy") .. " · Queued" .. tail
     elseif entry.state == MessageService.PHASE.TYPING then
-        return "若夕正在输入"
+        return "Ruoxi is typing"
     elseif entry.state == "replied" then
-        return "已回复"
+        return "Replied"
     end
     return ""
 end
@@ -192,19 +192,19 @@ function MessageService.StatusLine(utcNow)
         return ""
     end
     if head.state == MessageService.PHASE.TYPING then
-        return "若夕正在输入…"
+        return "Ruoxi is typing..."
     elseif head.state == MessageService.PHASE.SENT then
-        return "已送达"
+        return "Delivered"
     elseif head.state == MessageService.PHASE.WAITING then
         local left = math.max(0, math.ceil((head.effReplyAtUtc or head.planReplyAtUtc or utcNow) - utcNow))
-        return "等待若夕回复 · 约 " .. tostring(left) .. " 秒"
+        return "Reply in about " .. tostring(left) .. "s"
     end
-    local text = "对方" .. (head.availabilityLabelAtSend or "在忙") .. "，消息已排队"
+    local text = "Ruoxi: " .. (head.availabilityLabelAtSend or "Busy") .. " · Message queued"
     if #queue_ > 1 then
-        text = text .. "（" .. tostring(#queue_) .. " 条）"
+        text = text .. " (" .. tostring(#queue_) .. " messages)"
     end
     if head.planWindowStartUtc and head.planReplyAtUtc and head.planReplyAtUtc > utcNow then
-        text = text .. " · " .. ClockTextOf(head.planWindowStartUtc) .. " 之后能回"
+        text = text .. " · Replies after " .. ClockTextOf(head.planWindowStartUtc)
     end
     return text
 end
@@ -623,7 +623,7 @@ local function AdvanceStreaming(now)
             table.remove(streaming_, i)
             logInfo(string.format("回复 #%d 逐句上屏完成，共 %d 句", entry.id, #segments))
         elseif now >= (entry.streamNextAtUtc or 0) then
-            entry.text = entry.text .. segments[idx]
+            entry.text = entry.text .. " " .. segments[idx]
             entry.streamIndex = idx
             entry.streamNextAtUtc = now + SEGMENT_GAP_SECONDS
             version_ = version_ + 1

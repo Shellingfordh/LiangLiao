@@ -101,27 +101,27 @@ function SettingsOverlay.Build()
                 borderColor = { 122, 130, 142, 90 },
                 children = {
                     UI.Label {
-                        text = "设置",
+                        text = "Settings",
                         fontSize = 14,
                         fontWeight = "bold",
                         fontColor = COLORS.title,
                     },
-                    MakeEntryRow("查看档案", "她住在哪、此刻在做什么、留下了什么生活痕迹", function()
+                    MakeEntryRow("About Ruoxi", "Her city, her day, and the little things left behind.", function()
                         if onProfile_ then
                             onProfile_()
                         end
                     end),
-                    MakeEntryRow("换一段人生", "在已有人生卡片之间切换（最多三段）", function()
+                    MakeEntryRow("Switch story", "Return to one of your stories. Keep up to three.", function()
                         if onSwitch_ then
                             onSwitch_()
                         end
                     end),
-                    MakeEntryRow("新故事", "选一座城市和一段关系起点，开始独立的一段人生", function()
+                    MakeEntryRow("New story", "Choose a city and a relationship for a fresh start.", function()
                         if onNew_ then
                             onNew_()
                         end
                     end),
-                    MakeEntryRow("关闭", "回到聊天", function()
+                    MakeEntryRow("Close", "Back to your conversation.", function()
                         SettingsOverlay.Hide()
                     end),
                 },

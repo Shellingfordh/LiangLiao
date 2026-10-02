@@ -19,50 +19,50 @@ local ElizaService = {}
 local RULES = {
     {
         id = "fatigue",
-        words = { "累", "困", "辛苦", "熬夜", "没睡" },
+        words = { "累", "困", "辛苦", "熬夜", "没睡" , "tired", "sleepy", "exhausted", "late night", "no sleep" },
         lines = {
-            "听着挺累的。你现在能歇一会儿吗？",
-            "先别硬撑。你想先缓一缓，还是把这件事说完？",
+            "That sounds tiring. Can you take a little break?",
+            "You don't have to push through. Want a breather, or would you rather talk it out?",
         },
     },
     {
         id = "pressure",
-        words = { "难过", "烦", "焦虑", "压力", "崩", "委屈" },
+        words = { "难过", "烦", "焦虑", "压力", "崩", "委屈" , "sad", "upset", "anxious", "stress", "overwhelmed", "hurt" },
         lines = {
-            "这件事听着不轻。你想先从哪一段说起？",
-            "不用急着把它讲明白。现在最让你难受的是哪一点？",
+            "That sounds like a lot. Where would you like to start?",
+            "No need to explain it all at once. What's weighing on you most?",
         },
     },
     {
         id = "work",
-        words = { "项目", "工作", "作业", "开会", "赶", "加班" },
+        words = { "项目", "工作", "作业", "开会", "赶", "加班" , "project", "work", "homework", "meeting", "deadline", "overtime" },
         lines = {
-            "先别把所有事一起扛着。最卡的是哪一块？",
-            "听起来今天又被事情追着跑。要不要挑一件先说？",
+            "One thing at a time. What's the hardest part right now?",
+            "Sounds like a busy day. Want to pick one thing to talk about?",
         },
     },
     {
         id = "food",
-        words = { "吃", "饭", "饿", "咖啡", "夜宵" },
+        words = { "吃", "饭", "饿", "咖啡", "夜宵" , "eat", "food", "hungry", "coffee", "dinner" },
         lines = {
-            "先把这一口顾上。你现在吃到什么了？",
-            "饿着的时候什么都容易变难。你先找点热的？",
+            "Food first. What are you having?",
+            "Everything feels harder on an empty stomach. Could you get something warm?",
         },
     },
     {
         id = "thanks",
-        words = { "谢谢", "谢了", "多谢" },
+        words = { "谢谢", "谢了", "多谢" , "thanks", "thank you", "thankful" },
         lines = {
-            "不用谢。你愿意说，我就听着。",
-            "没事，能帮你接住一点就好。",
+            "You're welcome. I'm glad you told me.",
+            "I'm glad I could make it a little easier.",
         },
     },
     {
         id = "care",
-        words = { "还好吗", "怎么样", "在忙吗", "睡了吗" },
+        words = { "还好吗", "怎么样", "在忙吗", "睡了吗" , "how are you", "how is it going", "are you busy", "are you asleep" },
         lines = {
-            "我在。你今天过得还顺吗？",
-            "这边没事。倒是你，今天有没有一点能喘气的空档？",
+            "I'm here. How's your day going?",
+            "I'm okay. Have you had a moment to catch your breath today?",
         },
     },
 }
@@ -70,9 +70,9 @@ local RULES = {
 ---@type table<string, string[]>
 local RELATION_PREFIX = {
     stranger = { "", "" },
-    classmate = { "老同学，", "" },
-    ex_colleague = { "老搭档，", "" },
-    old_friend = { "好久没听你这么说了，", "" },
+    classmate = { "Hey, ", "" },
+    ex_colleague = { "Hey, ", "" },
+    old_friend = { "It's been a while since we talked like this. ", "" },
 }
 
 local function hash(s)
@@ -88,7 +88,11 @@ end
 ---@return boolean
 local function containsAny(source, words)
     for i = 1, #words do
-        if source:find(words[i], 1, true) then
+        local word = words[i]
+        local matched = word:match("^[%a%s]+$")
+            and source:find("%f[%a]" .. word .. "%f[%A]")
+            or (not word:match("^[%a%s]+$") and source:find(word, 1, true))
+        if matched then
             return true
         end
     end
@@ -102,7 +106,7 @@ end
 ---@return string|nil tail
 ---@return string|nil ruleId
 function ElizaService.ReplyTail(userText, quoteText, turnIndex)
-    local source = (userText or "") .. " " .. (quoteText or "")
+    local source = ((userText or "") .. " " .. (quoteText or "")):lower()
     for i = 1, #RULES do
         local rule = RULES[i]
         if containsAny(source, rule.words) then

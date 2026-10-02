@@ -30,7 +30,7 @@ local LifeCardsOverlay = require("ui.LifeCardsOverlay")
 
 ---@type {Title: string, City: string, ReplyWaitSeconds: integer, DevTools: boolean, UseCloudMemory: boolean, DevSelfTest: boolean, AwaySummaryMinSeconds: integer, LlmRelayEnabled: boolean}
 local CONFIG = {
-    Title = "送给你这个回来的人",
+    Title = "For You, Who Came Back",
     City = "los_angeles",        -- 干净安装的初始城市；存档/换档案后的城市走 ProfileService
     ReplyWaitSeconds = 10,   -- 空闲档的固定等待（M0-1 验收过的那条链路）
     DevTools = false,        -- 正式体验不展示覆盖式测试台；需验收时再显式打开
@@ -49,9 +49,9 @@ local CONFIG = {
 --- 事件实例的生命周期上屏文案：状态窗注释行与回复共用同一套说法
 ---@type table<string, string>
 local EVENT_STATE_LABEL = {
-    upcoming = "还没开始",
-    ongoing = "正在进行",
-    ended = "已经收了",
+    upcoming = "Upcoming",
+    ongoing = "Ongoing",
+    ended = "Ended",
 }
 
 ---@type Widget|nil
@@ -853,7 +853,7 @@ function ApplyProfile(cityId, relationId, opts)
 
     if not opts.firstTime then
         MessageService.AddSystem(
-            string.format("档案更新 · 她搬去了 %s，你们的最新消息从这里继续", p.cityLabel),
+            string.format("Profile updated · She's moved to %s. Your conversation continues here.", p.cityLabel),
             NowUtc(), lastSnap_ and lastSnap_.clock or "")
         ChatPanel.SetDraft(ProfileService.DefaultDraft(p.cityId))
         MemoryService.Persist(MessageService.GetMessages())
@@ -1036,21 +1036,21 @@ function ShowLifeCards(mode)
             slotId = slot.slotId,
             head = (city and city.label or slot.cityId) .. " × "
                 .. (relation and relation.label or slot.relationId)
-                .. (active and slot.slotId == active.slotId and "（当前）" or ""),
-            body = string.format("%s · %s · %s ｜ 痕迹：%s ｜ 最近打开 %s",
+                .. (active and slot.slotId == active.slotId and " (current)" or ""),
+            body = string.format("%s · %s · %s\nTrace: %s\nLast opened: %s",
                 snap.clock, snap.cityLabel, snap.phrase,
-                trace and trace.label or "还没有", opened),
+                trace and trace.label or "None yet", opened),
             isActive = active ~= nil and slot.slotId == active.slotId,
         }
     end
     LifeCardsOverlay.Show({
-        title = mode == "replace" and "替换哪一段人生？" or "换一段人生",
+        title = mode == "replace" and "Which story should this replace?" or "Switch story",
         hint = mode == "replace"
-                and "三段都满了。点一张卡将被新故事覆盖，它的聊天、事件与痕迹整段作废。"
-                or "每张卡是一段独立人生：聊天、事件、记忆与生活痕迹互不串写。",
+                and "All three slots are full. Tap a story to replace it. Its chat, events and traces will be lost."
+                or "Each story keeps its own chat, events, memories and traces.",
         cards = cards,
         onPick = mode == "replace" and HandleReplacePick or HandleSwitchLife,
-        cancelText = mode == "replace" and "先不替换" or "先不换",
+        cancelText = mode == "replace" and "Cancel" or "Cancel",
     })
 end
 
@@ -1071,7 +1071,7 @@ function BuildProfilePageData()
         local stateText = EVENT_STATE_LABEL[entry.lastEventState] or ""
         local title = entry.title ~= "" and entry.title or ""
         if title ~= "" then
-            recent[#recent + 1] = title .. (stateText ~= "" and ("（" .. stateText .. "）") or "")
+            recent[#recent + 1] = title .. (stateText ~= "" and (" (" .. stateText .. ")") or "")
         end
     end
     local traceSlot = SessionSlot()
@@ -1082,10 +1082,10 @@ function BuildProfilePageData()
         cityClock = snap.cityLabel .. " · " .. snap.clock .. " · " .. snap.dateKey,
         identity = p.identity,
         relation = p.relationLabel .. " × " .. p.cityLabel,
-        scene = pkg and (pkg.label .. " · " .. (fact and fact.placeLabel or "")) or "此刻不在任何已知场景",
+        scene = pkg and (pkg.label .. " · " .. (fact and fact.placeLabel or "")) or "No known scene right now",
         status = snap.availabilityLabel .. " · " .. snap.phrase,
         recent = recent,
-        trace = traceItem and (traceItem.label .. "（" .. trace.eventTitle .. "留下的）") or "",
+        trace = traceItem and (traceItem.label .. " (from " .. trace.eventTitle .. ")") or "",
     }
 end
 
@@ -1396,13 +1396,13 @@ function RefreshNoteLine()
     if not noteLabel_ then
         return
     end
-    local note = "M1 · 镜头仍锁定，回复只用送达与交付两个时刻的事件事实"
+    local note = "Her own day, unfolding in local time."
     if lastFact_ and lastFact_.eventTitle then
-        note = string.format("事件 · %s（%s）· %s · %s—%s",
+        note = string.format("%s (%s) · %s · %s–%s",
             lastFact_.eventTitle, EVENT_STATE_LABEL[lastFact_.eventState] or lastFact_.eventState,
             (lastFact_.eventEmotion or ""), lastFact_.eventStartsAt, lastFact_.eventEndsAt)
         if lastFact_.isM7KeyEvent == true and lastFact_.clue and lastFact_.clue ~= "" then
-            note = note .. " · 线索：" .. lastFact_.clue
+            note = note .. " · Clue: " .. lastFact_.clue
         end
     end
     local sceneNote = StatusWindow.GetSceneNotice()
@@ -1485,7 +1485,7 @@ function RefreshStatusLine(force)
             -- 地点与回复事实同源：用事件事实的中文标签，不用作息表原始键
             -- （2026-09-25 真机截图：卡片上裸露英文 "apartment"，就是这里取了 snap.place）。
             -- TimeState 快照本身没有 placeLabel 字段；事实缺席（作息窗口漏模板）才退「外面」。
-            infoPlaceLabel_:SetText((lastFact_ and lastFact_.placeLabel) or "外面")
+            infoPlaceLabel_:SetText((lastFact_ and lastFact_.placeLabel) or "Out and about")
         end
         if infoStateLabel_ then
             infoStateLabel_:SetText(snap.phrase)

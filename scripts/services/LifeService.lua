@@ -11,6 +11,7 @@
 -- 任何一段都不会因为一张索引而丢。
 -- ============================================================================
 
+local EnglishText = require("EnglishText")
 local LifeService = {}
 
 local ProfileService = require("ProfileService")
@@ -114,7 +115,7 @@ local function readSlot(raw)    if type(raw) ~= "table" then
             slot.trace = {
                 traceKey = traceKey,
                 occurrenceKey = occurrenceKey,
-                eventTitle = asString(raw.trace.eventTitle) or "",
+                eventTitle = EnglishText.Translate(asString(raw.trace.eventTitle) or "") or "",
                 sceneId = sceneId,
                 isM7KeyEvent = raw.trace.isM7KeyEvent == true,
                 boundAtUtc = asInteger(raw.trace.boundAtUtc) or 0,

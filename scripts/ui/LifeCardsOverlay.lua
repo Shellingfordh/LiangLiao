@@ -42,7 +42,8 @@ local function MakeCard(index)
         fontSize = 12,
         fontWeight = "bold",
         fontColor = COLORS.title,
-        whiteSpace = "nowrap",
+        whiteSpace = "normal",
+        wordBreak = "break-word",
     }
     local body = UI.Label {
         text = "",
@@ -93,7 +94,7 @@ function LifeCardsOverlay.Build()
         cardWidgets[i] = MakeCard(i)
     end
     title_ = UI.Label {
-        text = "换一段人生",
+        text = "Switch story",
         fontSize = 14,
         fontWeight = "bold",
         fontColor = COLORS.title,
@@ -107,7 +108,7 @@ function LifeCardsOverlay.Build()
     }
     cancelButton_ = UI.Button {
         id = "lifeCardsCancel",
-        text = "先不换",
+        text = "Cancel",
         variant = "secondary",
         fontSize = 12,
         height = 34,

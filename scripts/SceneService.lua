@@ -74,7 +74,7 @@ local BG = {
 ---@type table<string, ScenePackage>
 local PACKAGES = {
     la_apartment = {
-        id = "la_apartment", cityId = "los_angeles", type = "home", label = "洛杉矶的公寓",
+        id = "la_apartment", cityId = "los_angeles", type = "home", label = "Los Angeles apartment",
         backgroundKey = "la_apartment", backgroundPath = BG.la_apartment,
         colorTemperature = 3000, keyLightDirection = { x = -1.2, y = 1.6, z = 1.0 },
         characterPlacement = { x = 0.55, y = 0.0, z = 0.0, side = "right" },
@@ -84,7 +84,7 @@ local PACKAGES = {
         future3D = { sceneRef = "scene/la_apartment", anchorId = "la_apartment_desk_01" },
     },
     la_studio = {
-        id = "la_studio", cityId = "los_angeles", type = "work", label = "洛杉矶的工作室",
+        id = "la_studio", cityId = "los_angeles", type = "work", label = "Los Angeles studio",
         backgroundKey = "la_studio", backgroundPath = BG.la_studio,
         colorTemperature = 5600, keyLightDirection = { x = 1.4, y = 1.5, z = 0.8 },
         characterPlacement = { x = 0.55, y = 0.0, z = 0.0, side = "right" },
@@ -94,7 +94,7 @@ local PACKAGES = {
         future3D = { sceneRef = "scene/la_studio", anchorId = "la_studio_table_01" },
     },
     la_cafe = {
-        id = "la_cafe", cityId = "los_angeles", type = "public", label = "「塞法尔东非」咖啡馆",
+        id = "la_cafe", cityId = "los_angeles", type = "public", label = "Sefer East Africa Cafe",
         backgroundKey = "la_cafe", backgroundPath = BG.la_cafe,
         colorTemperature = 2900, keyLightDirection = { x = -0.8, y = 1.8, z = 0.9 },
         characterPlacement = { x = 0.55, y = 0.0, z = 0.0, side = "right" },
@@ -104,7 +104,7 @@ local PACKAGES = {
         future3D = { sceneRef = "scene/la_cafe", anchorId = "la_cafe_counter_01" },
     },
     la_commute = {
-        id = "la_commute", cityId = "los_angeles", type = "transit", label = "洛杉矶的街区",
+        id = "la_commute", cityId = "los_angeles", type = "transit", label = "Los Angeles streets",
         backgroundKey = "la_commute", backgroundPath = BG.la_commute,
         colorTemperature = 3500, keyLightDirection = { x = -1.6, y = 0.9, z = 0.6 },
         characterPlacement = { x = 0.55, y = 0.0, z = 0.0, side = "right" },
@@ -114,7 +114,7 @@ local PACKAGES = {
         future3D = { sceneRef = "scene/la_commute", anchorId = "la_commute_busstop_01" },
     },
     sha_apartment = {
-        id = "sha_apartment", cityId = "shanghai", type = "home", label = "上海的公寓",
+        id = "sha_apartment", cityId = "shanghai", type = "home", label = "Shanghai apartment",
         backgroundKey = "sha_apartment", backgroundPath = BG.sha_apartment,
         colorTemperature = 3400, keyLightDirection = { x = -1.3, y = 1.4, z = 0.9 },
         characterPlacement = { x = 0.55, y = 0.0, z = 0.0, side = "right" },
@@ -124,7 +124,7 @@ local PACKAGES = {
         future3D = { sceneRef = "scene/sha_apartment", anchorId = "sha_apartment_balcony_01" },
     },
     sha_office = {
-        id = "sha_office", cityId = "shanghai", type = "work", label = "报社的版房",
+        id = "sha_office", cityId = "shanghai", type = "work", label = "Newsroom",
         backgroundKey = "sha_office", backgroundPath = BG.sha_office,
         colorTemperature = 5000, keyLightDirection = { x = 0.2, y = 2.0, z = 0.7 },
         characterPlacement = { x = 0.55, y = 0.0, z = 0.0, side = "right" },
@@ -134,7 +134,7 @@ local PACKAGES = {
         future3D = { sceneRef = "scene/sha_office", anchorId = "sha_office_typesetting_01" },
     },
     sha_bookstore = {
-        id = "sha_bookstore", cityId = "shanghai", type = "public", label = "街角的旧书店",
+        id = "sha_bookstore", cityId = "shanghai", type = "public", label = "Corner bookshop",
         backgroundKey = "sha_bookstore", backgroundPath = BG.sha_bookstore,
         colorTemperature = 2800, keyLightDirection = { x = 1.2, y = 1.3, z = 0.8 },
         characterPlacement = { x = 0.55, y = 0.0, z = 0.0, side = "right" },
@@ -144,7 +144,7 @@ local PACKAGES = {
         future3D = { sceneRef = "scene/sha_bookstore", anchorId = "sha_bookstore_counter_01" },
     },
     sha_commute = {
-        id = "sha_commute", cityId = "shanghai", type = "transit", label = "上海的街区",
+        id = "sha_commute", cityId = "shanghai", type = "transit", label = "Shanghai streets",
         backgroundKey = "sha_commute", backgroundPath = BG.sha_commute,
         colorTemperature = 4500, keyLightDirection = { x = -1.5, y = 1.0, z = 0.7 },
         characterPlacement = { x = 0.55, y = 0.0, z = 0.0, side = "right" },
@@ -154,7 +154,7 @@ local PACKAGES = {
         future3D = { sceneRef = "scene/sha_commute", anchorId = "sha_commute_station_01" },
     },
     cdu_apartment = {
-        id = "cdu_apartment", cityId = "chengdu", type = "home", label = "成都的公寓",
+        id = "cdu_apartment", cityId = "chengdu", type = "home", label = "Chengdu apartment",
         backgroundKey = "cdu_apartment", backgroundPath = BG.cdu_apartment,
         colorTemperature = 4000, keyLightDirection = { x = 1.3, y = 1.5, z = 0.9 },
         characterPlacement = { x = 0.55, y = 0.0, z = 0.0, side = "right" },
@@ -164,7 +164,7 @@ local PACKAGES = {
         future3D = { sceneRef = "scene/cdu_apartment", anchorId = "cdu_apartment_desk_01" },
     },
     cdu_studio = {
-        id = "cdu_studio", cityId = "chengdu", type = "work", label = "成都的画室",
+        id = "cdu_studio", cityId = "chengdu", type = "work", label = "Chengdu art studio",
         backgroundKey = "cdu_studio", backgroundPath = BG.cdu_studio,
         colorTemperature = 4800, keyLightDirection = { x = 1.4, y = 1.6, z = 0.8 },
         characterPlacement = { x = 0.55, y = 0.0, z = 0.0, side = "right" },
@@ -174,7 +174,7 @@ local PACKAGES = {
         future3D = { sceneRef = "scene/cdu_studio", anchorId = "cdu_studio_easel_01" },
     },
     cdu_cafe = {
-        id = "cdu_cafe", cityId = "chengdu", type = "public", label = "老式茶馆",
+        id = "cdu_cafe", cityId = "chengdu", type = "public", label = "Traditional teahouse",
         backgroundKey = "cdu_cafe", backgroundPath = BG.cdu_cafe,
         colorTemperature = 3600, keyLightDirection = { x = -1.2, y = 1.7, z = 0.7 },
         characterPlacement = { x = 0.55, y = 0.0, z = 0.0, side = "right" },
@@ -184,7 +184,7 @@ local PACKAGES = {
         future3D = { sceneRef = "scene/cdu_cafe", anchorId = "cdu_cafe_bamboo_table_01" },
     },
     cdu_commute = {
-        id = "cdu_commute", cityId = "chengdu", type = "transit", label = "夜市街口",
+        id = "cdu_commute", cityId = "chengdu", type = "transit", label = "Night-market corner",
         backgroundKey = "cdu_commute", backgroundPath = BG.cdu_commute,
         colorTemperature = 2700, keyLightDirection = { x = -1.5, y = 1.1, z = 0.8 },
         characterPlacement = { x = 0.55, y = 0.0, z = 0.0, side = "right" },
@@ -194,7 +194,7 @@ local PACKAGES = {
         future3D = { sceneRef = "scene/cdu_commute", anchorId = "cdu_commute_stall_01" },
     },
     lon_apartment = {
-        id = "lon_apartment", cityId = "london", type = "home", label = "伦敦的公寓",
+        id = "lon_apartment", cityId = "london", type = "home", label = "London apartment",
         backgroundKey = "lon_apartment", backgroundPath = BG.lon_apartment,
         colorTemperature = 2900, keyLightDirection = { x = -1.2, y = 1.4, z = 0.9 },
         characterPlacement = { x = 0.55, y = 0.0, z = 0.0, side = "right" },
@@ -204,7 +204,7 @@ local PACKAGES = {
         future3D = { sceneRef = "scene/lon_apartment", anchorId = "lon_apartment_desk_01" },
     },
     lon_studio = {
-        id = "lon_studio", cityId = "london", type = "work", label = "学院的录音棚",
+        id = "lon_studio", cityId = "london", type = "work", label = "College recording studio",
         backgroundKey = "lon_studio", backgroundPath = BG.lon_studio,
         colorTemperature = 6500, keyLightDirection = { x = 0.1, y = 2.0, z = 0.7 },
         characterPlacement = { x = 0.55, y = 0.0, z = 0.0, side = "right" },
@@ -216,7 +216,7 @@ local PACKAGES = {
     -- 唱片行的留白与柜台上在左侧：人物站位、接地阴影、相机让位三处必须一起翻到左边，
     -- 否则人就会像贴在右侧的独立贴图（M4 验收 3 点名的缺陷形态）。
     lon_recordshop = {
-        id = "lon_recordshop", cityId = "london", type = "public", label = "老唱片行",
+        id = "lon_recordshop", cityId = "london", type = "public", label = "Old record shop",
         backgroundKey = "lon_recordshop", backgroundPath = BG.lon_recordshop,
         colorTemperature = 3200, keyLightDirection = { x = 1.1, y = 1.6, z = 0.8 },
         characterPlacement = { x = -0.5, y = 0.0, z = 0.0, side = "left" },
@@ -226,7 +226,7 @@ local PACKAGES = {
         future3D = { sceneRef = "scene/lon_recordshop", anchorId = "lon_recordshop_turntable_01" },
     },
     lon_commute = {
-        id = "lon_commute", cityId = "london", type = "transit", label = "雨中的伦敦街区",
+        id = "lon_commute", cityId = "london", type = "transit", label = "Rainy London streets",
         backgroundKey = "lon_commute", backgroundPath = BG.lon_commute,
         colorTemperature = 3000, keyLightDirection = { x = 1.5, y = 1.2, z = 0.7 },
         characterPlacement = { x = 0.55, y = 0.0, z = 0.0, side = "right" },
@@ -249,15 +249,15 @@ local PACKAGES = {
 
 ---@type table<string, TraceItem>
 local TRACES = {
-    note = { id = "note", label = "桌上摊开的便签", assetPath = "image/trace-note_20260924155918.png" },
-    coffee = { id = "coffee", label = "喝了一半的咖啡", assetPath = "image/trace-coffee_20260924155918.png" },
-    vinyl = { id = "vinyl", label = "没放回架子的唱片", assetPath = "image/trace-vinyl_20260924155918.png" },
-    umbrella = { id = "umbrella", label = "门边收着的雨伞", assetPath = "image/trace-umbrella_20260924155918.png" },
-    postcard = { id = "postcard", label = "摊开的明信片", assetPath = "image/trace-postcard_20260924155918.png" },
-    proofs = { id = "proofs", label = "批注过的校样", assetPath = "image/trace-proofs_20260924155918.png" },
-    grocery = { id = "grocery", label = "带回来的那袋菜", assetPath = "image/trace-grocery_20260924155918.png" },
-    oldbook = { id = "oldbook", label = "叠着的两本旧书", assetPath = "image/trace-oldbook_20260924155918.png" },
-    gaiwan = { id = "gaiwan", label = "还热着的盖碗茶", assetPath = "image/trace-gaiwan_20260924155918.png" },
+    note = { id = "note", label = "Notes spread on the desk", assetPath = "image/trace-note_20260924155918.png" },
+    coffee = { id = "coffee", label = "A half-finished coffee", assetPath = "image/trace-coffee_20260924155918.png" },
+    vinyl = { id = "vinyl", label = "A record left off the shelf", assetPath = "image/trace-vinyl_20260924155918.png" },
+    umbrella = { id = "umbrella", label = "An umbrella by the door", assetPath = "image/trace-umbrella_20260924155918.png" },
+    postcard = { id = "postcard", label = "Postcards spread out", assetPath = "image/trace-postcard_20260924155918.png" },
+    proofs = { id = "proofs", label = "Annotated proofs", assetPath = "image/trace-proofs_20260924155918.png" },
+    grocery = { id = "grocery", label = "A bag of groceries", assetPath = "image/trace-grocery_20260924155918.png" },
+    oldbook = { id = "oldbook", label = "Two second-hand books", assetPath = "image/trace-oldbook_20260924155918.png" },
+    gaiwan = { id = "gaiwan", label = "Tea still warm in its cup", assetPath = "image/trace-gaiwan_20260924155918.png" },
 }
 
 SceneService.SCENE_ORDER = {

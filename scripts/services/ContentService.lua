@@ -16,11 +16,11 @@ local ContentService = {}
 -- 关键词 → 话题，用于记忆与模板分支
 ---@type { topic: string, words: string[] }[]
 local TOPIC_WORDS = {
-    { topic = "time",    words = { "几点", "傍晚", "时间", "今天", "现在", "晚上" } },
-    { topic = "event",   words = { "活动", "顺利", "演出", "麦克风", "店里", "咖啡馆", "忙" } },
-    { topic = "weather", words = { "天气", "下雨", "晴", "冷", "热", "风" } },
-    { topic = "feel",    words = { "累", "开心", "难过", "想", "还好", "辛苦" } },
-    { topic = "food",    words = { "吃", "喝", "咖啡", "饭", "夜宵" } },
+    { topic = "time",    words = { "几点", "傍晚", "时间", "今天", "现在", "晚上" , "what time", "evening", "time", "today", "now", "tonight" } },
+    { topic = "event",   words = { "活动", "顺利", "演出", "麦克风", "店里", "咖啡馆", "忙" , "event", "well", "show", "mic", "shop", "cafe", "busy" } },
+    { topic = "weather", words = { "天气", "下雨", "晴", "冷", "热", "风" , "weather", "rain", "sunny", "cold", "hot", "wind" } },
+    { topic = "feel",    words = { "累", "开心", "难过", "想", "还好", "辛苦" , "tired", "happy", "sad", "miss", "okay", "exhausted" } },
+    { topic = "food",    words = { "吃", "喝", "咖啡", "饭", "夜宵" , "eat", "drink", "coffee", "food", "dinner" } },
 }
 
 -- 事件事实 → 主干句。每个事件有自己的模板池，禁止把咖啡馆文案套到别的生活事件上。
@@ -28,189 +28,189 @@ local TOPIC_WORDS = {
 ---@type table<string, string[]>
 local EVENT_LINES = {
     la_apartment_night_rest = {
-        "{event}，有什么明天再说也行。",
-        "{event}，这会儿只留了一盏灯。",
+        "{event}. We can talk tomorrow if you like. ",
+        "{event}. I've left just one lamp on. ",
     },
     la_apartment_morning_inbox = {
-        "{event}，水刚烧开。",
-        "{event}，今天的安排还没完全醒过来。",
+        "{event}. The kettle's just boiled. ",
+        "{event}. I'm still easing into today's plans. ",
     },
     la_campus_workshop = {
-        "{event}，材料还差一小叠没摆好。",
-        "{event}，等人到齐前我再过一遍流程。",
+        "{event}. There's one small stack of materials left to set out. ",
+        "{event}. I'll run through it once more before everyone arrives. ",
     },
     la_cafe_midday = {
-        "{event}，饭吃得很快。",
-        "{event}，一会儿还要回工作室。",
+        "{event}. It's a quick lunch today. ",
+        "{event}. I'll head back to the studio soon. ",
     },
     la_studio_zine_layout = {
-        "{event}，这一页的边距还差一点。",
-        "{event}，我先把最后两张样张对完。",
-        "{event}，等我把这处颜色挪好再和你说。",
+        "{event}. This page's margins still need a little work. ",
+        "{event}. Let me check the last two proofs first. ",
+        "{event}. Let me adjust this colour, then we can talk. ",
     },
     la_commute_voice_notes = {
-        "{event}，现在不太方便打长字。",
-        "{event}，等到站我再看仔细一点。",
+        "{event}. I can't type much right now. ",
+        "{event}. I'll read properly when I arrive. ",
     },
     la_cafe_open_mic = {
-        "{event}，店里这会儿{weather}。",
-        "嗯，{event}，要到{ends}才收。",
-        "{event}。你那边这个点还醒着？",
+        "{event}. It's {weather} here right now. ",
+        "Yes, {event}. It finishes at {ends}. ",
+        "{event}. Are you still awake over there? ",
     },
     la_apartment_wind_down = {
-        "{event}，现在终于能安静坐一会儿。",
-        "{event}，我把最后一张便签压在杯子下面了。",
+        "{event}. I can finally sit quietly for a moment. ",
+        "{event}. I've tucked the last note under my cup. ",
     },
 
     -- ===== 上海（sha）=====
     sha_apartment_night_rest = {
-        "{event}，有什么睡起来再说。",
-        "{event}，灯已经关了。",
+        "{event}. We can talk after I wake up. ",
+        "{event}. The lights are off. ",
     },
     sha_apartment_morning_balcony = {
-        "{event}，一天的字从这儿开头。",
-        "{event}，浇完花我就出门。",
+        "{event}. This is where the day's writing begins. ",
+        "{event}. I'll head out once the plants are watered. ",
     },
     sha_commute_rush = {
-        "{event}，到站再说。",
-        "{event}，我先顾着下车。",
+        "{event}. Let's talk when I arrive. ",
+        "{event}. Let me get off the train first. ",
     },
     sha_office_topic_meeting = {
-        "{event}，稿子的事散会再讲。",
-        "{event}，到{ends}前多半都在会议室。",
+        "{event}. We can talk about the article after the meeting. ",
+        "{event}. I'll probably be in the meeting room until {ends}. ",
     },
     sha_cafe_midday = {
-        "{event}，下午还有两版要盯。",
-        "{event}，这顿吃得快。",
+        "{event}. Two more layouts to check this afternoon. ",
+        "{event}. Not much time for lunch today. ",
     },
     sha_office_layout = {
-        "{event}，眼睛快对不上了。",
-        "{event}，等付印前我再过一遍。",
+        "{event}. My eyes could use a rest. ",
+        "{event}. I'll check it again before it goes to print. ",
     },
     sha_commute_market = {
-        "{event}，顺手的事，说完就去。",
-        "{event}，一会儿到家再细说。",
+        "{event}. Just a quick errand after this. ",
+        "{event}. I'll say more when I'm home. ",
     },
     sha_bookstore_evening = {
-        "{event}，你要来也来得及。",
-        "{event}，{weather}的天，店里更安静。",
+        "{event}. There's still time to stop by. ",
+        "{event}. It's {weather}, and the shop feels even quieter. ",
     },
     sha_apartment_reread = {
-        "{event}，改完这段就休息。",
-        "{event}，一天到这里差不多收口了。",
+        "{event}. I'll rest after this paragraph. ",
+        "{event}. That's nearly the end of my day. ",
     },
 
     -- ===== 成都（cdu）=====
     cdu_apartment_night_rest = {
-        "{event}，有事明天再说。",
-        "{event}，灯早关了。",
+        "{event}. We can talk tomorrow. ",
+        "{event}. The lights have been off for a while. ",
     },
     cdu_apartment_morning_water = {
-        "{event}，不急，今天节奏慢。",
-        "{event}，上午的茶还没凉。",
+        "{event}. No rush; it's a slow day. ",
+        "{event}. My morning tea is still warm. ",
     },
     cdu_studio_morning_ink = {
-        "{event}，画完这一批再喘口气。",
-        "{event}，今天{weather}，光线正好。",
+        "{event}. I'll take a breather after this batch. ",
+        "{event}. It's {weather} today, and the light is just right. ",
     },
     cdu_cafe_midday = {
-        "{event}，茶馆就这样，热闹。",
-        "{event}，吃完这碗再回去。",
+        "{event}. The teahouse is lively as ever. ",
+        "{event}. I'll head back after these noodles. ",
     },
     cdu_studio_color = {
-        "{event}，这批交完就松了。",
-        "{event}，颜色差一点都是事。",
+        "{event}. I'll feel better once this batch is done. ",
+        "{event}. Even a tiny colour difference matters. ",
     },
     cdu_commute_supplies = {
-        "{event}，回来再聊。",
-        "{event}，一趟不容易，边走边看。",
+        "{event}. Let's talk when I'm back. ",
+        "{event}. It's a bit of a trip; I'm looking around as I go. ",
     },
     cdu_nightmarket_supper = {
-        "{event}，你要是在就一起吃口。",
-        "{event}，{weather}，摊子上坐得下去。",
+        "{event}. Wish you were here to share a bite. ",
+        "{event}. It's {weather}, and there's room to sit at the stall. ",
     },
     cdu_apartment_letters = {
-        "{event}，写完这张就收工。",
-        "{event}，今晚的话留到纸上。",
+        "{event}. This is my last card for tonight. ",
+        "{event}. Tonight's words are going on paper. ",
     },
 
     -- ===== 伦敦（lon）=====
     lon_apartment_night_rest = {
-        "{event}，有事明天说。",
-        "{event}，工程挂着明早导出。",
+        "{event}. Let's leave it until tomorrow. ",
+        "{event}. The project can wait until morning to export. ",
     },
     lon_apartment_morning_tea = {
-        "{event}，今天{weather}，伞在门口。",
-        "{event}，早课前的这点时间是完整的。",
+        "{event}. It's {weather} today; my umbrella's by the door. ",
+        "{event}. I've got this little stretch before class to myself. ",
     },
     lon_commute_early_train = {
-        "{event}，到站再找你。",
-        "{event}，消息断了我先都发着。",
+        "{event}. I'll message you when I arrive. ",
+        "{event}. I'll keep sending, even if the signal drops. ",
     },
     lon_campus_lecture = {
-        "{event}，笔记还记着呢。",
-        "{event}，忙完这阵我再看手机。",
+        "{event}. I'm still taking notes. ",
+        "{event}. I'll check my phone after this. ",
     },
     lon_cafe_midday = {
-        "{event}，下午的录音不能迟到。",
-        "{event}，三明治凉了，边吃边说。",
+        "{event}. I can't be late for this afternoon's recording. ",
+        "{event}. The sandwich has gone cold; I'm eating as we talk. ",
     },
     lon_studio_field_recording = {
-        "{event}，这段收完就安静了。",
-        "{event}，到{ends}前我都得戴着耳机。",
+        "{event}. It'll be quiet once this take is done. ",
+        "{event}. I'll need my headphones on until {ends}. ",
     },
     lon_commute_dark = {
-        "{event}，到家再打长字。",
-        "{event}，{weather}，我把领子竖起来了。",
+        "{event}. I'll write more when I'm home. ",
+        "{event}. It's {weather}; I've turned my collar up. ",
     },
     lon_recordshop_shift = {
-        "{event}，你要什么唱片我帮你翻。",
-        "{event}，班守到{ends}。",
+        "{event}. Tell me what record you're after; I'll look for it. ",
+        "{event}. My shift ends at {ends}. ",
     },
     lon_apartment_mixdown = {
-        "{event}，推子一收今天就完。",
-        "{event}，最后一遍，不添话了。",
+        "{event}. One last fader, then I'm done for today. ",
+        "{event}. One final listen, then I'll leave it there. ",
     },
 }
 
 -- 查无此事件的最后兜底：只复述事实，不借别城的句子（四城池已全，正常走不到这里）
 ---@type string[]
 local GENERIC_LINES = {
-    "{event}。",
-    "{event}，就这些。",
+    "{event}. ",
+    "{event}. That's about it. ",
 }
 
 -- 碎片时间档：规格 §5.2 要求「回复较短」，所以另开一组短句且不带话题后缀。
 -- 唯一例外是引用回指句（用户明确点名的请求），见 BuildSegments。
 ---@type string[]
 local BRIEF_LINES = {
-    "这会儿{avail}，{event}。",
-    "{event}。{avail}，先说到这儿。",
+    "{event}. {avail}, so I'll keep this short. ",
+    "{event}. {avail}, so I'll leave it there. ",
 }
 
 -- 排队补回时的前缀：三个变量全部来自确定时间快照（作息表原话、送达钟点、两条 UTC 之差）
-local QUEUED_PREFIX = "那会儿{before}，隔了{gap}才回你。"
+local QUEUED_PREFIX = "At the time: {before}. It's been {gap} before I could reply. "
 
 -- 送达时那件事件到交付已经收了：要说它什么时候收的，不能继续用「正在进行」的口吻
 -- 规格 §5.3 的底线是把已结束的说成已结束，而不是含糊地略过。
-local QUEUED_ENDED_PREFIX = "那会儿{before}，{sentEvent}到{sentEnds}就收了，隔了{gap}才回你。"
+local QUEUED_ENDED_PREFIX = "At the time: {before}. {sentEvent} ended at {sentEnds}. It's been {gap} before I could reply. "
 
 -- 用户原文里出现了某个话题时追加的半句
 ---@type table<string, string>
 local TOPIC_SUFFIX = {
-    time = "你那边这个点是白天吧",
-    weather = "这边{weather}，风不大",
-    feel = "我还好，就是站久了有点累",
-    food = "手边是一杯冰的",
-    event = "你要是在就好了",
+    time = "Is it daytime where you are? ",
+    weather = "It's {weather} here, with hardly any wind. ",
+    feel = "I'm okay, just a little tired from standing. ",
+    food = "I've got a cold drink beside me. ",
+    event = "Wish you were here. ",
 }
 
 -- 引用回指句：只「认下」被引用的那一句，不替它编内容、不做任何事实断言。
 -- 排在通用话题后缀之前，所以「引用」比「猜话题」更早被回应。
 ---@type string[]
 local QUOTE_ECHO_LINES = {
-    "你刚才那句「{quote}」，我看见了。",
-    "「{quote}」这句我记下了。",
+    "I saw what you said: \"{quote}\". ",
+    "I'll keep that in mind: \"{quote}\". ",
 }
 
 ---@class ReplyQuote
@@ -232,7 +232,7 @@ local function fill(tpl, vars)
     local out = (tpl:gsub("{(%w+)}", function(key)
         return vars[key] or ""
     end))
-    return out
+    return (out:gsub("%s+$", ""))
 end
 
 --- UTF-8 安全截断，只用于回显用户原文，按字符数裁
@@ -299,11 +299,11 @@ function ContentService.FormatGap(seconds)
     local h = math.floor(s / 3600)
     local m = math.floor((s % 3600) / 60)
     if h > 0 then
-        return tostring(h) .. " 小时 " .. tostring(m) .. " 分"
+        return tostring(h) .. "h " .. tostring(m) .. "min"
     elseif m > 0 then
-        return tostring(m) .. " 分"
+        return tostring(m) .. "min"
     end
-    return tostring(s) .. " 秒"
+    return tostring(s) .. "s"
 end
 
 ---@param text string
@@ -311,7 +311,7 @@ end
 function ContentService.DetectTopics(text)
     ---@type string[]
     local found = {}
-    local src = text or ""
+    local src = (text or ""):lower()
     for i = 1, #TOPIC_WORDS do
         local entry = TOPIC_WORDS[i]
         for j = 1, #entry.words do
@@ -333,7 +333,7 @@ local function matchesM7Question(fact, text)
     if fact.isM7KeyEvent ~= true or type(fact.questionHints) ~= "table" then
         return false
     end
-    local source = text or ""
+    local source = (text or ""):lower()
     for i = 1, #fact.questionHints do
         local hint = fact.questionHints[i]
         if type(hint) == "string" and hint ~= "" and source:find(hint, 1, true) then
@@ -357,7 +357,7 @@ local function BuildSegments(fact, userText, turnIndex, quote)
         if matchesM7Question(fact, userText or "") then
             pool = { "{m7Answer}" }
         else
-            pool = { "我只能先确认：{m7Answer}" }
+            pool = { "What I can tell you is: {m7Answer}" }
         end
     elseif briefReply then
         pool = BRIEF_LINES
@@ -377,15 +377,15 @@ local function BuildSegments(fact, userText, turnIndex, quote)
     local head = fill(pool[pick] or pool[1] or "", vars)
     if fact.queued and fact.thenPhrase then
         if fact.sentEventState == "ended" then
-            head = fill(QUEUED_ENDED_PREFIX, vars) .. head
+            head = fill(QUEUED_ENDED_PREFIX, vars) .. " " .. head
         else
-            head = fill(QUEUED_PREFIX, vars) .. head
+            head = fill(QUEUED_PREFIX, vars) .. " " .. head
         end
     end
     -- 回显用户原文：证明回复是对这句话的回应，而不是自说自话
     local quoted = clip(userText or "", 12)
     if quoted ~= "" then
-        head = "「" .. quoted .. "」" .. head
+        head = "\"" .. quoted .. "\" — " .. head
     end
     segments[#segments + 1] = head
 
@@ -443,7 +443,7 @@ end
 ---@param turnIndex integer 第几轮，用于稳定地换措辞
 ---@return string
 function ContentService.Reply(fact, userText, turnIndex)
-    return table.concat(BuildSegments(fact, userText, turnIndex, nil), "")
+    return table.concat(BuildSegments(fact, userText, turnIndex, nil), " ")
 end
 
 --- 生成 1–3 段短回复，由 MessageService 复用 typing 相位逐句上屏。
@@ -468,11 +468,11 @@ end
 ---@return string
 function ContentService.AwaySummary(gapSeconds, thenPhrase, nowPhrase, pendingCount, cityLabel)
     local thenText, nowText = ProfileService.AwayPhrases(thenPhrase, nowPhrase)
-    local line = string.format("离开期间 · %s过了 %s · %s，%s",
+    local line = string.format("While you were away · %s · %s elapsed · %s; %s",
         cityLabel or ProfileService.Get().cityLabel,
         ContentService.FormatGap(gapSeconds), thenText, nowText)
     if pendingCount and pendingCount > 0 then
-        line = line .. string.format(" · 还有 %d 条在等她回", pendingCount)
+        line = line .. string.format(" · %d messages waiting for her reply", pendingCount)
     end
     return line
 end
@@ -481,7 +481,7 @@ end
 ---@param fact EventFact
 ---@return string
 function ContentService.OpeningLine(fact)
-    return fill("我在{place}，{event}。你可以随便说点什么。", varsOf(fact))
+    return fill("{event}. Tell me what's on your mind. ", varsOf(fact))
 end
 
 return ContentService

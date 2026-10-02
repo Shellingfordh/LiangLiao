@@ -3,8 +3,8 @@
 
   "enabled": false,
 
-  "source_lang": "zh_CN",
-  "target_langs": ["en"],
+  "source_lang": "en",
+  "target_langs": [],
 
   "extract_rules": [
     {

@@ -93,7 +93,7 @@ function ProfilePageOverlay.Build()
     -- 让这一点静默失效（AGENTS 实测坑；2026-09-25 本地控件树取证抓到）。
     local closeButton = UI.Button {
         id = "profilePageClose",
-        text = "关闭",
+        text = "Close",
         variant = "secondary",
         fontSize = 12,
         height = 34,
@@ -121,6 +121,7 @@ function ProfilePageOverlay.Build()
                 id = "profilePageCard",
                 width = "86%",
                 maxWidth = 380,
+                height = "80%",
                 maxHeight = "80%",
                 flexDirection = "column",
                 gap = 9,
@@ -133,18 +134,35 @@ function ProfilePageOverlay.Build()
                 pointerEvents = "auto",
                 children = {
                     UI.Label {
-                        text = "她的档案",
+                        text = "About Ruoxi",
                         fontSize = 14,
                         fontWeight = "bold",
                         fontColor = COLORS.title,
                     },
-                    MakeRow("城市 · 当地时间", cityClockLabel_),
-                    MakeRow("身份", identityLabel_),
-                    MakeRow("关系起点", relationLabel_),
-                    MakeRow("此刻所在", sceneLabel_),
-                    MakeRow("当前状态", statusLabel_),
-                    MakeRow("近期生活线索", recentLabel_),
-                    MakeRow("当前生活痕迹", traceLabel_),
+                    UI.ScrollView {
+                        width = "100%",
+                        flexGrow = 1,
+                        flexShrink = 1,
+                        flexBasis = 0,
+                        scrollY = true,
+                        showScrollbar = true,
+                        children = {
+                            UI.Panel {
+                                width = "100%",
+                                flexDirection = "column",
+                                gap = 9,
+                                children = {
+                                    MakeRow("City · Local time", cityClockLabel_),
+                                    MakeRow("Her everyday life", identityLabel_),
+                                    MakeRow("How you know her", relationLabel_),
+                                    MakeRow("Where she is", sceneLabel_),
+                                    MakeRow("Right now", statusLabel_),
+                                    MakeRow("Recent moments", recentLabel_),
+                                    MakeRow("A trace of her day", traceLabel_),
+                                },
+                            },
+                        },
+                    },
                     closeButton,
                 },
             },
@@ -172,8 +190,8 @@ function ProfilePageOverlay.Show(data)
     relationLabel_:SetText(data.relation or "")
     sceneLabel_:SetText(data.scene or "")
     statusLabel_:SetText(data.status or "")
-    recentLabel_:SetText(#data.recent > 0 and table.concat(data.recent, "；") or "还没有可说的近况")
-    traceLabel_:SetText(data.trace ~= "" and data.trace or "她还没来得及留下痕迹")
+    recentLabel_:SetText(#data.recent > 0 and table.concat(data.recent, "\n") or "No recent moments yet.")
+    traceLabel_:SetText(data.trace ~= "" and data.trace or "No trace left yet.")
     root_:SetVisible(true)
 end
 

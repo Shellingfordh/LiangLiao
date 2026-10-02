@@ -25,14 +25,14 @@ local PolishService = {}
 local CORE = {
     characterId = "lin_ruoxi",
     characterName = "林若夕",
-    personaTail = "中文异地聊天语气自然、克制、生活化；"
-        .. "可短可分句；只依据对方给到的此刻事实说话，不编造经历、不承诺现实行动、不模仿真人。",
+    personaTail = "Use natural, warm, understated English for a long-distance chat. "
+        .. "Keep replies short. Use only the given facts; invent no history or promises, and imitate no real person.",
 }
 
 --- 每次请求从档案现取，不缓存：换档案后下一条请求的 persona 就是新城身份
 ---@return string
 local function personaOf()
-    return "原创角色：" .. ProfileService.Get().identity .. "。" .. CORE.personaTail
+    return "Original character: " .. ProfileService.Get().identity .. " " .. CORE.personaTail
 end
 
 local MAX_SEG_CHARS = 40
@@ -401,6 +401,11 @@ local function GuardFacts(segments, req)
             if not allowedClocks[hhmm] then
                 return "guard_time"
             end
+        end
+    end
+    for _, segment in ipairs(segments) do
+        for _, code in utf8.codes(segment) do
+            if code >= 0x4e00 and code <= 0x9fff then return "guard_language" end
         end
     end
     return nil

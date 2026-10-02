@@ -149,7 +149,7 @@ return function(ctx)
         end
         startGameRequested_ = true
         state_ = "entering"
-        setStatus("她正在接通")
+        setStatus("Connecting to her")
         client:StartGame {
             onMatchFound = function()
                 -- 平台已经给出确定结果：后面的连服与切脚本由引擎接管，
@@ -166,7 +166,7 @@ return function(ctx)
                 -- 不显示平台下发的 status 原文（那是内部文案），也不伪造精确百分比：
                 -- 只按真实进度换一句更近的话，进度本身由光点呼吸表达。
                 if type(progress) == "number" and progress >= 0.6 then
-                    setStatus("快到了")
+                    setStatus("Almost there")
                 end
             end,
             onError = function(code, message)
@@ -180,7 +180,7 @@ return function(ctx)
     local function beginRoom()
         client:CreateRoom {
             onCreated = function()
-                setStatus("她正在接通")
+                setStatus("Connecting to her")
             end,
             onPlayersChanged = function(players, masterId)
                 if handedOff_ or startGameRequested_ then
@@ -233,7 +233,7 @@ return function(ctx)
     }
     local statusWidget = UI.Label {
         id = "seamlessLobbyStatus",
-        text = "正在靠近若夕…",
+        text = "Connecting to Ruoxi...",
         fontSize = 18,
         fontColor = { 238, 244, 241, 235 },
         height = 30,   -- 写死高度：文案变化不许改容器高度（AGENTS.md 规则 ③）
@@ -241,7 +241,7 @@ return function(ctx)
     -- 加载页的主操作：不必等满 8 秒。命中即回调，不等抬起。
     local skipWidget = UI.Button {
         id = "seamlessLobbySkip",
-        text = "先不接通",
+        text = "Stay offline",
         fontSize = 14,
         height = 34,
         minWidth = 132,

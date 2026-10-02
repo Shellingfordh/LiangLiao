@@ -14,6 +14,7 @@
 -- 不落任何含用户原文的串。
 -- ============================================================================
 
+local EnglishText = require("EnglishText")
 local ProfileService = {}
 
 local CITY_ORDER = { "shanghai", "chengdu", "los_angeles", "london" }
@@ -50,78 +51,78 @@ end
 ---@type table<string, CityProfile>
 local CITIES = {
     los_angeles = {
-        id = "los_angeles", label = "洛杉矶",
-        identity = "在洛杉矶办开放麦克风夜、做独立小册子的活动策划系毕业生",
-        identityShort = "活动策划 · 独立出版",
+        id = "los_angeles", label = "Los Angeles",
+        identity = "An event-planning graduate in Los Angeles who hosts open mic nights and makes independent zines.",
+        identityShort = "Events · Independent zines",
         defaultRelation = "stranger",
         sceneVocab = { "la_apartment", "la_studio", "la_cafe", "la_commute" },
         events = {
-            la_apartment_night_rest = "凌晨在公寓睡下，白天活动的便签还摊在桌上",
-            la_apartment_morning_inbox = "清晨把活动邮件和便签归到一起",
-            la_campus_workshop = "在工作室准备一场小型工作坊",
-            la_cafe_midday = "中午在咖啡馆吃午饭、顺看晚上的安排",
-            la_studio_zine_layout = "在工作室对独立小册子的版面校样",
-            la_commute_voice_notes = "在路上整理晚间活动的语音便签",
-            la_cafe_open_mic = "在咖啡馆参与开放麦克风夜",
-            la_apartment_wind_down = "回公寓整理今晚活动的复盘便签",
+            la_apartment_night_rest = "I'm asleep at home, with notes from the day's event still on the desk",
+            la_apartment_morning_inbox = "I'm sorting the event emails and notes this morning",
+            la_campus_workshop = "I'm preparing a small workshop in the studio",
+            la_cafe_midday = "I'm having lunch at the cafe and checking tonight's plans",
+            la_studio_zine_layout = "I'm checking the zine layout proofs in the studio",
+            la_commute_voice_notes = "I'm organising voice notes for tonight's event on my way",
+            la_cafe_open_mic = "I'm at the cafe's open mic night",
+            la_apartment_wind_down = "I'm back at the apartment, sorting tonight's event notes",
         },
-        defaultDraft = "你那边是不是快傍晚了？今天的活动还顺利吗？",
+        defaultDraft = "Is it almost evening there? How did today's event go?",
     },
     shanghai = {
-        id = "shanghai", label = "上海",
-        identity = "在市区做城市生活专栏、晚上还会去旧书店值班的女编辑",
-        identityShort = "专栏编辑 · 旧书店志愿",
+        id = "shanghai", label = "Shanghai",
+        identity = "A city-life editor who also volunteers at a second-hand bookshop in the evenings.",
+        identityShort = "Editor · Bookshop volunteer",
         defaultRelation = "classmate",
         sceneVocab = { "sha_apartment", "sha_office", "sha_bookstore", "sha_commute" },
         events = {
-            sha_apartment_night_rest = "凌晨在公寓睡着，明天专栏的选题草稿还摊着",
-            sha_apartment_morning_balcony = "清晨在阳台浇花、顺手把要交的字过一遍",
-            sha_commute_rush = "在早高峰的地铁里，手机打字不太方便",
-            sha_office_topic_meeting = "报社在开选题会，一上午没停",
-            sha_cafe_midday = "中午在版房边吃午饭边看版面",
-            sha_office_layout = "下午在版房盯这一期的排版",
-            sha_commute_market = "绕到菜场给屋里添点吃的",
-            sha_bookstore_evening = "在旧书店值夜班的台，安静得很",
-            sha_apartment_reread = "回公寓把明天的稿子又读了一遍",
+            sha_apartment_night_rest = "I'm asleep at home, with tomorrow's column draft still out",
+            sha_apartment_morning_balcony = "I'm watering the balcony plants and reviewing today's writing",
+            sha_commute_rush = "I'm on the rush-hour metro, so typing is a little tricky",
+            sha_office_topic_meeting = "I'm in the newsroom's editorial meeting; it's been going all morning",
+            sha_cafe_midday = "I'm having lunch in the newsroom while checking layouts",
+            sha_office_layout = "I'm checking this issue's layout in the newsroom",
+            sha_commute_market = "I'm stopping at the market to pick up some food for home",
+            sha_bookstore_evening = "I'm on the evening shift at the second-hand bookshop; it's very quiet",
+            sha_apartment_reread = "I'm back at the apartment and I've reread tomorrow's article",
         },
-        defaultDraft = "你那边到下午了吧？今天专栏的稿子顺不顺？",
+        defaultDraft = "Is it afternoon there already? How's your column coming along?",
     },
     chengdu = {
-        id = "chengdu", label = "成都",
-        identity = "画本地风物明信片、常在茶馆和夜市出没的自由插画师",
-        identityShort = "自由插画 · 风物明信片",
+        id = "chengdu", label = "Chengdu",
+        identity = "A freelance illustrator making postcards of local life, often found at teahouses and night markets.",
+        identityShort = "Illustrator · Local postcards",
         defaultRelation = "ex_colleague",
         sceneVocab = { "cdu_apartment", "cdu_studio", "cdu_cafe", "cdu_commute" },
         events = {
-            cdu_apartment_night_rest = "凌晨在公寓睡下，桌上一叠没干的明信片",
-            cdu_apartment_morning_water = "早上给阳台的花浇了水，还没开工",
-            cdu_studio_morning_ink = "上午在画室给一批明信片勾线上色",
-            cdu_cafe_midday = "中午在茶馆吃碗面，顺便看看别人的稿",
-            cdu_studio_color = "下午在工作台把今天这批颜色调完",
-            cdu_commute_supplies = "出去买颜料和纸，一趟要走一会儿",
-            cdu_nightmarket_supper = "在夜市街口摆摊收工，顺便吃了口夜宵",
-            cdu_apartment_letters = "回公寓把寄出去的明信片写了地址",
+            cdu_apartment_night_rest = "I'm asleep at home, with postcards still drying on the desk",
+            cdu_apartment_morning_water = "I've watered the balcony plants, but haven't started work yet",
+            cdu_studio_morning_ink = "I'm outlining and colouring a batch of postcards in the studio",
+            cdu_cafe_midday = "I'm having noodles at the teahouse and looking at other people's sketches",
+            cdu_studio_color = "I'm finishing today's colours at the workbench",
+            cdu_commute_supplies = "I'm out buying paint and paper; it's a bit of a trip",
+            cdu_nightmarket_supper = "I've packed up my night-market stall and had a late snack",
+            cdu_apartment_letters = "I'm back at the apartment, addressing the postcards I'm sending out",
         },
-        defaultDraft = "你那边这个点吃了吗？我今天这批明信片还没画完。",
+        defaultDraft = "Have you eaten yet? I haven't finished today's postcards.",
     },
     london = {
-        id = "london", label = "伦敦",
-        identity = "在学院读声音设计、周末在老唱片行当值的研究生",
-        identityShort = "声音设计 · 唱片行当值",
+        id = "london", label = "London",
+        identity = "A sound-design postgraduate who works weekends at an old record shop.",
+        identityShort = "Sound design · Record shop",
         defaultRelation = "old_friend",
         sceneVocab = { "lon_apartment", "lon_studio", "lon_recordshop", "lon_commute" },
         events = {
-            lon_apartment_night_rest = "凌晨在公寓睡了，混音工程还没导出",
-            lon_apartment_morning_tea = "早上煮了茶，翻了翻今天的课表",
-            lon_commute_early_train = "赶一早的火车，信号断断续续",
-            lon_campus_lecture = "学院录音棚里有场声音设计的工作坊，走不开",
-            lon_cafe_midday = "中午在街边买了三明治，赶下午的棚",
-            lon_studio_field_recording = "录音棚里采集一段田野录音",
-            lon_commute_dark = "天已经黑了，路上人多走得慢",
-            lon_recordshop_shift = "在老唱片行当值，帮人找一张难找的唱片",
-            lon_apartment_mixdown = "回公寓把今天的混音收到最后",
+            lon_apartment_night_rest = "I'm asleep at home, and the mix hasn't been exported yet",
+            lon_apartment_morning_tea = "I've made tea and checked today's class timetable",
+            lon_commute_early_train = "I'm catching an early train, and the signal keeps dropping",
+            lon_campus_lecture = "I'm at a sound-design workshop in the college studio and can't step away",
+            lon_cafe_midday = "I've bought a sandwich on the street before heading to the studio",
+            lon_studio_field_recording = "I'm collecting a field recording in the studio",
+            lon_commute_dark = "It's dark already, and the crowds are slowing me down",
+            lon_recordshop_shift = "I'm on shift at the old record shop, helping someone find a rare record",
+            lon_apartment_mixdown = "I'm back at the apartment, finishing today's mix",
         },
-        defaultDraft = "你那边是白天吧？伦敦刚下过一阵雨。",
+        defaultDraft = "Is it daytime there? We've just had some rain in London.",
     },
 }
 
@@ -142,44 +143,44 @@ local CITIES = {
 ---@type table<string, RelationProfile>
 local RELATIONS = {
     stranger = {
-        id = "stranger", label = "陌生网友",
-        greeting = "你好，我们还没见过面。{city}这边{event}，你说，我听着。",
+        id = "stranger", label = "Someone new",
+        greeting = "Hi, we haven't met yet. Here in {city}, {event}. Tell me what's on your mind.",
         flavorLines = {
-            "虽然不认识，但你说的我会认真听完。",
-            "陌生人的话反而好说，你说吧。",
+            "We may have just met, but I'm listening.",
+            "Sometimes it's easier to talk to someone new. Go ahead.",
         },
-        summaryThen = "那会儿她{phrase}",
-        summaryNow = "现在她{phrase}",
+        summaryThen = "Then: {phrase}",
+        summaryNow = "Now: {phrase}",
     },
     classmate = {
-        id = "classmate", label = "高中同学",
-        greeting = "是你啊。{city}这边{event}，好久没被人这么吵醒了。",
+        id = "classmate", label = "School friend",
+        greeting = "Hey, it's you. Here in {city}, {event}. It's been a while since we talked.",
         flavorLines = {
-            "还记不记得以前那间朝西的教室。",
-            "毕业以后好多事，也就还能和你念叨。",
+            "Do you remember our classroom with the west-facing windows?",
+            "So much has happened since school. It's nice to talk it over with you.",
         },
-        summaryThen = "那会儿她{phrase}",
-        summaryNow = "这会儿她{phrase}",
+        summaryThen = "Then: {phrase}",
+        summaryNow = "Now: {phrase}",
     },
     ex_colleague = {
-        id = "ex_colleague", label = "前同事",
-        greeting = "好久不见。{city}这边{event}，还是老样子先干活再说话。",
+        id = "ex_colleague", label = "Former colleague",
+        greeting = "It's been a while. Here in {city}, {event}. Still fitting our chats around work, I see.",
         flavorLines = {
-            "以前一起赶工的劲儿还在，就是换了地方。",
-            "工作的事先说到这儿，别又聊成加班。",
+            "Same old deadlines, just a different place now.",
+            "Let's leave work there for now, before this turns into overtime.",
         },
-        summaryThen = "那会儿她正{phrase}",
-        summaryNow = "现在她{phrase}",
+        summaryThen = "Then: {phrase}",
+        summaryNow = "Now: {phrase}",
     },
     old_friend = {
-        id = "old_friend", label = "久未联系的朋友",
-        greeting = "隔了这么久才又说话了。{city}这边{event}，你先坐。",
+        id = "old_friend", label = "Old friend",
+        greeting = "It's good to hear from you again. Here in {city}, {event}. Make yourself comfortable.",
         flavorLines = {
-            "这么久没联系，我也常想起从前。",
-            "不急，你想说的时候我都在。",
+            "Even after all this time, I still think about those days.",
+            "Take your time. I'm here when you feel like talking.",
         },
-        summaryThen = "那会儿她{phrase}",
-        summaryNow = "如今她{phrase}",
+        summaryThen = "Then: {phrase}",
+        summaryNow = "Now: {phrase}",
     },
 }
 
@@ -314,7 +315,7 @@ end
 function ProfileService.RelationCityLine()
     local p = ProfileService.Get()
     return p.relationLabel .. " × " .. p.cityLabel
-        .. " · 她按当地时间生活，在忙或在睡时你的消息会排队"
+        .. " · Her days follow local time. Messages wait while she's busy or asleep."
 end
 
 --- 消息时间行的角色标签：她的名字随档案（四城同一人，仍叫「若夕」；这里只切城市与「你」的归属）。
@@ -326,9 +327,9 @@ function ProfileService.MessageSuffix(isUser, cityId)
     local p = ProfileService.Get()
     if isUser then
         local city = cityId and ProfileService.CityFor(cityId) or nil
-        return " · " .. (city and city.label or p.cityLabel) .. " · 你"
+        return " · " .. (city and city.label or p.cityLabel) .. " · You"
     end
-    return " · 若夕"
+    return " · Ruoxi"
 end
 
 -- ============================================================================
@@ -342,7 +343,7 @@ end
 function ProfileService.OpeningLine(cityId, relationId, eventPhrase)
     local city = CITIES[cityId] or CITIES.los_angeles
     local relation = RELATIONS[relationId] or RELATIONS.stranger
-    local filler = (eventPhrase and eventPhrase ~= "") and eventPhrase or "这会儿没什么特别的安排"
+    local filler = (eventPhrase and eventPhrase ~= "") and eventPhrase or "I have no special plans right now"
     return (relation.greeting:gsub("{city}", city.label):gsub("{event}", filler))
 end
 
@@ -360,8 +361,8 @@ end
 ---@return string, string
 function ProfileService.AwayPhrases(thenPhrase, nowPhrase)
     local relation = ProfileService.Get().relation
-    local thenOut = (relation.summaryThen:gsub("{phrase}", thenPhrase or ""))
-    local nowOut = (relation.summaryNow:gsub("{phrase}", nowPhrase or ""))
+    local thenOut = (relation.summaryThen:gsub("{phrase}", EnglishText.Translate(thenPhrase or "")))
+    local nowOut = (relation.summaryNow:gsub("{phrase}", EnglishText.Translate(nowPhrase or "")))
     return thenOut, nowOut
 end
 
