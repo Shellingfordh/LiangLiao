@@ -1,0 +1,35 @@
+{
+  "$schema": "../schemas/settings.schema.json",
+  "sources": {
+    "engine": {
+      "tag": "stable"
+    },
+    "engine-res": {
+      "tag": "stable"
+    },
+    "official-res": {
+      "tag": "stable"
+    }
+  },
+  "build": {
+    "generate_fs_path": true,
+    "output_dir": "../dist",
+    "asset_dirs": [
+      "../assets",
+      "../scripts"
+    ],
+    "asset_ignores": [
+      "**/models/**",
+      "**/model/**",
+      "**/*.glb",
+      "**/*.bak"
+    ]
+  },
+  "@runtime": {
+    "multiplayer": {
+      "enabled": true,
+      "lobby_runtime": "scripts/lobby_runtime.lua",
+      "max_players": 1
+    }
+  }
+}

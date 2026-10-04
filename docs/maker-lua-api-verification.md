@@ -3,7 +3,7 @@
 > 验证日期：2026-09-18
 >
 > 方法：下载官方 AI Dev Kit（`@taptap/maker` CLI 内嵌的公开 CDN 地址），对照
-> `docs/superpowers/specs/2026-09-15-parallel-companion-design.md` 与 `docs/platform-capabilities.md`
+> `docs/2026-09-15-parallel-companion-design.md` 与 `docs/platform-capabilities.md`
 > 中的每一条平台假设逐项核对。
 >
 > 证据来源（均为官方产物，非推测）：
@@ -25,9 +25,10 @@
 | 4 | Maker AI 在**运行时**润色文案 | ❌ **不成立** | 必须改：无运行时 LLM |
 | 5 | GLB 放进 `assets/` 即可运行时加载 | ❌ **不成立** | 必须改：GLB→MDL 构建期转换 |
 | 6 | Marble 全景能否接入 Maker「必须实测」 | ✅ 成立且**优于预期** | 官方有专用转换工具 |
-| 7 | 聊天 UI 需要文本输入控件 | ✅ 成立（`LineEdit`） | 无需改设计 |
+| 7 | 聊天 UI 需要文本输入控件 | ✅ 成立，但**只能用 `urhox-libs/UI` 的 `TextField`**（原生 `LineEdit` 已废弃） | 见 §6（2026-09-21 云端实测更新） |
 | 8 | 时间来源可信 | ✅ 成立且**优于预期**（`common.get_server_time()`） | 建议采用 |
 | 9 | `research/taptap-pages/` 作为文档依据 | ❌ **无效** | 38 份中 27 份是登录墙 |
+| 10 | 「输入框旁边的按钮点一下就能发」 | ❌ **不成立**，默认会静默失效 | 必须改：按钮加 `focusable = false`，见 §6.1 |
 
 规格第 203 行写的「不可把历史文档中的推测 API 当作已验收事实」是对的——本次验证发现 **3 条核心假设不成立**，
 其中 2 条会直接影响已冻结的 M0-0 基线。
@@ -105,7 +106,7 @@ Lua 5.4 标准库的 `os.date` 不接受时区参数，引擎也没有暴露 tz 
 
 本项目四座城市在赛事窗口内的真实 UTC 偏移：
 
-| 城市 | 今天 09-18 | 评审结束 10-25 | DST 切换点 |
+| 城市 | 实测基准日 09-18 | 评审结束 10-25 | DST 切换点 |
 | --- | --- | --- | --- |
 | 上海 / 成都 | +8 | +8 | 中国无夏令时，永远 +8 ✅ |
 | 洛杉矶 | **-7**（PDT） | **-7** | 11-01 才切 -8 ✅ 整个赛期安全 |
@@ -283,7 +284,7 @@ poc/maker/assets/
 
 ---
 
-## 6. ✅ 成立：聊天 UI 有文本输入控件
+## 6. ✅ 成立：聊天 UI 有文本输入控件（2026-09-21 云端实测后修正用法）
 
 `.emmylua/LineEdit.d.lua`：
 
@@ -298,14 +299,20 @@ function LineEdit:SetCursorMovable(enable) end
 function LineEdit:SetTextSelectable(enable) end
 ```
 
-规格 §6.1 的「下部：主聊天流与消息输入」可以实现。
+⚠️ **但 `LineEdit` 属于已废弃的原生 UI 系统，不要用。** 本条是 2026-09-18 按「引擎里有没有输入控件」这个
+问题验证的，答案是有；而 AGENTS.md 规则 #10 已把原生 UI 判为废弃，2026-09-21 做 M0-1 时用的是新 UI 系统的
+`urhox-libs/UI` → `UI.TextField`（Yoga + NanoVG），它同时提供 `text` / 占位文案 / 提交回调，规格 §6.1 的
+「下部：主聊天流与消息输入」据此已跑通。
 
-**未验证项（需真机确认）**：`LineEdit` 在 Android / iOS 上的**中文输入法（IME）**行为。
-Dev Kit 中未检索到 IME 相关说明。这是移动端文本输入的经典坑
-（候选词、拼音上屏、软键盘遮挡输入框），建议在 M0-1 做可编辑输入时**第一个验证**。
+**云端实测已确认**（本阶段共五次构建 `415cb4c` → `f70bf4b`，其中 `4bde79c` 起聊天链路可用，
+全程 `runtime.log` 零 ERROR）：
+`UI.TextField` 在 Maker 云端预览里可显示预填草稿、可编辑、回车可提交，且提交后草稿按预期保留/清空。
 
-规格 §9 的 M0-1 已经很聪明地把首版设为「默认可编辑消息」而非任意输入，
-这个设计正好能在 IME 有问题时降级为「预置消息 + 轻度编辑」。**保持这个设计。**
+**仍未验证**：Android / iOS 上**中文输入法（IME）**的候选词与上屏行为——Dev Kit 里没有 IME 相关说明，
+而 M0-1 的实测全程用的是预填草稿，没有真的用拼音输入法打过字。规格 §9 把首版设成「默认可编辑消息」
+正好能在 IME 有问题时降级为「预置消息 + 轻度编辑」，**保持这个设计**。
+
+（同一轮实测还发现「输入框旁边的按钮默认点不动」，独立成条 → §13。）
 
 ---
 
@@ -355,17 +362,26 @@ Dev Kit 中未检索到 IME 相关说明。这是移动端文本输入的经典�
 
 | 项 | 原因 | 建议 |
 | --- | --- | --- |
-| 真机运行 Lua | `UrhoXRuntime` 需 GLIBC 2.38，当前沙箱为 2.35 | 在开发机跑 `skills/run-lua-headless` 验证时区表 |
+| 真机运行 Lua | `UrhoXRuntime` 需 GLIBC 2.38，当前**云端 Linux 沙箱**为 2.35 | 在开发机跑 `skills/run-lua-headless` 验证时区表。**2026-09-23 补充**：Windows 开发机上 `.cli/rt/UrhoXRuntime.exe` 可跑，但**完整游戏仍起不来**——`TimeState.lua:349` 的 `os.date("!%Y")` 因 `common.get_server_time()` 本地返回越界值而抛 `date result cannot be represented`，`main.lua:222` 的 `RefreshSnapshot()` 中断；只能跑绕开 TimeState 的 PoC |
 | 移动端中文 IME | 文档无记载 | M0-1 真机第一优先验证 |
 | 资产文件大小上限 | Dev Kit 无记载，原始来源是登录墙 | 实测，或以 Maker 后台报错为准 |
 | `clientCloud` 单值大小上限 | 只查到频率/总量配额（300/分、48 MB/分） | 记忆摘要做长度上限，勿无限增长 |
 
 > `UrhoXRuntime` 与 `UrhoXCLI` 均可从 `https://urhox-demo-platform.spark.xd.com/runtime/<platform>/latest/UrhoXRuntime.zip`
 > 免登录下载（已验证 linux 版 45 MB 可下载解压）。开发机上 `python3 .cli/install-urhox-runtime.py` 会自动处理。
+> **2026-09-23 实测补正**：Windows 版已由该脚本装好，落在 `D:/Develop/ShanTianLiang/.cli/rt/`（`UrhoXRuntime.exe` 24 MB，
+> 配套 `Autoload/*.pak`、`d3dcompiler_47.dll`、`shaderc.dll`）。但**这个 zip 只给 UrhoXRuntime**：
+> `UrhoXCLI` 本地仍不存在（全盘扫过 `.cli/`、npm `_npx` 缓存、`mcp-runtime/0.0.34/dist/maker.js`，命中 0 次），
+> GLB→MDL 这步只能在 Maker 云端 `/workspace/.cli/` 下发生，本地做不了。
 
 ---
 
 ## 10. 建议的规格修订清单
+
+> **状态（2026-09-19）**：下列 7 条已全部落地，逐条去向见 `CHANGELOG.md` 的 2026-09-19 条目。
+> 本节保留为当时的核实记录，不要再当作待办重复执行。第 1 条的偏移表已按「从 epoch 起、覆盖到 2026 年末」
+> 的区间写法确认；第 3 条的资产目录以 `docs/asset-provenance.md` 的唯一真源表为准（不是下面示例里的
+> `poc/maker/assets/`）。
 
 按优先级：
 
@@ -379,3 +395,520 @@ Dev Kit 中未检索到 IME 相关说明。这是移动端文本输入的经典�
    增加本地文件存储作为离线兜底。
 6. **§7.2**：Marble 全景可用 `convert-panorama` 转 Cubemap 天空球，作为 M0-1/M1 的视觉升级项。
 7. **AGENTS.md**：权威文档改指 AI Dev Kit；标注 `research/taptap-pages/` API 快照无效。
+
+---
+
+## 11. 预览卡 `Initializing… 0%` 的定性（2026-09-19 实测）
+
+**现象**：Maker 网页预览停在 `Initializing… 0%`，console 两条：
+
+```
+Uncaught [object ErrorEvent]
+Uncaught InvalidStateError: An operation that depends on state cached in an interface
+           object was made but the state had changed since it was read from disk.
+```
+
+第二句是 **Chromium IndexedDB 的 `InvalidStateError` 原文**，失败点在**引擎启动前的资源装载层**，
+不是 Lua 报错。触发条件是浏览器缓存的资源状态与其对应的服务端工作树不再一致——本项目当天工作树被
+改过三次（16:35 云端重导入 → 19:35 我们推送 → 19:57 平台 `TapCode Rollback`），符合该成因。
+
+**逐项排除的"代码/资产缺陷"假设**（每条都有独立证据，不是"应该没事"）：
+
+| 假设 | 结论 | 依据 |
+| --- | --- | --- |
+| 推送删掉了被引用的资产 | 否 | `prefab → Meshes/lin-ruoxi.mdl` ✅、`material → Textures/lin-ruoxi_00_D.jpg` ✅；全库 `uuid://` 引用 0 条；无孤儿 `.meta` |
+| 云端塞回的 `raw-assets/`（24 MB）撑爆包 | 否 | `build.asset_dirs` 只有 `../assets`、`../scripts`；schema 原文「groups 中的本地路径**相对于这些目录**匹配」 |
+| `preload_groups: []` 导致启动取不到资源 | 否 | `download-while-playing.md`：`.mdl/.xml/.prefab` 属 render-blocking，脚本启动前已就绪；`Texture2D` 自动触发 DWP |
+| 报错由 19:35 的推送引起 | 否 | reflog 钉死推送时间 19:35:53，**晚于** 19:09:13 的报错 |
+| 工程/凭据不健康 | 否 | `maker_status_lite`：`project_health: ready`，auth/git/python/lua_lsp 全绿；远端构建 ✅ 100% ×2 |
+
+**平台契约（读 `@taptap/maker` 0.0.33 的 `dist/maker.js` 与包内 `skills/taptap-maker-local/SKILL.md` 得到，仓库文档里没有）**：
+
+- 「预览 / 跑一下 / 看结果」的官方路径**就是** `maker_build_current_directory` + 读 `runtime_logs.local_file`，
+  agent 侧没有浏览器步骤。包内两份 skill 文档与连接排障文档**均无 0% / IndexedDB / 清缓存条目**——
+  因为这属浏览器环境态，不是工程态。
+- `preview-refresh` 是**纯服务端**动作：`POST {apiBase}/apps/{projectId}/preview-refresh`，
+  `Authorization: Bearer <PAT>`，body `{}`，每次成功构建自动调一次。**它刷不到浏览器里的 IndexedDB。**
+- 运行日志窗口有上限：`DEFAULT_RUNTIME_LOG_SINCE_SECONDS = 600`、`MAX_RUNTIME_LOG_WINDOW_SECONDS = 3600`，
+  且抓取器空转 10 分钟即退出（`DEFAULT_RUNTIME_LOG_IDLE_TIMEOUT_MS`）。
+  ⚠️ 手改 `.maker/logs/runtime/state.json` 的 `nextStartTime` 倒回历史**无效**（会被窗口夹住 +
+  `isFreshRuntimeLogCursor()` 判定不新鲜）。 topics 含 `engine`，所以引擎层报错也会进 `runtime.log`。
+- `logs watch --reset` 会连 `state.json` 与 `runtime.log` 一起清空，补拉时**不要带**。
+
+**已做处置**：干净重建 ×2 + preview-refresh ✅200 ×2；用 `build.asset_ignores` 把 9.7 MB 非运行时文件
+（源 `.glb`、Tripo 多视图缩略图、`lin-ruoxi.mdl.bak`）剔出构建包（文件保留在库内）。
+**回归核验**：三条 glob 恰好命中 16 个文件，且 `Meshes/lin-ruoxi.mdl`、`Materials/lin-ruoxi_00_tripo_mat_*.xml`、
+`Textures/lin-ruoxi_00_D.jpg`、`Prefabs/lin-ruoxi.prefab`、`Textures/lin-ruoxi_00_N.png` 五个运行时必需路径
+**均不被任何 glob 命中**——即该改动不会自己造成资源缺失。
+**不要用 `asset_ignores` 剔贴图**：`lin-ruoxi.mdl`(UMD2) 整份压缩，全文件对 `tex|mat|jpg|png|normal`
+零明文匹配，无法证明某张贴图未被引用，剔了有打断模型的风险。
+
+**另已排除的两条代码侧假设**：
+
+- **模块加载期副作用**：`StatusWindow.lua` 与 `main.lua` 顶层**没有任何可执行语句**，全是 `local`/`function`
+  声明，实际工作都在 `Start()` 里。所以不存在"加载期抛错被宿主报成 `ErrorEvent`"这条路。
+- **候选路径探测打爆网络**：`resourceExists()` 走的是 `cache:Exists(path)`（清单查询，非 HTTP 请求），
+  `findFirstExisting()` 命中即返回。缺失的 `la-cafe-4x3.png` 由 `RefreshResourceNotices()` 优雅降级成
+  一条 UI 提示，不会形成 404 风暴。
+
+**已闭环（2026-09-21 补）**：`runtime.log` 后来出现了，而且多轮会话完整跑到 Lua 层，零 ERROR——
+「卡 `Initializing… 0%`」不是这几次构建的故障，装载层已通。取日志的实际操作口径见下面的 runbook，
+其中「跑 ~20s 后 Ctrl-C」与判据字符串都已按实测更正。
+
+### 复现/收尾 runbook（下一次照抄即可，不要重新探索）
+
+```bash
+# 0) 用户侧：关掉多余预览标签页，硬刷新预览页
+#    https://maker.taptap.cn/app/720b27bf-ca69-44ac-a776-a88ec2ec2b28?localDev=1
+
+# 1) 拉运行日志。CLI 位置随 @taptap/maker 版本漂移，先确认哪个存在：
+#    C:/Users/20145/.taptap-maker/mcp-runtime/<ver>/dist/maker.js        （MCP 自运行时）
+#    C:/Users/20145/AppData/Local/npm-cache/_npx/<hash>/node_modules/@taptap/maker/bin/taptap-maker
+node "<上面任一个>" logs watch --target-dir "D:/Develop/ShanTianLiang" --interval 5s
+#    ⚠️ 绝对不要带 --reset：它会连 state.json 与 runtime.log 一起清空（构建工具自己重启时就是带的）。
+#    判据：`.maker/logs/runtime/runtime.log` 出现入口行
+#          "[M0-1] 启动 M0-1 竖切片"（M0-0 时代是 "[M0-0] 启动 M0-0 原型"）→ Lua 已跑到，问题在代码层；
+#          文件仍不存在 → 仍在装载层。链路日志前缀：[MsgService] / [EventService] / [Memory] / [ChatPanel]，
+#          一次发送的闭环落点是 "[M0-1] 回复 #N → replied 事实=la_cafe_open_mic"。
+```
+
+**四条踩过的 watcher 运维坑（2026-09-21 一天内全部实测，别再重复探索）**：
+
+| 坑 | 实测 | 应对 |
+| --- | --- | --- |
+| 每次构建都会重启 watcher 且带 `--reset` | 构建返回值里 `watch_command: … --reset`、`previous_watch_stopped: yes`，本地 `runtime.log` 当场消失 | **下一次构建之前必须把日志证据转录进文档**；原始文件不跨构建存活 |
+| CLI watcher 只活 **4~8 分钟** | 同日三次：08:57:22Z、09:30:50Z、10:43:45Z 停在 `watcher stopped`；另两次约 4 分钟后崩在 `EPERM: rename state.json.<pid>.<ts>.tmp` | 取证当下**先量** `state.json.updatedAt` 与当前 UTC 的差，超十几秒就重启 |
+| 「人死了日志就取不回来」是错的 | 死时游标停在 18:28:49，19:07 不带 `--reset` 重启，一次拉回 21,345 字节，把 18:59 那次会话完整补回（`runtime.log` 25,550 → 46,895） | 判断标准只有**「`now - nextStartTime` 是否超过 1 小时窗口」** |
+| `watcher.out.log` 会假死 | 用 `logs watch \| tail -N` 起的时候，它自己的 `pulled: N` 行被管道憋住不落盘，文件停在上一实例的 `stopped` 行 | **判活性只看 `state.json.updatedAt` 和 `runtime.log` 的 mtime/字节数**（后者由进程直写） |
+
+顺带一条被证伪的推测：EPERM 崩**不是**「两个 watcher 并存互杀」——第二次重启时前一个实例已退出 4 分钟，
+单实例照样在 4 分钟后崩。真实原因是本机另有进程短期占用 `state.json`（索引/杀软/编辑器一类），与并发无关。
+
+收尾不变：`logs watch` 会把 `origin` 改指回 Maker URL —— 按 2026-09-19 的决定这是预期行为，不需要纠正
+（见 AGENTS.md「Git 拓扑」：所有推送只发 `maker`，GitHub 暂不管，`github` 远端仅留档）。
+只有当确实要动 GitHub 时，才临时 `set-url` 并**重新 fetch**（tracking ref 不重 fetch 会残留假值）。
+
+服务端只读探针（本次全部跑过，均正常，别再重复）：`maker_status_lite`（`project_health: ready`）、
+`get_ad_config`（`app_id 940330` / `developer_id 471831` 均在，广告未开通与预览无关；
+顺带暴露云端工作树在 `/userspaces/<project_id>/workspace/`）、
+`get_debug_feedbacks` 全量（`total: 0`）。
+
+**已穷举并排除的假设清单**（11 条，含依据）：悬空引用 / `raw-assets` 进包 / DWP 预下载配置 /
+推送时间因果 / 工程健康 / 模块加载期副作用 / 候选路径 404 风暴 / `asset_ignores` 误剔必需资源 /
+headless 引擎验证（本地无此能力）/ 自动化浏览器（无登录态）/ 反馈与历史日志通道（恒空且窗口仅 1 小时）。
+
+## 12. ✅ 已定：`nvgCreateVideo` 对 RenderTarget 的方向处理，引擎文档写错了（2026-09-20 提出，2026-09-21 真机定案）
+
+> **结论先说，见 §12.2**：不加 `nvgRotate(math.pi)` 角色上下颠倒，加了才正立——WebGL 与原生 Android 行为一致，
+> `scene-to-nanovg.md:13` 那句「不需要额外翻转 Y」不成立，代码里那枚旋转**必须保留**。
+> 下面 §12 主体保留 2026-09-20 当时「文档与实测矛盾、只能等真机」的完整推演与判读表（方法本身仍可复用），
+> 读的时候把它当过程记录，不要当未决项。
+
+M0-0 状态窗把独立 3D 场景渲到 `Texture2D` RenderTarget，再用 `nvgCreateVideo` + `nvgImagePattern`
+画进 UI。这条路径的**画面方向**目前只有矛盾证据，没有定论：
+
+| 来源 | 说法 |
+| --- | --- |
+| `engine-docs/recipes/scene-to-nanovg.md:13` | 「`nvgCreateVideo` 已处理预览纹理的上下方向，按普通图片绘制即可，不需要额外翻转 Y」 |
+| `.emmylua/NanoVG.d.lua:299-300` | 「Render targets are normalized to NanoVG image orientation internally」 |
+| 本项目 2026-09-20 浏览器预览实测 | **不加任何旋转时角色上下颠倒**（`screenshots/m00-check.png`，commit `94a317e` 引入 `nvgRotate` 之前的状态）；加 `nvgRotate(π)` 后角色正立（`screenshots/m00-frame-check.png`） |
+
+两条文档依据与一条实机证据直接对立。按 AGENTS.md「API 依据只有本地 AI Dev Kit」应以文档为准，
+但文档无法解释那张颠倒的截图，故当前代码**保留** `StatusWindow.Draw()` 里的 `nvgRotate(math.pi)`，
+把它标记为待真机裁决的假设而非结论。
+
+一个能同时容纳两者的解释：`nvgCreateVideo` 的类型注释自己写了「or 0 on failure/**unsupported platform**」，
+即方向归一化可能分平台；`m00-check.png` 出自 WebGL 浏览器预览，而验收目标是原生 Android/iOS，
+两者行为可以不一致。此解释同样未经证实。
+
+**真机扫码时的判读表**（一次扫码即可定论，无需改代码再跑）：
+
+> **判读基准变了，注意。** 静帧改由 UI 层绘制之后，两层各自独立定向：背景走普通 UI 图片路径
+> （恒正立），角色走 RT 路径（受本冲突影响）。所以**不能再靠"角色是否正立"单独下结论**——
+> 要以背景为基准图，同时看角色在**哪一侧**。`nvgRotate(π)` 会把画面绕中心转 180°，
+> 等价于 x→(W−x)：镜头按规格把她摆在右侧约 71% 处，一旦这 180° 是多余的，她就会跑到左侧约 29%，
+> 直接违反「背景主体和窗景在左，角色预留区在右」。左右位置因此成了一个不依赖正立判断的第二信号。
+
+| 真机现象 | 结论 | 动作 |
+| --- | --- | --- |
+| 角色正立**且在右侧**、窗景方向正确 | 保留 `nvgRotate(π)` 正确，且原生与 WebGL 一致 | 删掉本节冲突，转为 ✅ |
+| 角色**上下颠倒**（多半同时跑到左侧） | 原生端已归一化，文档正确，`nvgRotate(π)` 是多余补偿 | 删 `Draw()` 里的 translate/rotate/translate 三行 |
+| 角色正立但**左右镜像**（也会跑到左侧） | 归一化只处理了 Y，X 仍需修正 | 把 `nvgRotate(π)` 换成水平翻转 |
+| 状态窗整块变黑、只剩窗景 | 透明底 RT 的 alpha 未被保留 | 退回「远景也进 3D 场景」方案，改为预先把静帧按实测轴向翻转后再生成贴图 |
+| 窗景缺失、只有角色 | 背景未下载成功，或 `preload_groups` 未生效 | 屏上会显示 `GetBackgroundError()` 文案；按文案而非猜 |
+
+### 12.1 WebGL 侧已定论：判读表第 1 行成立（2026-09-20 23:23 实测）
+
+上面「四条本地验证路全死」的结论**被推翻了一条**：用户的真实 Chrome 带有 TapTap 登录态，
+但 `mcp__user-browser-use__list_pages` 在浏览器未开窗口时报 `No current window`——
+先 `cmd //c start "" "<maker_url>"` 把默认浏览器拉起来，连接器就能接管标签页并截图。
+这条路以前没走通只是因为**没有浏览器窗口**，不是因为拿不到登录态。
+
+`build 5ac225f` 在 390×867（9:20，DPR≈1.02）移动视口下的预览，**五项全部符合判读表第 1 行**：
+
+| 检查项 | 结果 |
+| --- | --- |
+| 4:3 窗景方向 | ✅ 与源图一致：窗与暮色街景在左、海报板在右、木桌在下。无镜像、无上下翻 |
+| 透明底 RT 的 alpha | ✅ **保留**。角色四周透出的正是窗景，没有出现「整块变黑」 |
+| 角色朝向 | ✅ 正立且**面向镜头**（可见面部与米白内搭），180° yaw 修正生效 |
+| 角色横向位置 | ✅ 落在右侧约 70%，符合「角色预留区在右」，未因多余旋转跑到左侧 |
+| 状态文案 | ✅ 「若夕 · 洛杉矶 18:20 · 还在外面」正常渲染（旧截图里完全没有文字的问题一并消失） |
+
+留档：`screenshots/preview-m00-after-fix.png`（整页）与
+`screenshots/preview-m00-after-fix-statuswindow-crop.png`（状态窗放大裁切）。
+
+**当时仍未决**：原生 Android/iOS 是否与 WebGL 同行为。`nvgCreateVideo` 的类型注释自己写了
+「or 0 on failure/**unsupported platform**」，方向归一化与 alpha 都可能分平台，
+所以 WebGL 的正结果**不能**外推成真机结论；判读表其余四行对真机依然有效。
+**（这一条已由 §12.2 在 2026-09-21 真机定案：与 WebGL 同行为。）**
+
+**两条二维码通道不一致，扫码前须知**（同日实测）：
+
+| 通道 | 状态 |
+| --- | --- |
+| MCP `generate_test_qrcode` | ✅ 成功，返回 `https://tapcode-sce.spark.xd.com/qrcode/m_c7s3_1789916661057.png`，HTTP 200、300×300 有效 PNG，且已确认云端包含其对应构建 `5ac225f` |
+| Maker 网页「真机自测」面板 | ❌ 自报「**项目配置暂不可读**，测试版本待确认」「暂时无法读取测试二维码，发布状态不受影响」，只提供「重新读取」 |
+
+留档：`screenshots/preview-m00-realdevice-panel-qr-unreadable.png`。
+以 MCP 那条为准去扫码；**若扫码后打不开**，先怀疑这个面板暴露的配置读取问题，
+不要先怀疑构建本身——构建与资源装载已由 §12.1 的 `runtime.log` 证明可用。
+
+
+**顺带记一条引擎告警**（非阻塞，角色仍带贴图正常渲染）：
+
+```
+WARNING: DownloadManager: cannot resolve 'uuid://-73mcwx1QB6NyLrwJxv8Kg', skipping
+WARNING: DownloadManager: cannot resolve 'uuid://u05oYbz5RtecsyHB9-bmKQ', skipping
+WARNING: DownloadManager: no resources resolved for batch download
+```
+
+两个悬空 `uuid://` 引用（材质引用由 uuid 改为路径后遗留），与 §「云端二次同步后的状态」
+记录的引用方式变更同源；`asset-provenance.md` 已警告过「按 uuid 判定无人引用」的结论只对当时那一版成立，
+反过来**残留的 uuid 引用**同样要清。属 M0-1 资产对账项，不影响 M0-0 通过条件。
+
+
+
+窗景本身的方向已与本冲突解耦：静帧不再贴 3D `Plane`（Plane 的 UV 轴向会镜像静帧，
+且为修正角色而加的 `nvgRotate(π)` 会把该镜像变成可见的上下翻转），改由 UI 层
+`backgroundImage` + `backgroundFit="cover"` 绘制，走的是普通 UI 图片路径。
+
+**为什么这个冲突只能等真机，不能自己验**（2026-09-20 把路全部走了一遍，四条全断，别再重试）：
+
+| 想走的路 | 结果 |
+| --- | --- |
+| 本地 headless 跑引擎出图对方向 | **2026-09-23 已推翻本条前提**：`.cli/install-urhox-runtime.py` 已把 Windows 运行时装好（`.cli/rt/UrhoXRuntime.exe`，24 MB），本地可跑并用 `Image:SavePNG` 落真实渲染像素。但当时的三条限制仍成立：沙箱 `io=nil`（取证只能走 `SavePNG` 与 `File`）、本地 `Autoload/*.pak` 是云端子集、`UrhoXRuntime` 需 GLIBC 2.38 的 **linux** 版在当前云端沙箱（2.35）仍跑不了 ⇒ **Windows 本机能出图，云端沙箱不能** |
+| 从 Lua 里回读 RT 像素的 alpha 直接判定 | **API 不存在**：`GetPixel` / `GetPixelInt` 只在 CPU 侧 `Image`（`.emmylua/Image.d.lua:141-169`），`Texture2D` 侧只有 `GetDataSize`。RenderTarget 是 GPU 纹理，读不回来 |
+| 解码测试二维码拿到可公开访问的 play 链接，用浏览器自己截图 | 失败：`cv2.QRCodeDetector` 对 2/3/4/6 倍放大 + 灰度 + Otsu 全部解不出（Maker 二维码是带样式的非标准模块图），`pyzbar`/`zxingcpp` 本机没有 |
+| 用浏览器打开 Maker 预览页截图 | **部分可行，见下方 §12.1**。`mcp__browser-use`（Qoder 内置浏览器）与 `playwright` 两条都被 302 到 `/intro`，它们没有 TapTap 会话；但 `mcp__user-browser-use`（接管用户真实 Chrome）**有登录态**，只是要求浏览器当前有窗口，否则报 `No current window`。先 `cmd //c start "" "<url>"` 拉起浏览器即可 |
+
+结论：方向与 alpha 两个未知数**只有真机（或用户已登录的预览页）能判定**，
+一次扫码按上面的判读表即可同时给出两个答案。
+
+> **本条已于 2026-09-21 由真机关闭**：角色正立、位于右侧约 65%、角色框无黑底 ⇒ `nvgRotate(math.pi)` 保留。
+> 上表第一条路「本地 headless 出图」的前提也已在 2026-09-23 被推翻（Windows 运行时装好了），
+> 但**真机结论不变**——本地只能证明渲染链路，交付判定仍以真机/云端为准。
+
+**扫码之后的两条取证通道（2026-09-20 从 `@taptap/maker` 0.0.33 包内 skill 核实）**：
+
+| 通道 | 拿什么 | 注意 |
+| --- | --- | --- |
+| `runtime.log`（本地 watcher，`.maker/logs/runtime/`） | **当前本地构建/运行会话**的运行时日志，含 `[M0-0]` 启动行与资源加载结果 | 包内 skill 明令：本地运行日志**不能**代替远端玩家反馈 |
+| Maker MCP `get_debug_feedbacks` | 本游戏**线上玩家提交的反馈，含真机游戏日志与真机截图**、指定会话的服务端/Lua 日志 | 现在 `total: 0` 只因为还没有任何客户端加载过构建；扫码后应复查此工具，**真机截图可能可以直接从这里取回**，不必让用户手动拍照 |
+
+这条改变了 M0-0 收尾的取物方式：用户扫码并试玩一次之后，先查 `get_debug_feedbacks`，
+再决定是否需要人工补拍截图。
+
+### 12.2 ✅ 真机侧已定论：判读表第 1 行成立，本节冲突结束（2026-09-21 12:53 实测）
+
+用户用 TapTap 扫码在原生手机上跑通 `5ac225f`，系统截图存于 `screenshots/device/m00-realdevice-01-fullframe.jpg`。
+三项判读全部落在第 1 行，**与 §12.1 的 WebGL 结论一致，不分平台**：
+
+| 判读项 | 真机结果 | 对本节的意义 |
+| --- | --- | --- |
+| 角色上下方向 | 正立 | 「unsupported platform 归一化」这个解释**不需要**，文档那句「不需要额外翻转 Y」才是错的 |
+| 角色横向位置 | 右侧约 65%（WebGL 为约 70%） | 与基准同侧 ⇒ 没有多余的那 180°，`nvgRotate(math.pi)` **必须保留** |
+| 角色框是否黑底 | 无黑底，四周透出窗景 | 透明底 RT 的 alpha 在原生生效 ⇒ 判读表第 4 行排除 |
+
+同时排除了「设备其实是浏览器仿真」的可能：该会话日志打 `屏幕物理分辨率: 462.0x1029.0 DPR=0.94866532087326`，
+而 WebGL 预览是 712×906 一类的桌面/移动仿真尺寸。
+
+⇒ **最终结论：`engine-docs/recipes/scene-to-nanovg.md:13` 与 `.emmylua/NanoVG.d.lua:299-300` 两条文档说法在
+WebGL 与原生 Android 上都不成立**，本项目代码里的 `nvgRotate(math.pi)` 是必须保留的修正，不是待清理的临时补丁。
+上面那张判读表作为方法保留（下次再遇到方向争议仍然适用），四条本地死路（§12 末表）里除
+「用 `mcp__user-browser-use` 接管已登录 Chrome」那一条外依然有效。
+
+## 13. ❌ 不成立：输入框旁边的按钮默认点不动（2026-09-21 云端实测）
+
+同一个 `UI.TextField` + `UI.Button` 组合里，**回车能提交，点「发送」却毫无反应，而且不报任何错**。
+根因在引擎的点击判定与软键盘引起的布局位移，两段源码即可解释：
+
+| 位置 | 事实 |
+| --- | --- |
+| `urhox-libs/UI/Core/UI.lua:2379` | `HandlePointerUp` 只在**按下与抬起命中同一个控件**时才派发 `OnClick` |
+| `urhox-libs/UI/Core/UI.lua:2341` | 焦点继承的判据是 `widget.focusable ~= false`——引擎自己的 `EditMenu` 就用这个开关避免抢走输入框焦点 |
+
+链条：点按钮 → `TextField` 失焦 → 软键盘收起 → **画布高度变化 → 整棵 Yoga 布局位移** → 抬起时命中的已经不是按钮
+→ `OnClick` 静默不触发。**修法就是一行**：按钮设 `focusable = false`（`scripts/ui/ChatPanel.lua` 里「发送」与
+「跳过等待」两个按钮都加了），改完用户复测确认「它可以发送」。
+
+**How to apply:** 界面里只要有软键盘输入框，它旁边的按钮**默认**加 `focusable = false`，不要等复现。
+排查时旁证比报错快——同一份包里「跳过等待」点击是好的，因为那时键盘已经因回车收起、不再产生位移。
+⚠️ 另记一条取证限制：**日志区分不出「点击发出」和「回车发出」**（两条路径汇入同一个发送函数）。
+要做成硬证据必须在发送入口带一个来源标签再构建一轮，别拿时序旁证当结论写进验收材料。
+
+## 14. ✅ 每日事件计划的云端运行证据（2026-09-22 17:45–17:46 实测，构建 `ea56ca2`）
+
+会话：预览带 `?localDev=1`，屏幕 502x1116 / DPR≈1.03，洛杉矶当地 02:45 冷启动，存档为空
+（`[Memory] 没有本地存档，使用初始内存状态`）。日志由 watcher 落在 `.maker/logs/runtime/runtime.log`
+（45 KB，最后一条 17:46:49）。下面每条都是日志原文（同一行的 `[Script]` 与 `INFO` 双写已去重）。
+
+### 14.1 计划只生成一次，时间来回跳不重算
+
+```
+[EventService] 生成 los_angeles 2026-09-22 的事件计划 8 个事件（种子=los_angeles|2026-09-22|m1-events-v1）
+[EventService] 接管存档事件计划 0 天
+[M0-1] 事件计划落盘 true
+```
+
+同一会话里连点面板 02:45 → 01:30 → 14:30 → 12:30，`生成 … 事件计划` 全日志**只出现一次**，
+且各钟点都命中当日计划里自己的实例：
+
+```
+[EventService] 事件事实 key=los_angeles/2026-09-22/la_apartment_night_rest state=ongoing scene=la_apartment clock=01:30 fromSave=false
+[EventService] 事件事实 key=los_angeles/2026-09-22/la_studio_zine_layout state=ongoing scene=la_studio clock=14:30 fromSave=false
+[EventService] 事件事实 key=los_angeles/2026-09-22/la_cafe_midday state=ongoing scene=la_cafe clock=12:30 fromSave=false
+```
+
+`fromSave` 在这里必然是 `false`——同进程内存缓存即可命中，**不能**拿它当「没重算」的证据；
+跨进程的那一半要靠重进后 `接管存档事件计划 N 天`（N≥1）+ `fromSave=true`，本轮**尚未取到**（见 14.5）。
+
+### 14.2 状态背景确实跟着事件实例走
+
+```
+[M0-1] 开发测试事件 key=los_angeles/2026-09-22/la_studio_zine_layout 模板=la_studio_zine_layout 状态=ongoing 场景=la_studio 提示=小册子版面校样 钟点=14:30
+[M0-0] 切换状态窗场景: la_studio → Textures/backgrounds/la-studio-dev-placeholder.png
+[M0-0] 场景静帧已在本地: Textures/backgrounds/la-studio-dev-placeholder.png
+```
+
+两张开发占位图（apartment / studio）能被 `PrepareBackground` 命中，说明 `.project/resources.json`
+的 `Textures/backgrounds/**` 把它们带进了包，增强引用模式没有裁掉。
+
+### 14.3 排队补回把已结束事件说成已结束（真链路，非自检）
+
+```
+[MsgService] 用户消息 #27 已发出 serverTime=1790070348 计划回复=1790082010（排队到下一个窗口 · 队列 1 条）
+[M0-1] 发送 #27 → 排队（她 06:00 之后能回，计划 1790082010）
+[EventService] 排队补回 送达key=los_angeles/2026-09-22/la_apartment_night_rest 送达态=ended 送达=02:45 隔 42255 秒
+[M0-1] 回复 #27 → replied 事实=la_studio_zine_layout key=los_angeles/2026-09-22/la_studio_zine_layout 状态=ongoing 场景=la_studio 送达key=los_angeles/2026-09-22/la_apartment_night_rest 送达态=ended 正文长度=264
+```
+
+回复引用**送达时刻**的实例并标 `ended`，同时自身落在**回复时刻**的实例上（studio ongoing）——
+目标里「不得把已结束事件说成未开始」这条在主链路上成立。
+
+### 14.4 日志隐私符合约定
+
+用户消息只落 `#id / serverTime / 计划回复 / 队列长度`；回复只落 `fact / key / 状态 / 场景 / 正文长度`。
+全程没有任何一条打出用户原文。
+
+### 14.5 本轮没取到的两项（都只需人手，代码侧无待办）
+
+1. **自检只跑到 A6 就没了后续**：`自检开始 → 场景 A → PASS A0…A6`，之后既无 `A7`、也无任何
+   `场景 B…` 与 `自检结束` 汇总行，且整份日志 `ERROR`/`FAIL` 计数为 0。新加的 I（计划覆盖）与
+   J（重进）断言一行都没出现在日志里。
+   **「suite 中途抛出」这条已排除**：`DevSelfTest.Run` 的调用点本来就包在 `pcall` 里，异常会打
+   `开发自检异常退出（正式会话继续，不受影响）`，而这行同样没出现。同批应当出现却同样缺席的还有
+   `开场事件 key=…` 与 `M1 已就绪：…`——但之后 UI 完全能用、用户消息 #27 起一路正常，
+   说明那几行**打过了、整批没上来**。
+   → 结论：开机瞬间的突发日志会被管道**整批丢弃**（§11 第五条的加重形态，不是截掉尾巴而是丢一整批）。
+   「自检结论只在开机说过一次」这件事本身就不可取证。已改为：① 逐场景 `pcall` +
+   `场景 X 结束：判定 N 条`；② 一行式结论 `自检结论 通过=N 失败=M 场景=10/10[A B C D E F I J G H]`；
+   ③ 该结论由 `HandleUpdate` 每 4 秒原样重发、共 3 次，落进后面的抓取窗口。
+   **判据改成看结论行的 `场景=N/总数`（写作为 10；M2-B 起为 20，总数 = `DevSelfTest.SCENARIO_TOTAL`），不再数 PASS 条数。**
+   再补一层：结论行现在带 `需看=I×1 J×2`（每条场景各自的失败数，`DevSelfTest.BadScenarios()`），
+   面板那行只在全绿之外的情况下才追加这一段——否则一轮 reload 只知道「有红的」，还得再来一轮才知道翻哪段。
+   想靠「本地跑一遍真 Lua」绕开 reload 也已堵死：`engine-docs/recipes/procedural-lua-headless.md`
+   明写 headless 运行时托管在 Maker 云端（`/workspace/...`），本机既无 `lua`/`luajit`，
+   也没有可跑的引擎；所以 §14.6 那种「逐行移植到 Node 对拍」已是本地能做到的上限。
+2. **面板 19:45 没点、也没做第二次冷进**：本轮点了 01:30 / 14:30 / 12:30，缺 19:45 那一档；
+   会话只启动过一次，所以「同日期重进 occurrenceKey 不变」还缺 `接管存档事件计划 ≥1 天` 的证据。
+
+### 14.6 不依赖设备的那一层：日期算法与落盘上限（2026-09-22 离线对拍）
+
+条件 (b) 的后半句「下一本地日期才产生新实例」只靠 `daysFromCivil` / `civilDaySeconds` /
+`TimeState.ShiftDateKey`，这部分不需要云端会话就能验：把 Lua 里的 Hinnant 原式逐行搬进 Node，
+与真实 UTC 日历对拍 **2000-01-01 … 2100-12-31 共 36,890 天，不一致 0 条**；
+`ShiftDateKey(+1/-1)` 在 `2026-03-31→04-01`、`2026-12-31→2027-01-01`、`2028-02-28→02-29→03-01`
+（闰年）与 `2100-02-28→03-01`（百年非闰）上全部正确。
+`EventService.ExportPlans` 的 4 天上限是从**队头** `table.remove`，即留最新丢最旧，
+不存在「攒满 4 天后当天计划被裁掉→次日重算」的反向缺陷。
+
+这两条只证日期与裁剪口径；变体定种的可复现性、重进接管、以及 19:45 那一档，仍然只能等 §14.5 的第二次会话。
+
+同一层还能顺手证「日期变体不是空话」：把 `fnv1a`（Lua 5.4 的 64 位整数乘再 `& 0xFFFFFFFF`，
+用 BigInt 忠实移植；种子串全 ASCII，`charCodeAt` 等价 `s:byte(i)`）+ `rolled % #variants + 1`
+按 2026 全年 365 个 `dateKey` 跑一遍，8 个模板**每个都两种变体都命中**（182/183 与 183/182 对半分），
+同一输入重算恒等，换城市则整批下标改变。也就是「同一天一定一样、不同天确实不一样」两条同时成立；
+剩下的「重进后仍引用同一实例」仍需 §14.5 那次会话。
+
+重进那条链也逐段追过一遍（结论：没有可修的东西，记下免得下次重复推演）：
+`Save()` 把 `mem_.eventPlans` **原样** `cjson.encode`，不做字段白名单，所以
+`occurrenceKey`/`templateId`/`startUtc`/`endUtc` 一定在 JSON 里；`readEventPlans` 只按
+`dateKey`/`cityId`/`occurrences` 非空筛天、occurrences 按引用透传；`EventService.Restore` 才是在
+**自己新建的**计划表上打 `fromSave = true`（不会把 `fromSave` 回写进存档、污染下一次判据）。
+`InitServices` 的顺序也核对过：`Load → EventService.Init → Restore(GetEventPlans())`，
+都在首次 `PlanFor` 查询之前，所以第二次进入必然先接管再生成。
+
+
+
+
+## 15. ❌ 不成立：按函数订阅的 `Update` 永不派发（2026-09-25 本地整游实测）
+
+**假设**：`SubscribeToEvent("Update", handlerFunction)` 与按全局名订阅等价，只是写法不同。
+此前只把它当 PoC 侧的限制（AGENTS 本地运行时边界 3），玩法模块里照这个写法挂了逐帧逻辑。
+
+**量法**：`.tmp/poc/m4_micro_motion.lua` 钉住权威时钟跑整游，逐帧采角色节点的 `position.y`
+（`breathe` 声明 ±0.006，正弦周期约 3.7s，300 帧驻留足以看到），同一个进程里再数日志把手：
+main 那条**按全局名**订阅的重发机制在跑，StatusWindow 里两条**按函数**订阅的东西一行日志都没有。
+
+**结论：不成立，而且比原来的记述更宽。**
+
+| 订阅写法 | 位置 | 实测 |
+| --- | --- | --- |
+| `SubscribeToEvent("Update", "HandleUpdate")`（按全局名） | `main.lua` | 逐帧派发（自检结论重发 6 次） |
+| `SubscribeToEvent("Update", HandleMicroMotionUpdate)`（按函数） | `StatusWindow.Init` | **1477 帧内一次未触发**，角色 y 零变化 |
+| `SubscribeToEvent("Update", bootEchoHandler_)`（按函数） | `StatusWindow.Init` | 同一份日志里「状态窗开机」整段 **0 行** |
+
+也就是说这不是「PoC 里才不灵」——**同一个进程、同一个事件，按函数订阅就是不派发**，
+`main.lua` 的按名订阅正常逐帧。受影响的是交付物本体：M4 的「无骨骼微动」整块此前从未真正跑过
+（本地无从发现，真机也没证据会跑），被一起吞掉的还有开机突发日志被管道整批丢掉时唯一的补救把手
+（见 §11 的日志丢弃行为）。
+
+**可用的写法**：逐帧逻辑集中挂到 main 那条按名订阅上，由它显式调各模块导出的
+`Tick(dt)`（`StatusWindow.Tick(dt)` / `ChatPanel.Tick(dt)` 都是这么被驱动的）；
+模块不要自订阅，也不要事后替换 `_G.HandleUpdate`（同样不生效）。
+证据链：`CHANGELOG.md` 2026-09-25「无骨骼微动整块静默不跑」，
+修后逐通道取证 `.tmp/poc/m4_micro_motion2.lua` 7/0
+（breathe 位置跨度 0.00594 ⚠️ 这个数后来被 §16 推翻：那是换景瞬间的跳变，不是连续振幅
+/ sway 绕自身朝向滚转 0.928° / turn 偏航 5.076°，
+连打 4 圈 × 16 张换景后每圈位置均值跨度 8e-6，不漂移），构建 `5019748`。
+
+**顺带两条同族的量具教训**（写微动取证时必须照做，否则会把「没测到」当成「没做」）：
+`sway` 是绕自身朝向（局部 Z）的滚转，按定义**不改** `direction`，要读 `node.up`；
+而 120 帧窗口装不下 `sway`(11.4s) / `turn`(19.6s) 的整周期，
+拿「实测峰峰必须等于声明峰峰」去卡它们等于要求窗口足够长——判据应当是
+「动了 + 不出声明振幅 +20%」，只有短周期通道（breathe）能按振幅硬卡。
+
+## 16. ⚠️ 逐帧微动的「撤销式增量」只对相对写成立，绝对写会自我抵消（2026-09-25 本地逐帧分账实测）
+
+**假设**：§15 把微动改挂到 `StatusWindow.Tick(dt)` 之后，逐通道取证给出 7/0，
+于是认为「无骨骼微动」四条通道都在按声明值动。
+
+**反证来自换了一张量具**：把 16 张应用面取证改成「每张守 150 帧再换下一张」重跑，
+`breathe` 的 y 包络只有 **±0.00017**。这个数不是噪声——它等于 `0.006 × 1.7 × dt`
+（声明振幅 × 声明角频率 × 每帧步长），即目标正弦的**每帧增量**：
+
+```lua
+-- 修前（`StatusWindow.lua` stepMicroMotion）：位置是绝对写，却又减了 undo
+characterRoot_.position = Vector3(base.x, base.y - undo + nextv, base.z)
+-- 落地值 = nextv(n) - nextv(n-1) ≈ A·ω·dt·cos(ωt)，振幅被自己抵消掉 1/35
+```
+
+`sway` / `turn` 用 `node:Rotate(Quaternion(-undo, axis))` + `Rotate(Quaternion(nextv, axis))`，
+那是**相对**变换，撤销式在那儿是对的；同一套写法搬到绝对写（`position = 基准 + 偏移`）
+就把上一帧的偏移连同这一帧的目标一起抵掉了。修法：绝对写只取 `基准 + nextv`，
+`undo` 留给相对通道（`dolly` 是同族缺陷，一并去掉；它当前无包声明使用，属潜伏）。
+
+**怎么把「谁在写」和「写完还剩多少」分开量**（这条比结论更值钱）：
+把生产导出的 `StatusWindow.Tick` 包一层，同一帧内记它**进门前**与**出门后**那个节点的 y，
+再在下一帧开头读一次。三条判决一次跑完（`.tmp/poc/m4_micro_motion3.lua` 5/0）：
+
+| 判决 | 实测 |
+| --- | --- |
+| `Tick` 每帧恰好被调一次（不是零次、不是多次） | 401 帧 / 400 次 |
+| 下一帧开头 = 上一帧出门值（没有第三个写入者抹平） | 最大差 `0.00000000` |
+| 出门后幅度达到声明值 | 修前 0.001002 且真在动的只有 ±0.00017 ✗ → 修后 **0.006000** ✓ |
+
+**修后复量**：breathe 全峰峰 **0.01200** = 2×0.006（此前那个 0.00594 是换景瞬间
+`microPrev_` 被复位那一拍的跳变——窗口只占周期的 0.68 圈，包络会把瞬时当成振幅），
+6.9s 内过零 3 次 ≈ 3.7s 周期与 `1.7 rad/s` 一致；sway 滚转 0.932°、turn 偏航 5.079° 不变
+（相对通道从来没错）；16 张应用面取证 13/0（新增「每张守 150 帧站位仍不离声明值」
+与「那 8 张 breathe 每张 y 都在动」两条）。证据链：`CHANGELOG.md`
+2026-09-25「更正 + 修复（呼吸幅度被自己抵消）」，构建 `3fdf4ba`。
+
+**给下一位的两条硬规矩**：
+① 量逐帧周期量，**先在一张上守住一个整周期**（breathe 取 ≥4s）再谈振幅；
+跨场景包络、或每圈只取换景附近那一拍的均值，都可能给出「看起来对」的假数。
+② 本地 `timeStep` 与真实时间基本对齐（2417 帧 / 40.83s 累计 dt，墙钟 42s，每帧 0.0169s），
+所以**微动在本地不会因时间膨胀而变慢**——量到的小幅度不要赖给运行时时钟，
+它就是你写下去的值。这条顺带否掉了「本地 dt 太小导致幅度看着小」的猜想。
+
+## 17. ⚠️ 引擎没有「世界→屏幕」投影 API，自己算的针孔投影会丢左右符号（2026-09-25 本地取证实测）
+
+要把「她的脚底落在画面哪一格」「阴影画在哪一格」变成可复算的判据
+（`CHANGELOG.md` 2026-09-25「角色悬空」与「阴影横向那 0.029」两条修复的前提），
+第一反应是问引擎要投影。答案是**没有**：
+
+- `.emmylua/Camera.d.lua` 全量点过一遍，只有 `GetView` / `GetProjection` / `GetGPUProjection` /
+  `GetFrustum` / `GetFrustumSize(near,far)` / `GetHalfViewSize` / `GetViewSpaceFrustum` 这一类，
+  **没有 `Project` / `Unproject` / `ToScreen`**；
+- `.emmylua/Node.d.lua` 同样没有任何屏幕坐标 API（`grep ToScreen|Project|Screen` 零命中）；
+  `Billboard` 只出现在 `BillboardSet` / `ParticleEmitter` / `GraphicsDefs` 那一族，
+  与 `Camera`、`Node` 都无关，不是换算工具；
+- `Matrix3x4.d.lua`（`Camera:GetView` 返回的就是它）全量点过：`new` / `SetTranslation` /
+  `SetRotation` / `SetScale` / `ToMatrix3` / `ToMatrix4` / `RotationMatrix` / `Translation` /
+  `Rotation` / `Scale` / `Equals` / `Decompose` / `Inverse` / `ToString`，
+  **没有任何「拿矩阵变换一个点/向量」的入口**（`Matrix4` 同）；
+  也就是说想拿到 NDC，只能自己从 `node.position` / `node.direction` / `node.up` 拼针孔式子。
+
+**自己拼的那一步会踩到一个不显眼但足以把判据做假的坑**：为了避免继承任何坐标系约定
+（本地 RT 与原生 Android 的 Y 朝向相反是 §12 已经付过学费的事实），侧向分量当时是用勾股从
+正交基里扣出来的——`side = √(d² − z² − y²)`。这式子**结构上没有符号**，于是投影出来的
+`x` 永远 ≥ 0.5，判据只能比「离画面中线多远」，比不了「在哪一侧」。后果不是小事：
+给 `side="right"` 的场景声明一个左半边的阴影（0.32 写反成镜像），旧判据照样放行。
+
+**符号不该靠猜约定，靠已证事实拼**。这次用的两条都在同一棵树上有独立证据：
+① 应用面取证 S10 逐张量到「相机 x − 人物 x」的符号与场景包声明的 `side` 一致（16/16，
+   `right` ⇒ 相机在世界 −X 一侧）；② 2026-09-21 真机截图判到她在画面右侧约 65%
+   （同一套 `frameFixedCamera` 产出的）。两条合起来就是一句不含坐标系假设的话：
+   **相机在人物 −X 一侧 ⇒ 人物落在画面中线右侧**。把它乘回勾股给出的距离，就得到带符号的屏幕 x。
+
+**给下一位的规矩**：本项目里凡是要把世界坐标换算成屏幕/UI 坐标做判据，
+① 先确认引擎确实没有现成投影 API（本节已确认，别重复找）；
+② 针孔式子要么用引擎给的基向量点积并**显式说明约定**，要么走勾股但**另外用实证把符号钉回来**，
+   绝不可把「距离一致」当成「位置一致」——那会把镜像写反的声明判成通过；
+③ 带符号之后容差可以也应该收紧（竖直那档要对齐美术地板线，留 0.03 画面高；
+   横向只要求「在她脚下」，收到 0.006 画面宽≈1152px 下 7px，否则逐张调完还是自查不过）。
+
+## 18. ✅ 成立：`pointerEvents` 读 `props`、`focusable` 读实例——两道读的层相反，不许互相外推（2026-09-25 本地命中测试 A/B 实测）
+
+PRD §5.3 要求 2.5D 生活痕迹是「**不可点击**的 2D 定位物」。既有取证（控件树取证 U9）只读到
+`traceOverlay.props.pointerEvents == "none"` 这一句声明；而 AGENTS 那条最贵的坑写着
+`focusable` **只有实例赋值才生效**，很容易顺手也给 `pointerEvents` 补一道实例赋值、
+或者反过来以为「属性那道是装饰」。源码给的答复是**两者读的层相反**：
+
+- 命中测试通篇读 `widget.props.pointerEvents`（`urhox-libs/UI/Core/UI.lua:2135`、`2188`、`2207`、
+  `2227`、`2240`），`Widget:SetStyle` 会把传入的 style **并进 `self.props`**（`Widget.lua:1771`），
+  所以构造期写 `UI.Panel{ pointerEvents = "none" }` 单独放着就生效；
+- 焦点派发读的是实例字段 `widget.focusable`（`UI.lua:2341`），构造期属性单独放着是装饰。
+
+**用引擎自己的公开入口做 A/B 把这句话钉成实测**（PoC `.tmp/poc/m4_hit_test.lua`，
+证据 `Documents/temp/savedata/unknown/0/m4-hit-test.txt`，`UI.FindWidgetAt(x,y)` 就是 Inspector 用的那个）：
+先把痕迹框钉在状态窗画框中心（`trace.absoluteLayout` 是库自己支持的显式几何入口，
+用它就不依赖本地那套不保证重绘的合成器），再对同一个坐标连打四枪：
+
+| 枪次 | 只改这一处 | `FindWidgetAt` 命中的那一支 |
+| --- | --- | --- |
+| H1 仪器有效性 | 什么都不改 | `chatSend < chatInputBar < chatPanel < page < root` |
+| H2 几何前提 | 痕迹 `props.pointerEvents="auto"` | `traceOverlay < statusWindowFrame < page < root` |
+| H3 生产声明 | 痕迹改回 `"none"` | `nil`（穿过痕迹；画框落在这一点上但 `box-none` 不接自己） |
+| H4 读的层 | 只写实例 `trace.pointerEvents="auto"`，`props` 留 `"none"` | `nil`（实例字段完全不被读取） |
+| H5 反向对照 | 把**发送按钮** `props` 改成 `"none"` | `chatInputBar < chatPanel …`（按钮自己消失，机制对普通控件同样说一不二） |
+
+7 条判据全过（H0/H0b 启动与控件在场）。H3 那个 `nil` 有两种可能（画框是 `box-none` 而穿过自己 /
+画框自己根本不落这一点），所以当场把画框也量了：**`statusWindowFrame.props.pointerEvents=box-none`
+而 `frame:HitTest(该点)=true`** —— 排除掉后者，结论是前者：状态窗画框只让孩子接事件、自己不吃点击，
+所以痕迹上屏之后**整块状态窗不接任何点击**——与「固定镜头状态展示、不做开放交互」的硬边界一致。
+
+**给下一位的规矩**：写控件时 `focusable` 要实例赋值、`pointerEvents` 要留在 props（构造参数或
+`SetStyle`），两条各自成立；拿其中一条去推另一条，就会写出「代码里设了、引擎不认、点下去静默无效」
+的控件——这一族的第三种表现。要证明「不可点击」，读声明不够，打一发 `UI.FindWidgetAt` 才算。

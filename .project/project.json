@@ -1,0 +1,35 @@
+{
+  "$schema": "../schemas/project.schema.json",
+  "project_id": "m_c7s3",
+  "author": {
+    "id": "863014094"
+  },
+  "entry": "main.lua",
+  "version": "1.0.18",
+  "taptap_publish": {
+    "title": "送给你这个回来的人",
+    "description": "M0-0 原型：竖屏固定镜头展示原创角色若夕的 3D 状态窗。",
+    "category": "casual",
+    "screen_orientation": "portrait",
+    "collection_type": "adventure",
+    "trial_note": "M0-0 仅状态窗预览，无聊天与完整玩法。",
+    "app_platforms": "1,2",
+    "developer_id": 471831,
+    "app_id": 940330,
+    "miniapp_id": "tapmc1yds3rzoloihc"
+  },
+  "assets": {
+    "icon": "./game_material/la-cafe-icon.png",
+    "screenshots": [],
+    "promotional_image": ""
+  },
+  "metadata": {
+    "updated_at": "2026-09-30T06:06:05.843Z"
+  },
+  "test_qrcode": {
+    "url": "https://tapcode-sce.spark.xd.com/qrcode/m_c7s3_1790748365701.png",
+    "generated_at": "2026-09-30T06:06:05.843Z"
+  },
+  "entry@client": "main.lua",
+  "entry@server": "main.lua"
+}

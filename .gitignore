@@ -1,7 +1,47 @@
-node_modules/
-.env
-.env.*
+# Build artifacts & runtime state
+.build/
+dist/
+.cli/
+logs/
+*.log
+logs/.nfs*
+.sce/logs/
+.sce/build/build_steps/__pycache__/
+
+# Temp & swap files
+.tmp/
+*.crswap
+.DS_Store
+
+# OSS util
+.ossutil_checkpoint/
+ossutil_output/
+
+# Editor / IDE / agent configs
+.vscode/
+.cursor/
+.codex/
+.gemini/
+.claude/
+.emmylua/
+.installer/
+.maker/
+
+# Maker 远端 pre-receive 硬拒的路径：一旦被自动提交工具纳入提交，push 会被
+# `! [remote rejected]` 退回，远端构建根本不会启动。这些文件保留在本地、不入 git。
+# game_material/ 只存本地图标（.project/project.json 的 assets.icon 指向它，设计如此）；
+# .penguin/ 是平台侧本地状态。
+game_material/
 .penguin/
-ShanTianLiang/
-__pycache__/
-*.pyc
+
+# Maker engine assets & agent files (provided by ai-dev-kit, not user source)
+engine-docs/
+examples/
+lua-tools/
+schemas/
+skills/
+templates/
+tools/
+urhox-libs/
+AGENTS.md
+CLAUDE.md
